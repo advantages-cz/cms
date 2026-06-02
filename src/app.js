@@ -59,7 +59,7 @@ const state = {
   frontMatterTitleBySha: new Map(),
   treeTruncated: false,
   headSha: "",
-  tab: settings.tab || "files",
+  tab: normalizeTab(settings.tab),
   editMode: false,
   pathFilter: "",
   selectedPath: "",
@@ -91,6 +91,7 @@ const state = {
   actionPolling: false,
   actionPollStartedAt: null,
   allowDefaultBranchEdits: Boolean(settings.allowDefaultBranchEdits),
+  dismissedAutomationBannerKey: "",
 };
 
 const ACTION_POLL_INTERVAL_MS = 12000;
@@ -100,6 +101,10 @@ let actionPollInFlight = false;
 let restoringBrowserNavigation = false;
 let treePaneResizeDrag = null;
 let frontMatterTitleScanId = 0;
+
+function normalizeTab(tab) {
+  return ["files", "changes", "commits", "actions"].includes(tab) ? tab : tab === "review" ? "changes" : "files";
+}
 
 const TOKEN_PERMISSION_REQUIREMENTS = [
   {
@@ -130,7 +135,7 @@ const TOKEN_PERMISSION_REQUIREMENTS = [
   {
     label: "Checks",
     value: "volitelné",
-    detail: "Jen detailní check runs a anotace. Fine-grained PAT ho nemusí nabízet; CMS potom použije Actions.",
+    detail: "Volitelný stav checků. Fine-grained PAT ho nemusí nabízet; CMS potom použije Actions.",
   },
   {
     label: "Actions",
@@ -332,8 +337,14 @@ async function handleAction(button) {
     return;
   }
 
+  if (action === "dismiss-automation-banner") {
+    state.dismissedAutomationBannerKey = automationBannerKey();
+    render();
+    return;
+  }
+
   if (action === "tab") {
-    state.tab = button.dataset.tab || "files";
+    state.tab = normalizeTab(button.dataset.tab || "files");
     persistSettings();
     render();
     return;
@@ -719,7 +730,7 @@ async function checkTokenAccess({ keepBusy = false } = {}) {
 
     const ref = branchPayload?.commit?.sha || state.headSha || state.branch || state.defaultBranch || "main";
     await probeTokenEndpoint(items, {
-      label: "Checks detail",
+      label: "Checks",
       required: "Checks: volitelné",
       optional: true,
       run: () => state.client.requestWithMeta(`${repoPath}/commits/${encodeURIComponent(ref)}/check-runs?per_page=1`),
@@ -946,11 +957,13 @@ async function pollActionsUntilIdle() {
   try {
     const result = await refreshActions({ keepBusy: true });
     if (result.headChanged) {
-      stopActionPolling();
       await refreshRepositoryData({ keepBusy: true, preserveSelection: true });
       if (hasRunningActionStatus()) {
+        render();
         startActionPolling();
+        return;
       }
+      stopActionPolling();
       toast("Actions posunuly větev. Head a preview jsou obnovené.", "ok");
       render();
       return;
@@ -963,11 +976,6 @@ async function pollActionsUntilIdle() {
     }
 
     stopActionPolling();
-    if (!actionStatusItems().length) {
-      render();
-      return;
-    }
-
     await refreshRepositoryData({ keepBusy: true, preserveSelection: true });
     toast("Actions doběhly. Větev a preview jsou obnovené.", "ok");
     render();
@@ -1300,9 +1308,10 @@ async function saveCurrentFile(message) {
     await refreshRepositoryData({ keepBusy: true });
     await loadFile(savedPath);
     await refreshActions({ keepBusy: true });
+    await refreshReviewData({ keepBusy: true });
     startActionPolling();
     persistSettings();
-    toast("Commit je ve větvi. Actions sleduji nahoře v toolbaru.", "ok");
+    toast("Commit je ve větvi. Actions sleduji vpravo v pruhu záložek.", "ok");
   });
 }
 
@@ -1340,8 +1349,9 @@ async function createTextFile(form, data) {
     state.selectedDir = dir;
     await loadFile(path, { navigation: "push", revealInTree: true });
     await refreshActions({ keepBusy: true });
+    await refreshReviewData({ keepBusy: true });
     startActionPolling();
-    toast("Nový soubor je vytvořený. Actions sleduji nahoře v toolbaru.", "ok");
+    toast("Nový soubor je vytvořený. Actions sleduji vpravo v pruhu záložek.", "ok");
   });
 }
 
@@ -1377,8 +1387,9 @@ async function createFolder(data) {
     state.expandedDirs.add(dirPath);
     persistSettings();
     await refreshActions({ keepBusy: true });
+    await refreshReviewData({ keepBusy: true });
     startActionPolling();
-    toast("Složka je vytvořená. Actions sleduji nahoře v toolbaru.", "ok");
+    toast("Složka je vytvořená. Actions sleduji vpravo v pruhu záložek.", "ok");
   });
 }
 
@@ -1421,10 +1432,11 @@ async function deleteSelectedFile() {
     removeFilesFromState([path]);
     state.selectedDir = directoryOfPath(path);
     await refreshActions({ keepBusy: true });
+    await refreshReviewData({ keepBusy: true });
     removeFilesFromState([path]);
     updateBrowserNavigation({ mode: "replace" });
     startActionPolling();
-    toast("Soubor je smazaný. Actions sleduji nahoře v toolbaru.", "ok");
+    toast("Soubor je smazaný. Actions sleduji vpravo v pruhu záložek.", "ok");
   });
 }
 
@@ -1486,11 +1498,12 @@ async function deleteSelectedFolder() {
     removeFilesFromState(files.map((file) => file.path));
     state.selectedDir = parentDirectoryOfDir(dir);
     await refreshActions({ keepBusy: true });
+    await refreshReviewData({ keepBusy: true });
     removeFilesFromState(files.map((file) => file.path));
     state.selectedDir = parentDirectoryOfDir(dir);
     updateBrowserNavigation({ mode: "replace" });
     startActionPolling();
-    toast("Složka je smazaná. Actions sleduji nahoře v toolbaru.", "ok");
+    toast("Složka je smazaná. Actions sleduji vpravo v pruhu záložek.", "ok");
   });
 }
 
@@ -1594,7 +1607,7 @@ async function createPullRequest(data) {
     state.modal = null;
     state.editMode = false;
     await refreshReviewData({ keepBusy: true });
-    state.tab = "review";
+    state.tab = "changes";
     persistSettings();
     toast("Pull request je vytvořený.", "ok");
   });
@@ -1690,18 +1703,19 @@ function render({ treeScrollTop = null } = {}) {
 
 function renderTopbar() {
   const repoLabel = state.owner && state.repo ? `${state.owner}/${state.repo}` : "repo zatím není připojené";
-  const checkSummary = summarizeChecks();
+  const modeClass = state.editMode ? "is-editing" : "is-browsing";
   return `
-    <header class="topbar">
+    <header class="topbar ${modeClass}">
       <div class="brand">
-        <h1>Adaptivio CMS</h1>
-        <span class="repo-label">${escapeHtml(repoLabel)}</span>
+        <img class="brand-symbol" src="./assets/brand/adaptivio-symbol-cerny-rgb.svg" alt="" aria-hidden="true" />
+        <div class="brand-copy">
+          <h1>Adaptivio CMS</h1>
+          <span class="repo-label">${escapeHtml(repoLabel)}</span>
+        </div>
       </div>
       <div class="top-actions">
         ${renderTopbarWorkflowControls()}
         ${renderUserMenu()}
-        ${state.headSha ? `<span class="status-pill">${shortSha(state.headSha)}</span>` : ""}
-        ${checkSummary}
       </div>
     </header>
   `;
@@ -1709,14 +1723,16 @@ function renderTopbar() {
 
 function renderUserMenu() {
   if (!state.token) {
-    return `<button class="status-pill warn" type="button" data-action="login">Přihlásit</button>`;
+    return `<button class="account-button is-logged-out" type="button" data-action="login">Přihlásit</button>`;
   }
 
   const label = state.user?.login || "token uložen";
   return `
     <div class="user-menu-wrap">
-      <button class="status-pill ok user-menu-trigger" type="button" data-action="toggle-user-menu" aria-expanded="${state.userMenuOpen ? "true" : "false"}">
-        ${escapeHtml(label)}
+      <button class="account-button user-menu-trigger" type="button" data-action="toggle-user-menu" aria-expanded="${state.userMenuOpen ? "true" : "false"}" aria-haspopup="menu">
+        <span class="account-dot" aria-hidden="true"></span>
+        <span>${escapeHtml(label)}</span>
+        <span class="menu-caret" aria-hidden="true"></span>
       </button>
       ${
         state.userMenuOpen
@@ -1738,25 +1754,33 @@ function renderTopbarWorkflowControls() {
   const branchOptions = state.branches
     .map((branch) => `<option value="${escapeHtml(branch.name)}" ${branch.name === state.branch ? "selected" : ""}>${escapeHtml(branch.name)}</option>`)
     .join("");
+  const branchKind = state.branch === state.defaultBranch ? "chráněná větev" : "pracovní větev";
+  const branchClass = state.branch === state.defaultBranch ? "branch-default" : "branch-working";
+  const hasChanges = changedFileCount() > 0;
   const prButton = state.branch === state.defaultBranch
     ? ""
     : state.pullRequest
-      ? `<button type="button" data-action="open-link" data-url="${escapeHtml(state.pullRequest.html_url)}">PR #${state.pullRequest.number}</button>`
-      : `<button class="primary" type="button" data-action="prepare-pr">PR</button>`;
+      ? `<button class="button-secondary external-link-button" type="button" data-action="open-link" data-url="${escapeHtml(state.pullRequest.html_url)}">PR #${state.pullRequest.number}</button>`
+      : hasChanges
+        ? `<button class="primary" type="button" data-action="prepare-pr">Vytvořit PR</button>`
+        : "";
   const editButton = state.editMode
-    ? `<button type="button" data-action="leave-edit-session">Browse</button>`
+    ? `<button class="button-secondary" type="button" data-action="leave-edit-session">Zpět na náhled</button>`
     : `<button class="primary" type="button" data-action="start-edit-session">Edit</button>`;
   const newBranchButton = state.branch === state.defaultBranch
     ? ""
     : `<button type="button" data-action="new-edit-branch" title="Create a new edit branch from current head">Nová větev</button>`;
 
   return `
-    <select id="branch-select" class="top-branch-select" aria-label="Aktuální větev">${branchOptions}</select>
-    <span class="status-pill ${state.editMode ? "warn" : ""}">${state.editMode ? "edit session" : "browse mode"}</span>
+    <div class="branch-control">
+      <span class="status-pill ${branchClass}">${branchKind}</span>
+      <select id="branch-select" class="top-branch-select" aria-label="Aktuální větev">${branchOptions}</select>
+      <span class="status-pill status-sha" title="Head commit aktuální větve">head ${escapeHtml(shortSha(state.headSha))}</span>
+    </div>
     ${editButton}
     ${newBranchButton}
     ${prButton}
-    <button type="button" data-action="refresh">Obnovit</button>
+    <button class="icon-button button-quiet refresh-button" type="button" data-action="refresh" title="Obnovit data z GitHubu" aria-label="Obnovit data z GitHubu">${treeIconSvg("refresh")}</button>
   `;
 }
 
@@ -1776,7 +1800,8 @@ function renderContent() {
     ${renderTabs()}
     <div class="tab-content tab-content-${escapeHtml(state.tab)}">
       ${state.tab === "files" ? renderFilesTab() : ""}
-      ${state.tab === "review" ? renderReviewTab() : ""}
+      ${state.tab === "changes" ? renderChangesTab() : ""}
+      ${state.tab === "commits" ? renderCommitsTab() : ""}
       ${state.tab === "actions" ? renderActionsTab() : ""}
     </div>
   `;
@@ -1819,27 +1844,7 @@ function renderWelcome(message) {
 }
 
 function renderWorkflowBanners() {
-  return `
-    ${renderApprovalWorkflowBanner()}
-    ${renderPostPushStatus()}
-  `;
-}
-
-function renderApprovalWorkflowBanner() {
-  if (state.editMode) {
-    return "";
-  }
-
-  const editBehavior =
-    state.branch === state.defaultBranch
-      ? `založí pracovní větev z aktuálního headu ${escapeHtml(shortSha(state.headSha))}`
-      : `odemkne editory ve stávající větvi ${escapeHtml(state.branch)}`;
-
-  return `
-      <p class="banner info">
-      Browse mode: soubory jsou jen pro čtení a preview. Kliknutím na Edit CMS ${editBehavior}.
-      </p>
-  `;
+  return renderPostPushStatus();
 }
 
 function renderPostPushStatus() {
@@ -1860,24 +1865,73 @@ function renderPostPushStatus() {
     return `<p class="banner warn">Po posledním commitu stále běží ${running.length} ${source}. Stav můžeš obnovit v záložce Actions.</p>`;
   }
 
-  if (statusItems.length) {
-    return `<p class="banner info">Poslední commit má hotové ${source}. Před PR zkontroluj ještě případné automatické commity a preview artefaktů.</p>`;
+  return renderAutomationFilesBanner();
+}
+
+function renderAutomationFilesBanner() {
+  const files = state.externalCompare?.files || [];
+  if (!state.lastSave || !files.length) {
+    return "";
   }
 
-  return "";
+  if (state.dismissedAutomationBannerKey === automationBannerKey()) {
+    return "";
+  }
+
+  const fileLinks = files
+    .filter((file) => file.status !== "removed")
+    .map(
+      (file) => {
+        const iconClass = fileIconClass(file.filename);
+        return `
+          <button class="file-link" type="button" data-action="preview-file" data-path="${escapeHtml(file.filename)}">
+            <span class="tree-icon tree-icon-lucide tree-icon-file file-link-icon ${escapeHtml(iconClass)}" aria-hidden="true">${treeIconSvg(iconClass)}</span>
+            <span class="path">${escapeHtml(file.filename)}</span>
+            <span class="tag status-${escapeHtml(normalizeFileStatus(file.status))}">${escapeHtml(file.status)}</span>
+          </button>
+        `;
+      },
+    )
+    .join("");
+
+  return `
+    <div class="banner info automation-files-banner dismissible">
+      <div>
+        <p>Actions doběhly a automatizace změnila soubory po posledním CMS commitu ${escapeHtml(shortSha(state.lastSave.commitSha))}.</p>
+        ${fileLinks ? `<div class="file-link-list">${fileLinks}</div>` : `<p class="help">Automatizace změnila jen soubory, které už v aktuální větvi nejdou otevřít jako preview.</p>`}
+      </div>
+      <button class="dismiss-button" type="button" data-action="dismiss-automation-banner" aria-label="Zavřít seznam automatických změn">×</button>
+    </div>
+  `;
+}
+
+function automationBannerKey() {
+  return [state.branch, state.lastSave?.commitSha || "", state.headSha || ""].join(":");
+}
+
+function normalizeFileStatus(status) {
+  const clean = String(status || "").toLowerCase();
+  if (clean === "added" || clean === "modified" || clean === "removed" || clean === "deleted") {
+    return clean === "deleted" ? "removed" : clean;
+  }
+  return "other";
 }
 
 function renderTabs() {
   const tabs = [
     ["files", "Soubory"],
-    ["review", "Review"],
+    ["changes", "Změny"],
+    ["commits", "Commity"],
     ["actions", "Actions"],
   ];
   return `
     <nav class="tabbar" aria-label="Sekce">
-      ${tabs
-        .map(([id, label]) => `<button type="button" class="${state.tab === id ? "active" : ""}" data-action="tab" data-tab="${id}">${label}${renderTabBadge(id)}</button>`)
-        .join("")}
+      <div class="tabbar-tabs">
+        ${tabs
+          .map(([id, label]) => `<button type="button" class="${state.tab === id ? "active" : ""}" data-action="tab" data-tab="${id}">${label}${renderTabBadge(id)}</button>`)
+          .join("")}
+      </div>
+      <div class="tabbar-status">${summarizeChecks()}</div>
     </nav>
   `;
 }
@@ -1887,17 +1941,66 @@ function renderTabBadge(tabId) {
     return `<span class="tab-badge">${escapeHtml(state.files.length)}</span>`;
   }
 
-  if (tabId === "review") {
+  if (tabId === "changes") {
     const count = changedFileCount();
     return count ? `<span class="tab-badge">${escapeHtml(count)}</span>` : "";
+  }
+
+  if (tabId === "commits") {
+    const count = commitCount();
+    return count ? `<span class="tab-badge">${escapeHtml(count)}</span>` : "";
+  }
+
+  if (tabId === "actions") {
+    return renderActionsTabBadge();
   }
 
   return "";
 }
 
+function renderActionsTabBadge() {
+  const statusItems = actionStatusItems();
+  if (!statusItems.length) {
+    return state.actionPolling ? `<span class="tab-badge warn">...</span>` : "";
+  }
+
+  const failing = statusItems.filter((run) => classifyConclusion(run.conclusion, run.status) === "danger").length;
+  if (failing) {
+    return `<span class="tab-badge danger">${escapeHtml(failing)}</span>`;
+  }
+
+  const running = statusItems.filter((run) => run.status && run.status !== "completed").length;
+  if (running) {
+    return `<span class="tab-badge warn">${escapeHtml(running)}</span>`;
+  }
+
+  return `<span class="tab-badge ok">${escapeHtml(statusItems.length)}</span>`;
+}
+
 function changedFileCount() {
-  const files = state.compare?.files?.length ? state.compare.files : state.pullFiles;
-  return files?.length || 0;
+  return changedFilesForBranch().length;
+}
+
+function changedFilesForBranch() {
+  return state.compare?.files?.length ? state.compare.files : state.pullFiles || [];
+}
+
+function changedFileStatusByPath() {
+  const statuses = new Map();
+  for (const file of changedFilesForBranch()) {
+    if (file.filename) {
+      statuses.set(file.filename, normalizeFileStatus(file.status));
+    }
+  }
+  return statuses;
+}
+
+function commitsForBranch() {
+  return state.pullCommits.length ? state.pullCommits : state.compare?.commits || [];
+}
+
+function commitCount() {
+  return commitsForBranch().length;
 }
 
 function renderFilesTab() {
@@ -1956,26 +2059,27 @@ function renderFileList() {
 
   const tree = buildFileTree(files);
   const filtering = Boolean(state.pathFilter.trim());
+  const changedStatuses = changedFileStatusByPath();
 
   return `
     <div class="file-list tree-browser" role="tree" aria-label="Repository files">
-      ${renderTreeNodes(tree, 0, filtering)}
+      ${renderTreeNodes(tree, 0, filtering, changedStatuses)}
     </div>
   `;
 }
 
-function renderTreeNodes(node, depth, forceExpanded = false) {
+function renderTreeNodes(node, depth, forceExpanded = false, changedStatuses = new Map()) {
   const children = [...node.files, ...node.dirs.values()];
   if (!children.length) {
     return "";
   }
 
   return children
-    .map((child) => (child.type === "dir" ? renderTreeDirectory(child, depth, forceExpanded) : renderTreeFile(child, depth)))
+    .map((child) => (child.type === "dir" ? renderTreeDirectory(child, depth, forceExpanded, changedStatuses) : renderTreeFile(child, depth, changedStatuses)))
     .join("");
 }
 
-function renderTreeDirectory(dir, depth, forceExpanded = false) {
+function renderTreeDirectory(dir, depth, forceExpanded = false, changedStatuses = new Map()) {
   const expanded = forceExpanded || state.expandedDirs.has(dir.path);
   const fileCount = dir.count || 0;
   const isSelectedAncestor = Boolean(state.selectedPath) && state.selectedPath.startsWith(`${dir.path}/`);
@@ -1984,31 +2088,33 @@ function renderTreeDirectory(dir, depth, forceExpanded = false) {
     <div class="tree-row tree-dir ${isSelectedAncestor ? "contains-active" : ""} ${isSelectedDir ? "active-dir" : ""}" role="treeitem" aria-expanded="${expanded}" style="--depth: ${depth};">
       <button class="tree-toggle" type="button" data-action="toggle-dir" data-path="${escapeHtml(dir.path)}" aria-label="${expanded ? "Sbalit" : "Rozbalit"} ${escapeHtml(dir.name)}">
         <span class="tree-caret" aria-hidden="true">${expanded ? "" : ""}</span>
-        <span class="tree-icon tree-icon-dir" aria-hidden="true"></span>
+        <span class="tree-icon tree-icon-lucide tree-icon-dir" aria-hidden="true">${treeIconSvg("folder")}</span>
         <span class="tree-label">
           <span class="path">${escapeHtml(dir.name)}</span>
-          <span class="tree-meta">${fileCount} files</span>
         </span>
+        <span class="tree-size">${fileCount} files</span>
       </button>
     </div>
-    ${expanded ? renderTreeNodes(dir, depth + 1, forceExpanded) : ""}
+    ${expanded ? renderTreeNodes(dir, depth + 1, forceExpanded, changedStatuses) : ""}
   `;
 }
 
-function renderTreeFile(file, depth) {
+function renderTreeFile(file, depth, changedStatuses = new Map()) {
   const previewable = isTextPath(file.path) || isImagePath(file.path) || isPdfPath(file.path);
-  const ext = extensionOf(file.path);
   const displayName = treeFileDisplayName(file);
+  const changedStatus = changedStatuses.get(file.path) || "";
+  const changedClass = changedStatus ? ` is-changed change-${changedStatus}` : "";
+  const mutedClass = isLowEmphasisTreeFile(file.path) ? " is-muted-file" : "";
+  const iconClass = fileIconClass(file.path);
   return `
-    <button class="tree-row tree-file ${state.selectedPath === file.path ? "active" : ""}" role="treeitem" type="button" data-action="select-file" data-path="${escapeHtml(file.path)}" title="${escapeHtml(file.path)}" style="--depth: ${depth};">
-      <span class="tree-spacer"></span>
-      <span class="tree-icon tree-icon-file ${escapeHtml(fileIconClass(file.path))}" aria-hidden="true"></span>
+    <button class="tree-row tree-file ${state.selectedPath === file.path ? "active" : ""}${changedClass}${mutedClass}" role="treeitem" type="button" data-action="select-file" data-path="${escapeHtml(file.path)}" title="${escapeHtml(file.path)}" style="--depth: ${depth};">
+      <span class="tree-change-slot" aria-hidden="true">${changedStatus ? `<span class="tree-change-marker"></span>` : ""}</span>
+      <span class="tree-icon tree-icon-lucide tree-icon-file ${escapeHtml(iconClass)}" aria-hidden="true">${treeIconSvg(iconClass)}</span>
       <span class="tree-label">
         <span class="path">
           ${escapeHtml(displayName.title)}
           ${displayName.filename ? `<span class="tree-file-name-muted">(${escapeHtml(displayName.filename)})</span>` : ""}
         </span>
-        <span class="tree-meta">${escapeHtml(ext || "file")}</span>
       </span>
       <span class="tree-size ${previewable ? "" : "is-binary"}">${previewable ? escapeHtml(humanBytes(file.size)) : "binary"}</span>
     </button>
@@ -2026,22 +2132,58 @@ function fileIconClass(path) {
   }
 
   const ext = extensionOf(path);
-  if (["md", "mdx", "txt"].includes(ext)) {
-    return "tree-icon-doc";
+  if (["md", "mdx"].includes(ext)) {
+    return "tree-icon-md";
   }
-  if (["json", "yaml", "yml", "toml", "csv"].includes(ext)) {
-    return "tree-icon-data";
+  if (["html", "htm"].includes(ext)) {
+    return "tree-icon-html";
   }
-  if (["html", "htm", "css", "js", "mjs", "ts", "tsx", "jsx", "astro"].includes(ext)) {
-    return "tree-icon-code";
-  }
-  if (["png", "jpg", "jpeg", "gif", "webp", "avif", "svg"].includes(ext)) {
-    return "tree-icon-image";
+  if (ext === "svg") {
+    return "tree-icon-svg";
   }
   if (ext === "pdf") {
     return "tree-icon-pdf";
   }
+  if (ext === "txt") {
+    return "tree-icon-text";
+  }
+  if (["json", "yaml", "yml", "toml", "csv"].includes(ext)) {
+    return "tree-icon-data";
+  }
+  if (["css", "js", "mjs", "ts", "tsx", "jsx", "astro"].includes(ext)) {
+    return "tree-icon-code";
+  }
+  if (["png", "jpg", "jpeg", "gif", "webp", "avif"].includes(ext)) {
+    return "tree-icon-image";
+  }
   return "";
+}
+
+function treeIconSvg(iconClass) {
+  const attrs = 'viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"';
+  const fileBase = '<path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"></path><path d="M14 2v4a2 2 0 0 0 2 2h4"></path>';
+  const icons = {
+    folder:
+      '<path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"></path>',
+    "tree-icon-home":
+      '<path d="m3 10 9-7 9 7"></path><path d="M5 10v10a1 1 0 0 0 1 1h5v-7h2v7h5a1 1 0 0 0 1-1V10"></path>',
+    "tree-icon-md": `${fileBase}<path d="M8 13v4"></path><path d="M8 13l2 2 2-2"></path><path d="M12 13v4"></path><path d="M16 13v4"></path><path d="M14 15h4"></path>`,
+    "tree-icon-html": `${fileBase}<path d="m10 13-2 2 2 2"></path><path d="m14 13 2 2-2 2"></path>`,
+    "tree-icon-svg": `${fileBase}<circle cx="12" cy="15" r="3"></circle><path d="M12 12v-2"></path><path d="M9.4 16.5l-1.7 1"></path><path d="M14.6 16.5l1.7 1"></path>`,
+    "tree-icon-pdf": `${fileBase}<path d="M8 17h1.5a1.5 1.5 0 0 0 0-3H8v4"></path><path d="M12.5 14v4h1a2 2 0 0 0 0-4h-1Z"></path><path d="M17 18v-4h2"></path><path d="M17 16h1.6"></path>`,
+    "tree-icon-text": `${fileBase}<path d="M8 13h8"></path><path d="M8 17h6"></path>`,
+    "tree-icon-data": `${fileBase}<path d="M10 13H9a1 1 0 0 0-1 1v1a1 1 0 0 1-1 1 1 1 0 0 1 1 1v1a1 1 0 0 0 1 1h1"></path><path d="M14 13h1a1 1 0 0 1 1 1v1a1 1 0 0 0 1 1 1 1 0 0 0-1 1v1a1 1 0 0 1-1 1h-1"></path>`,
+    "tree-icon-code": `${fileBase}<path d="m10 13-2 2 2 2"></path><path d="m14 13 2 2-2 2"></path>`,
+    "tree-icon-image": `${fileBase}<circle cx="10" cy="13" r="1"></circle><path d="m8 18 2.4-2.4a1 1 0 0 1 1.4 0L14 17l1-1a1 1 0 0 1 1.4 0L18 18"></path>`,
+    refresh: '<path d="M21 12a9 9 0 0 1-15.6 6.1L3 16"></path><path d="M3 21v-5h5"></path><path d="M3 12A9 9 0 0 1 18.6 5.9L21 8"></path><path d="M21 3v5h-5"></path>',
+    file: fileBase,
+  };
+  return `<svg ${attrs}>${icons[iconClass] || icons.file}</svg>`;
+}
+
+function isLowEmphasisTreeFile(path) {
+  const ext = extensionOf(path);
+  return !["md", "mdx", "html", "htm", "svg", "pdf", "png", "jpg", "jpeg", "gif", "webp", "avif"].includes(ext);
 }
 
 function renderEditor() {
@@ -2186,6 +2328,11 @@ function renderMarkdown(markdown) {
       continue;
     }
 
+    if (/^\s*<!--.*-->\s*$/.test(line)) {
+      flushBlocks();
+      continue;
+    }
+
     if (/^\s*---+\s*$/.test(line)) {
       flushBlocks();
       html.push("<hr />");
@@ -2268,8 +2415,8 @@ function renderMarkdownInline(value) {
     .replace(/\*([^*]+)\*/g, "<em>$1</em>")
     .replace(/_([^_]+)_/g, "<em>$1</em>")
     .replace(
-      /\[([^\]]+)\]\(([^)\s]+)(?:\s+&quot;[^&]*&quot;)?\)/g,
-      (match, label, href) => renderMarkdownLink(label, href) || match,
+      /\[([^\]]+)\]\((?:&lt;(.+?)&gt;|([^)\s]+))(?:\s+&quot;[^&]*&quot;)?\)/g,
+      (match, label, bracketedHref, plainHref) => renderMarkdownLink(label, bracketedHref || plainHref) || match,
     );
 }
 
@@ -2327,7 +2474,7 @@ function normalizeMarkdownHref(href) {
     return decoded;
   }
 
-  if (/^[A-Za-z0-9._~!$&'()*+,;=:@%/-]+(?:\?[A-Za-z0-9._~!$&'()*+,;=:@%/?-]*)?(?:#[A-Za-z0-9._~!$&'()*+,;=:@%/?-]*)?$/.test(decoded)) {
+  if (/^[^\u0000-\u001F\u007F<>"]+$/.test(decoded)) {
     return decoded;
   }
 
@@ -2472,80 +2619,64 @@ function splitMarkdownTableRow(line) {
     .map((cell) => cell.trim());
 }
 
-function renderReviewTab() {
+function renderChangesTab() {
   if (state.branch === state.defaultBranch) {
-    return `<p class="banner info">Review je dostupné pro pracovní větev. Vytvoř větev z ${escapeHtml(state.defaultBranch)} a CMS ukáže diff, PR a automatické commity.</p>`;
+    return `<p class="banner info">Změny jsou dostupné pro pracovní větev. Kliknutím na Edit CMS založí větev z ${escapeHtml(state.defaultBranch)}.</p>`;
+  }
+
+  const files = changedFilesForBranch();
+  const externalFiles = state.externalCompare?.files || [];
+  return `
+    ${renderBranchCompareBanner()}
+    <section class="panel">
+      <div class="panel-header">
+        <h2>Změněné soubory</h2>
+        <span class="tag">${escapeHtml(files.length)} souborů</span>
+      </div>
+      <div class="panel-body">${renderChangedFiles(files)}</div>
+    </section>
+    ${
+      externalFiles.length
+        ? `<p class="banner warn" style="margin-top: 10px;">Po posledním CMS commitu se větev ještě změnila. Zkontroluj hlavně automatické nebo externí změny.</p>
+          <section class="panel" style="margin-top: 10px;">
+            <div class="panel-header">
+              <h2>Změny po posledním CMS commitu</h2>
+              <span class="tag warn">${escapeHtml(externalFiles.length)} souborů</span>
+            </div>
+            <div class="panel-body">${renderChangedFiles(externalFiles)}</div>
+          </section>`
+        : ""
+    }
+  `;
+}
+
+function renderCommitsTab() {
+  if (state.branch === state.defaultBranch) {
+    return `<p class="banner info">Commity pracovní větve se zobrazí po založení edit branch.</p>`;
   }
 
   return `
-    <div class="split">
-      <section class="panel">
-        <div class="panel-header">
-          <h2>Pull request</h2>
-          ${state.pullRequest ? `<span class="tag ok">#${state.pullRequest.number}</span>` : `<span class="tag warn">není vytvořený</span>`}
-        </div>
-        <div class="panel-body">${renderPullRequestSummary()}</div>
-      </section>
-      <section class="panel">
-        <div class="panel-header"><h2>Diff proti ${escapeHtml(state.defaultBranch)}</h2></div>
-        <div class="panel-body">${renderCompareSummary(state.compare)}</div>
-      </section>
-    </div>
-    <section class="panel" style="margin-top: 14px;">
-      <div class="panel-header"><h2>Změny po posledním CMS commitu</h2></div>
-      <div class="panel-body">${renderExternalCompare()}</div>
-    </section>
-    <section class="panel" style="margin-top: 14px;">
-      <div class="panel-header"><h2>Commity v PR</h2></div>
+    ${renderBranchCompareBanner()}
+    <section class="panel">
+      <div class="panel-header">
+        <h2>Commity větve</h2>
+        <span class="tag">${escapeHtml(commitCount())} commitů</span>
+      </div>
       <div class="panel-body">${renderCommitList()}</div>
     </section>
   `;
 }
 
-function renderPullRequestSummary() {
-  if (!state.pullRequest) {
-    return `
-      <p class="help">Pro větev ${escapeHtml(state.branch)} zatím není otevřený PR do ${escapeHtml(state.defaultBranch)}.</p>
-      <div class="button-row" style="margin-top: 10px;">
-        <button class="primary" type="button" data-action="prepare-pr">Vytvořit PR</button>
-      </div>
-    `;
+function renderBranchCompareBanner() {
+  if (!state.compare) {
+    return `<p class="banner info">Data pracovní větve zatím nejsou načtená.</p>`;
   }
 
   return `
-    <p class="row-title">${escapeHtml(state.pullRequest.title)}</p>
-    <p class="help">${escapeHtml(state.pullRequest.user?.login || "")} otevřel ${escapeHtml(formatDate(state.pullRequest.created_at))}</p>
-    <div class="button-row" style="margin-top: 10px;">
-      <button type="button" data-action="open-link" data-url="${escapeHtml(state.pullRequest.html_url)}">Otevřít na GitHubu</button>
-    </div>
-  `;
-}
-
-function renderCompareSummary(compare) {
-  if (!compare) {
-    return `<div class="empty">Diff zatím není načtený.</div>`;
-  }
-
-  const files = compare.files || state.pullFiles || [];
-  return `
-    <p class="help">Ahead ${compare.ahead_by || 0}, behind ${compare.behind_by || 0}, souborů ${files.length}.</p>
-    ${renderChangedFiles(files)}
-  `;
-}
-
-function renderExternalCompare() {
-  if (!state.lastSave) {
-    return `<div class="empty">Po uložení z CMS se sem uloží poslední commit a následné změny z Actions nebo ruční práce půjdou porovnat.</div>`;
-  }
-
-  if (!state.externalCompare) {
-    return `<p class="banner info">Od posledního CMS commitu ${escapeHtml(shortSha(state.lastSave.commitSha))} se head větve nezměnil.</p>`;
-  }
-
-  const files = state.externalCompare.files || [];
-  return `
-    <p class="banner warn">Větev se změnila po posledním CMS commitu ${escapeHtml(shortSha(state.lastSave.commitSha))}. Zkontroluj automatické nebo externí změny před dalším uložením.</p>
-    ${renderChangedFiles(files)}
+    <p class="banner info">
+      Větev je ahead ${escapeHtml(state.compare.ahead_by || 0)} a behind ${escapeHtml(state.compare.behind_by || 0)} proti ${escapeHtml(state.defaultBranch)}.
+      ${state.pullRequest ? `PR #${escapeHtml(state.pullRequest.number)} je otevřený.` : changedFileCount() ? "PR můžeš vytvořit v horním toolbaru." : "Bez změn není potřeba vytvářet PR."}
+    </p>
   `;
 }
 
@@ -2558,24 +2689,35 @@ function renderChangedFiles(files) {
     <div class="list" style="margin-top: 10px;">
       ${files
         .map((file) => {
-          const canPreview = file.status !== "removed" && (isTextPath(file.filename) || isImagePath(file.filename) || isPdfPath(file.filename));
+          const canPreview = file.status !== "removed";
+          const statusClass = `status-${normalizeFileStatus(file.status)}`;
+          const iconClass = fileIconClass(file.filename);
+          const title = changedFileFrontMatterTitle(file);
+          const fileTitle = canPreview
+            ? `<p class="row-title path"><button class="changed-file-link" type="button" data-action="preview-file" data-path="${escapeHtml(file.filename)}">${escapeHtml(file.filename)}</button>${title ? ` <span class="changed-file-title-muted">(${escapeHtml(title)})</span>` : ""}</p>`
+            : `<p class="row-title path">${escapeHtml(file.filename)}${title ? ` <span class="changed-file-title-muted">(${escapeHtml(title)})</span>` : ""}</p>`;
           return `
-            <div class="row">
+            <div class="row changed-file-row">
+              <span class="tree-icon tree-icon-lucide tree-icon-file changed-file-icon ${escapeHtml(iconClass)}" aria-hidden="true">${treeIconSvg(iconClass)}</span>
               <div class="row-main">
-                <p class="row-title path">${escapeHtml(file.filename)}</p>
+                ${fileTitle}
                 <div class="row-meta">
-                  <span class="tag">${escapeHtml(file.status)}</span>
+                  <span class="tag ${escapeHtml(statusClass)}">${escapeHtml(file.status)}</span>
                   <span class="tag ok">+${file.additions || 0}</span>
                   <span class="tag danger">-${file.deletions || 0}</span>
                 </div>
               </div>
-              ${canPreview ? `<button type="button" data-action="preview-file" data-path="${escapeHtml(file.filename)}">Preview</button>` : ""}
             </div>
           `;
         })
         .join("")}
     </div>
   `;
+}
+
+function changedFileFrontMatterTitle(file) {
+  const entry = state.files.find((candidate) => candidate.path === file.filename);
+  return normalizeFrontMatterTitle(entry?.frontMatterTitle || "");
 }
 
 function renderCommitList() {
@@ -2610,19 +2752,13 @@ function renderCommitList() {
 function renderActionsTab() {
   return `
     ${renderActionsOverview()}
-    <div class="split">
-      <section class="panel">
-        <div class="panel-header">
-          <h2>Checks detail</h2>
-          <button type="button" data-action="refresh-actions">Obnovit</button>
-        </div>
-        <div class="panel-body">${renderCheckRuns()}</div>
-      </section>
-      <section class="panel">
-        <div class="panel-header"><h2>Workflow runs větve</h2></div>
-        <div class="panel-body">${renderWorkflowRuns()}</div>
-      </section>
-    </div>
+    <section class="panel">
+      <div class="panel-header">
+        <h2>Workflow runs větve</h2>
+        <button type="button" data-action="refresh-actions">Obnovit</button>
+      </div>
+      <div class="panel-body">${renderWorkflowRuns()}</div>
+    </section>
   `;
 }
 
@@ -2641,11 +2777,11 @@ function renderActionsOverview() {
   }
 
   if (running.length) {
-    return `<p class="banner warn">${running.length} ${currentHeadCheckRuns().length ? "checků" : "workflow runs"} stále běží. Obnov stav za chvíli; případné automatické commity se ukážou v Review.</p>`;
+    return `<p class="banner warn">${running.length} ${currentHeadCheckRuns().length ? "checků" : "workflow runs"} stále běží. Obnov stav za chvíli; případné automatické commity se ukážou v Commitech.</p>`;
   }
 
   if (state.externalCompare || actionCommits.length) {
-    return `<p class="banner warn">Automation changed the branch. Zkontroluj Review, diff po posledním CMS commitu a preview generovaných artefaktů před vytvořením PR.</p>`;
+    return `<p class="banner warn">Automation changed the branch. Zkontroluj záložky Změny a Commity, diff po posledním CMS commitu a preview generovaných artefaktů před vytvořením PR.</p>`;
   }
 
   if (statusItems.length) {
@@ -2686,7 +2822,7 @@ function renderCheckRuns() {
               </div>
               <div class="button-row">
                 <button type="button" data-action="load-annotations" data-check-id="${run.id}">Anotace</button>
-                <button type="button" data-action="open-link" data-url="${escapeHtml(run.html_url)}">GitHub</button>
+                <button class="external-link-button" type="button" data-action="open-link" data-url="${escapeHtml(run.html_url)}">GitHub</button>
               </div>
             </div>
           `;
@@ -2718,7 +2854,7 @@ function renderWorkflowRuns() {
               </div>
               <div class="button-row">
                 <button type="button" data-action="rerun-workflow" data-run-id="${run.id}">Spustit znovu</button>
-                <button type="button" data-action="open-link" data-url="${escapeHtml(run.html_url)}">GitHub</button>
+                <button class="external-link-button" type="button" data-action="open-link" data-url="${escapeHtml(run.html_url)}">GitHub</button>
               </div>
             </div>
           `;
@@ -2779,7 +2915,7 @@ function renderAuthModal() {
             <option value="local" ${state.tokenPersistence === "local" ? "selected" : ""}>trvale v tomto prohlížeči</option>
           </select>
         </div>
-        <p class="help">Doporučené minimum: Contents read/write, Pull requests read/write, Actions read a Metadata read. Checks detail je volitelný.</p>
+        <p class="help">Doporučené minimum: Contents read/write, Pull requests read/write, Actions read a Metadata read. Checks jsou volitelné.</p>
         ${
           state.publicConfig.githubOAuthClientId
             ? `<button type="button" data-action="start-oauth">Přihlásit přes GitHub device flow</button>`
@@ -2885,7 +3021,7 @@ function renderDeviceFlowModal() {
           </div>
           <div class="button-row">
             <button type="button" data-action="copy-code" data-code="${escapeHtml(payload.user_code)}">Kopírovat</button>
-            <button type="button" data-action="open-link" data-url="${escapeHtml(payload.verification_uri)}">Otevřít</button>
+            <button class="external-link-button" type="button" data-action="open-link" data-url="${escapeHtml(payload.verification_uri)}">Otevřít</button>
           </div>
         </div>
       </div>

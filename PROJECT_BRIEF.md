@@ -130,6 +130,7 @@ Implemented capabilities:
 - Front matter-aware Markdown rendering.
 - Collapsed front matter display in rendered Markdown preview.
 - Internal Markdown links resolved through the CMS tree instead of navigating the browser frame.
+- Markdown preview hides HTML comments and supports angle-bracket link destinations with spaces, such as `[PDF](<vystupy/test pozvanky/file.pdf>)`.
 - Browser history integration for repository file and folder navigation via URL `path` and `dir` parameters.
 - Sandboxed HTML preview with relative image, SVG, and CSS assets inlined from the current branch.
 - Fixed-height application shell with internal scrolling in the tree and preview regions.
@@ -137,6 +138,15 @@ Implemented capabilities:
 - Dismissible error and notification messages.
 - Consolidated top workflow toolbar for branch, mode, edit, pull request, and refresh actions.
 - User menu in the top toolbar for changing the token and logging out.
+- CMS design-system pass based on Adaptivio brand rules: role-based CSS tokens, approved black Adaptivio symbol in the toolbar, compact product toolbar, explicit branch/mode status patterns, restrained brand treatment, quieter panels, denser tree rows, and document-like previews.
+- Refined toolbar action model: edit/browse state lives in the primary workflow button, refresh is icon-only with a local Lucide-style SVG and an accessible label, PR creation is hidden until the branch has changes, and the signed-in user control looks like an account menu.
+- Review workspace split into separate `Změny` and `Commity` tabs with badge counts. PR creation/opening lives in the toolbar, while the tabs focus on changed-file and commit lists and refresh after commit operations.
+- Post-commit Actions feedback shows concrete files changed after the last CMS commit as clickable CMS links instead of a generic completed-workflow banner.
+- Actions tab has a status badge for running, failing, or completed branch checks/workflows, the current action status is shown at the right edge of the tab strip, and action polling performs a full branch/review/actions refresh when work finishes.
+- Automation output banners are dismissible per branch/head and show changed-file status labels plus local file-type icons with stable, colored added/modified/removed treatment.
+- Changed-file status colors are shared across automation banners, change lists, and tree indicators. The file tree marks changed files with a dedicated indicator before the file icon, uses local Lucide-style SVG icons for folders and file types, omits redundant extension subtitles, and de-emphasizes miscellaneous technical files.
+- Directory file counts in the tree align in the same right-hand column as file sizes.
+- Changed-file rows in `Změny` use the file path itself as the CMS preview link instead of a separate Preview button, include the same local file-type icons as the tree, and show front matter titles in parentheses as non-link text when available. The Actions tab focuses on workflow runs, while outbound buttons such as PR and GitHub links carry an external-link icon.
 
 ## Open Questions
 
@@ -261,6 +271,30 @@ Reasoning: The CMS is mostly a browse/review tool until the user explicitly ente
 Decision: The CMS targets `advantages-cz/avds` with `master` as the fixed default branch. Repository and default branch inputs were removed from the always-visible UI.
 
 Reasoning: The current deployment is specialized for one Adaptivio repository. Removing repository setup keeps login from interrupting normal browsing and reduces accidental connection to the wrong repository.
+
+### 2026-06-02: Apply A Product Design System Layer
+
+Decision: Adaptivio CMS uses a restrained product design-system layer based on the Adaptivio brand palette rather than a generic teal UI theme.
+
+Reasoning: The CMS is a working editor for repository, branch, token, preview, PR, and CI state. The UI should stay quiet and dense while clearly distinguishing browse mode, edit sessions, default branches, working branches, and risky actions.
+
+### 2026-06-03: Split Review Into Changes And Commits
+
+Decision: Replace the single Review tab with separate `Změny` and `Commity` tabs, each with its own badge count. Keep PR creation and opening in the top toolbar.
+
+Reasoning: Changed files and commits answer different review questions. Keeping PR actions in the toolbar avoids duplicating workflow controls inside the review surface, and refreshing review data after commit operations keeps badges and lists current.
+
+### 2026-06-03: Show Automation Output Files After Actions
+
+Decision: When Actions finish after a CMS commit and the branch head changed, show the concrete files changed after the last CMS commit as clickable links into the CMS.
+
+Reasoning: A generic completed-workflow banner does not help the editor decide what to review. The useful next step is opening the generated or changed files that automation committed.
+
+### 2026-06-03: Simplify Review And Actions Navigation
+
+Decision: In `Změny`, changed file paths are the primary navigation targets and the separate Preview button is removed. The Actions tab no longer renders the check-runs detail panel, and buttons that open GitHub or other external pages show an external-link icon.
+
+Reasoning: Review lists should behave like lists first. Removing duplicate actions and broken detail surfaces makes the workflow easier to scan, while outbound icons make it clear when a button leaves the CMS.
 
 ### 2026-06-02: Move Login Into A Modal
 
