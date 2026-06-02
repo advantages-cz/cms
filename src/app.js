@@ -1966,22 +1966,11 @@ function renderTabBadge(tabId) {
 }
 
 function renderActionsTabBadge() {
-  const statusItems = actionStatusItems();
-  if (!statusItems.length) {
+  if (!state.workflowRuns.length) {
     return state.actionPolling ? `<span class="tab-badge warn">...</span>` : "";
   }
 
-  const failing = statusItems.filter((run) => classifyConclusion(run.conclusion, run.status) === "danger").length;
-  if (failing) {
-    return `<span class="tab-badge danger">${escapeHtml(failing)}</span>`;
-  }
-
-  const running = statusItems.filter((run) => run.status && run.status !== "completed").length;
-  if (running) {
-    return `<span class="tab-badge warn">${escapeHtml(running)}</span>`;
-  }
-
-  return `<span class="tab-badge ok">${escapeHtml(statusItems.length)}</span>`;
+  return `<span class="tab-badge">${escapeHtml(state.workflowRuns.length)}</span>`;
 }
 
 function changedFileCount() {
@@ -2087,7 +2076,7 @@ function renderFileList() {
 }
 
 function renderTreeNodes(node, depth, forceExpanded = false, changedStatuses = new Map()) {
-  const children = [...node.files, ...node.dirs.values()];
+  const children = [...node.files, ...node.dirs.values()].sort(compareTreeChildren);
   if (!children.length) {
     return "";
   }
@@ -3200,15 +3189,38 @@ function compareTreeDirs(a, b) {
   return a.name.localeCompare(b.name, undefined, { sensitivity: "base" });
 }
 
+function compareTreeChildren(a, b) {
+  const rankDiff = treeChildRank(a) - treeChildRank(b);
+  if (rankDiff) {
+    return rankDiff;
+  }
+  if (a.type === "dir" && b.type === "dir") {
+    return compareTreeDirs(a, b);
+  }
+  if (a.type === "file" && b.type === "file") {
+    return compareTreeFiles(a, b);
+  }
+  return a.name.localeCompare(b.name, undefined, { sensitivity: "base" });
+}
+
 function treeFileRank(file) {
   if (isReadmePath(file.path)) {
     return 0;
   }
-  return file.name.startsWith(".") ? 2 : 1;
+  const lowEmphasisRank = isLowEmphasisTreeFile(file.path) ? 2 : 0;
+  const hiddenRank = file.name.startsWith(".") ? 1 : 0;
+  return 1 + lowEmphasisRank + hiddenRank;
 }
 
 function treeDirRank(dir) {
   return dir.name.startsWith(".") ? 1 : 0;
+}
+
+function treeChildRank(child) {
+  if (child.type === "file" && isLowEmphasisTreeFile(child.path)) {
+    return 2;
+  }
+  return child.type === "dir" ? 1 : 0;
 }
 
 function isReadmePath(path) {

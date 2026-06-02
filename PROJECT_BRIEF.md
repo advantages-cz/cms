@@ -144,6 +144,7 @@ Implemented capabilities:
 - Review workspace split into separate `Změny` and `Commity` tabs with badge counts. PR creation/opening lives in the toolbar, while the tabs focus on changed-file and commit lists and refresh after commit operations.
 - Post-commit Actions feedback shows concrete files changed after the last CMS commit as clickable CMS links instead of a generic completed-workflow banner.
 - Actions tab has a status badge for running, failing, or completed branch checks/workflows, the current action status is shown at the right edge of the tab strip, and action polling performs a full branch/review/actions refresh when work finishes.
+- The Actions tab badge shows the number of workflow runs listed in the tab. Running/failing/OK state belongs to the right-side status pill, not the numeric badge.
 - Automation output banners are dismissible per branch/head and show changed-file status labels plus local file-type icons with stable, colored added/modified/removed treatment.
 - Changed-file status colors are shared across automation banners, change lists, and tree indicators. The file tree marks changed files with a dedicated indicator before the file icon, uses local Lucide-style SVG icons for folders and file types, omits redundant extension subtitles, and de-emphasizes miscellaneous technical files.
 - Directory file counts in the tree align in the same right-hand column as file sizes.
