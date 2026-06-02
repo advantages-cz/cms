@@ -774,6 +774,15 @@ textarea:focus {
   background: var(--accent-soft);
 }
 
+.file-link-static {
+  color: var(--text);
+  cursor: default;
+}
+
+.file-link-static:hover {
+  background: var(--surface);
+}
+
 .file-link .path {
   display: block;
   min-width: 0;

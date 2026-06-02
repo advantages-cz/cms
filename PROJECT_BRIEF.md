@@ -143,9 +143,10 @@ Implemented capabilities:
 - Refined toolbar action model: edit/browse state lives in the primary workflow button, refresh is icon-only with a local Lucide-style SVG and an accessible label, PR creation is hidden until the branch has changes, and the signed-in user control looks like an account menu.
 - Review workspace split into separate `Změny` and `Commity` tabs with badge counts. PR creation/opening lives in the toolbar, while the tabs focus on changed-file and commit lists and refresh after commit operations.
 - Post-commit Actions feedback shows concrete files changed after the last CMS commit as clickable CMS links instead of a generic completed-workflow banner.
+- Commit-result tracking is anchored after every explicit CMS write action, including save, create, file delete, and folder delete, so Actions polling and automation diff feedback start consistently.
 - Actions tab has a status badge for running, failing, or completed branch checks/workflows, the current action status is shown at the right edge of the tab strip, and action polling performs a full branch/review/actions refresh when work finishes.
 - The Actions tab badge shows the number of workflow runs listed in the tab. Running/failing/OK state belongs to the right-side status pill, not the numeric badge.
-- Automation output banners are dismissible per branch/head and show changed-file status labels plus local file-type icons with stable, colored added/modified/removed treatment.
+- Automation output banners are dismissible per branch/head and show changed-file status labels plus local file-type icons with stable, colored added/modified/removed treatment. Removed files remain visible in the banner but are not clickable because they no longer exist in the current tree.
 - Changed-file status colors are shared across automation banners, change lists, and tree indicators. The file tree marks changed files with a dedicated indicator before the file icon, uses local Lucide-style SVG icons for folders and file types, omits redundant extension subtitles, and de-emphasizes miscellaneous technical files.
 - Directory file counts in the tree align in the same right-hand column as file sizes.
 - Changed-file rows in `Změny` use the file path itself as the CMS preview link instead of a separate Preview button, include the same local file-type icons as the tree, and show front matter titles in parentheses as non-link text when available. The Actions tab focuses on workflow runs, while outbound buttons such as PR and GitHub links carry an external-link icon.
@@ -238,6 +239,12 @@ Decision: Changes are committed explicitly with a Save commit action rather than
 
 Reasoning: Explicit commits produce cleaner history, avoid excessive CI runs, and give the CMS a clear moment to refresh GitHub Actions, check-run errors, annotations, automation commits, and previews.
 
+### 2026-06-03: Track Every Explicit CMS Write
+
+Decision: Save, create, file delete, and folder delete operations all record their resulting CMS commit as the latest write anchor before refreshing review and Actions data.
+
+Reasoning: Any explicit CMS write can trigger Actions or follow-up automation. Treating only editor saves as the anchor left deletes and creates without the same post-action status and automation diff feedback.
+
 ### 2026-06-02: Treat File Navigation As Browser History
 
 Decision: Selecting files and folders updates the URL with repository, branch, and selected path state, and browser back/forward restores that CMS selection.
@@ -291,6 +298,12 @@ Reasoning: Changed files and commits answer different review questions. Keeping 
 Decision: When Actions finish after a CMS commit and the branch head changed, show the concrete files changed after the last CMS commit as clickable links into the CMS.
 
 Reasoning: A generic completed-workflow banner does not help the editor decide what to review. The useful next step is opening the generated or changed files that automation committed.
+
+### 2026-06-03: Keep Deleted Files In Automation Output
+
+Decision: Automation output banners include removed files from the post-CMS-commit diff, but render them as non-clickable rows.
+
+Reasoning: Deleted files are part of the automation impact and should be visible to editors, while linking them into the CMS would fail because they are absent from the current branch tree.
 
 ### 2026-06-03: Simplify Review And Actions Navigation
 

@@ -1239,6 +1239,22 @@ function resolvePreviewAssetPath(ref, fromPath) {
   return resolveRepoRelativePath(clean, fromPath);
 }
 
+function recordCmsCommit({ commitSha, path, message }) {
+  if (!commitSha) {
+    return;
+  }
+
+  saveLastSave(state.owner, state.repo, state.branch, {
+    commitSha,
+    path,
+    message,
+    savedAt: new Date().toISOString(),
+    actor: state.user?.login || "",
+  });
+  state.lastSave = loadLastSave(state.owner, state.repo, state.branch);
+  state.dismissedAutomationBannerKey = "";
+}
+
 async function saveCurrentFile(message) {
   if (!state.editor || state.editor.binary) {
     toast(t("files.selectMarkdown"), "warn");
@@ -1269,14 +1285,7 @@ async function saveCurrentFile(message) {
     state.editor.sha = response.content?.sha || state.editor.sha;
     state.editor.dirty = false;
     state.headSha = response.commit?.sha || state.headSha;
-    saveLastSave(state.owner, state.repo, state.branch, {
-      commitSha: state.headSha,
-      path: state.editor.path,
-      message: commitMessage,
-      savedAt: new Date().toISOString(),
-      actor: state.user?.login || "",
-    });
-    state.lastSave = loadLastSave(state.owner, state.repo, state.branch);
+    recordCmsCommit({ commitSha: state.headSha, path: state.editor.path, message: commitMessage });
     await refreshRepositoryData({ keepBusy: true });
     await loadFile(savedPath);
     await refreshActions({ keepBusy: true });
@@ -1311,11 +1320,13 @@ async function createTextFile(form, data) {
 
   await withBusy(t("files.creatingFile"), async () => {
     assertCanWrite();
-    await state.client.putFile(state.owner, state.repo, path, {
+    const response = await state.client.putFile(state.owner, state.repo, path, {
       branch: state.branch,
       message,
       contentBase64: textToBase64(content),
     });
+    state.headSha = response.commit?.sha || state.headSha;
+    recordCmsCommit({ commitSha: state.headSha, path, message });
     state.modal = null;
     await refreshRepositoryData({ keepBusy: true });
     state.selectedDir = dir;
@@ -1346,11 +1357,13 @@ async function createFolder(data) {
 
   await withBusy(t("files.creatingFolder"), async () => {
     assertCanWrite();
-    await state.client.putFile(state.owner, state.repo, markerPath, {
+    const response = await state.client.putFile(state.owner, state.repo, markerPath, {
       branch: state.branch,
       message,
       contentBase64: textToBase64(""),
     });
+    state.headSha = response.commit?.sha || state.headSha;
+    recordCmsCommit({ commitSha: state.headSha, path: markerPath, message });
     state.modal = null;
     state.selectedDir = dirPath;
     expandPathToFile(markerPath);
@@ -1395,6 +1408,7 @@ async function deleteSelectedFile() {
     });
 
     state.headSha = response.commit?.sha || state.headSha;
+    recordCmsCommit({ commitSha: state.headSha, path, message: `CMS: delete ${path}` });
     state.selectedPath = "";
     state.selectedDir = directoryOfPath(path);
     state.editor = null;
@@ -1459,6 +1473,7 @@ async function deleteSelectedFolder() {
     });
 
     state.headSha = commit.sha || state.headSha;
+    recordCmsCommit({ commitSha: state.headSha, path: dir, message: `CMS: delete folder ${dir}` });
     state.selectedPath = "";
     state.selectedDir = parentDirectoryOfDir(dir);
     state.editor = null;
@@ -1864,17 +1879,18 @@ function renderAutomationFilesBanner() {
   }
 
   const fileLinks = files
-    .filter((file) => file.status !== "removed")
     .map(
       (file) => {
+        const status = normalizeFileStatus(file.status);
         const iconClass = fileIconClass(file.filename);
-        return `
-          <button class="file-link" type="button" data-action="preview-file" data-path="${escapeHtml(file.filename)}">
-            <span class="tree-icon tree-icon-lucide tree-icon-file file-link-icon ${escapeHtml(iconClass)}" aria-hidden="true">${treeIconSvg(iconClass)}</span>
-            <span class="path">${escapeHtml(file.filename)}</span>
-            <span class="tag status-${escapeHtml(normalizeFileStatus(file.status))}">${escapeHtml(formatFileStatusLabel(file.status))}</span>
-          </button>
+        const content = `
+          <span class="tree-icon tree-icon-lucide tree-icon-file file-link-icon ${escapeHtml(iconClass)}" aria-hidden="true">${treeIconSvg(iconClass)}</span>
+          <span class="path">${escapeHtml(file.filename)}</span>
+          <span class="tag status-${escapeHtml(status)}">${escapeHtml(formatFileStatusLabel(file.status))}</span>
         `;
+        return status === "removed"
+          ? `<div class="file-link file-link-static">${content}</div>`
+          : `<button class="file-link" type="button" data-action="preview-file" data-path="${escapeHtml(file.filename)}">${content}</button>`;
       },
     )
     .join("");
