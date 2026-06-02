@@ -32,6 +32,14 @@ const app = document.querySelector("#app");
 const settings = loadSettings();
 const tokenInfo = loadToken();
 const query = new URLSearchParams(window.location.search);
+const FIXED_REPOSITORY = "advantages-cz/avds";
+const FIXED_DEFAULT_BRANCH = "master";
+const DEFAULT_TREE_PANE_WIDTH = 380;
+const MIN_TREE_PANE_WIDTH = 260;
+const MIN_PREVIEW_PANE_WIDTH = 360;
+const MAX_FRONT_MATTER_TITLE_FILES = 200;
+const MAX_FRONT_MATTER_TITLE_BYTES = 256 * 1024;
+const FRONT_MATTER_TITLE_CONCURRENCY = 4;
 
 const state = {
   publicConfig: {},
@@ -39,14 +47,16 @@ const state = {
   token: tokenInfo.token,
   tokenPersistence: tokenInfo.persistence,
   user: null,
+  userMenuOpen: false,
   owner: "",
   repo: "",
   repositoryInput: "",
-  defaultBranch: settings.defaultBranch || "main",
+  defaultBranch: FIXED_DEFAULT_BRANCH,
   branch: settings.branch || "",
   branchPrefix: "cms/",
   branches: [],
   files: [],
+  frontMatterTitleBySha: new Map(),
   treeTruncated: false,
   headSha: "",
   tab: settings.tab || "files",
@@ -54,8 +64,11 @@ const state = {
   pathFilter: "",
   selectedPath: "",
   selectedDir: "",
-  expandedDirs: new Set(settings.expandedDirs || [""]),
+  expandedDirs: new Set(),
   treeScrollTop: 0,
+  revealSelectedInTree: false,
+  treePaneWidth: normalizeTreePaneWidth(settings.treePaneWidth),
+  treePaneResizing: false,
   editor: null,
   preview: null,
   previewUrls: [],
@@ -85,6 +98,8 @@ const ACTION_POLL_INTERVAL_MS = 12000;
 let actionPollTimer = null;
 let actionPollInFlight = false;
 let restoringBrowserNavigation = false;
+let treePaneResizeDrag = null;
+let frontMatterTitleScanId = 0;
 
 const TOKEN_PERMISSION_REQUIREMENTS = [
   {
@@ -162,6 +177,35 @@ app.addEventListener("input", (event) => {
   handleInput(target);
 });
 
+app.addEventListener("keydown", (event) => {
+  const target = event.target;
+  if (!(target instanceof HTMLElement) || target.dataset.resize !== "tree-pane") {
+    return;
+  }
+  handleTreePaneResizeKey(event, target);
+});
+
+app.addEventListener("pointerdown", (event) => {
+  const handle = event.target.closest("[data-resize='tree-pane']");
+  if (!handle) {
+    return;
+  }
+  event.preventDefault();
+  startTreePaneResize(event, handle);
+});
+
+window.addEventListener("pointermove", (event) => {
+  handleTreePaneResize(event);
+});
+
+window.addEventListener("pointerup", () => {
+  finishTreePaneResize();
+});
+
+window.addEventListener("pointercancel", () => {
+  finishTreePaneResize();
+});
+
 window.addEventListener("popstate", () => {
   void restoreSelectionFromLocation();
 });
@@ -189,15 +233,13 @@ async function loadPublicConfig() {
 }
 
 function hydrateRepositoryDefaults() {
-  const queryRepo = query.get("repo");
   const queryBranch = query.get("branch");
-  const configuredRepo = queryRepo || settings.repository || state.publicConfig.defaultRepository || "";
-  const parsed = parseRepository(configuredRepo);
+  const parsed = parseRepository(FIXED_REPOSITORY);
   state.owner = parsed.owner;
   state.repo = parsed.repo;
-  state.repositoryInput = configuredRepo;
-  state.defaultBranch = settings.defaultBranch || state.publicConfig.defaultBranch || "main";
-  state.branch = queryBranch || settings.branch || state.defaultBranch;
+  state.repositoryInput = FIXED_REPOSITORY;
+  state.defaultBranch = FIXED_DEFAULT_BRANCH;
+  state.branch = queryBranch || settings.branch || FIXED_DEFAULT_BRANCH;
   state.branchPrefix = state.publicConfig.branchPrefix || "cms/";
 }
 
@@ -222,22 +264,22 @@ async function handleForm(form) {
       toast("Změnil jsem způsob uložení tokenu.", "ok");
       shouldCheckToken = true;
     }
-    if (shouldCheckToken) {
-      await checkTokenAccess();
-    } else {
-      render();
+    if (shouldCheckToken && state.owner && state.repo) {
+      state.modal = null;
+      await connectRepository();
+      return;
     }
+    state.modal = null;
+    render();
     return;
   }
 
   if (formName === "repository") {
-    captureTokenFromAuthForm();
-    const repository = String(data.get("repository") || "").trim();
-    const parsed = parseRepository(repository);
+    const parsed = parseRepository(FIXED_REPOSITORY);
     state.owner = parsed.owner;
     state.repo = parsed.repo;
-    state.repositoryInput = repository;
-    state.defaultBranch = String(data.get("defaultBranch") || "main").trim() || "main";
+    state.repositoryInput = FIXED_REPOSITORY;
+    state.defaultBranch = FIXED_DEFAULT_BRANCH;
     state.branch = state.branch || state.defaultBranch;
     persistSettings();
     await connectRepository();
@@ -271,6 +313,7 @@ async function handleAction(button) {
     state.token = "";
     state.client = null;
     state.user = null;
+    state.userMenuOpen = false;
     state.permissionCheck = null;
     clearToken();
     toast("Token je odstraněný z localStorage i sessionStorage.", "ok");
@@ -310,6 +353,19 @@ async function handleAction(button) {
 
   if (action === "check-token-access") {
     await checkTokenAccess();
+    return;
+  }
+
+  if (action === "login") {
+    state.userMenuOpen = false;
+    state.modal = { type: "auth" };
+    render();
+    return;
+  }
+
+  if (action === "toggle-user-menu") {
+    state.userMenuOpen = !state.userMenuOpen;
+    render();
     return;
   }
 
@@ -362,7 +418,7 @@ async function handleAction(button) {
   if (action === "preview-file") {
     state.tab = "files";
     persistSettings();
-    await loadFile(button.dataset.path || "", { syncLatest: true, navigation: "push" });
+    await loadFile(button.dataset.path || "", { syncLatest: true, navigation: "push", revealInTree: true });
     return;
   }
 
@@ -378,6 +434,7 @@ async function handleAction(button) {
       return;
     }
     state.modal = { type: button.dataset.modal };
+    state.userMenuOpen = false;
     render();
     return;
   }
@@ -474,6 +531,81 @@ function handleInput(target) {
   }
 }
 
+function startTreePaneResize(event, handle) {
+  const workbench = handle.closest(".files-workbench");
+  if (!(workbench instanceof HTMLElement)) {
+    return;
+  }
+
+  const rect = workbench.getBoundingClientRect();
+  const maxWidth = Math.max(MIN_TREE_PANE_WIDTH, rect.width - MIN_PREVIEW_PANE_WIDTH);
+  treePaneResizeDrag = {
+    workbench,
+    left: rect.left,
+    min: MIN_TREE_PANE_WIDTH,
+    max: Math.min(maxWidth, 760),
+  };
+  state.treePaneResizing = true;
+  workbench.classList.add("is-resizing");
+  document.body.classList.add("is-resizing-tree-pane");
+  applyTreePaneWidth(event.clientX);
+}
+
+function handleTreePaneResize(event) {
+  if (!treePaneResizeDrag) {
+    return;
+  }
+  event.preventDefault();
+  applyTreePaneWidth(event.clientX);
+}
+
+function finishTreePaneResize() {
+  if (!treePaneResizeDrag) {
+    return;
+  }
+  treePaneResizeDrag.workbench.classList.remove("is-resizing");
+  treePaneResizeDrag = null;
+  state.treePaneResizing = false;
+  document.body.classList.remove("is-resizing-tree-pane");
+  persistSettings();
+}
+
+function handleTreePaneResizeKey(event, handle) {
+  if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) {
+    return;
+  }
+
+  const workbench = handle.closest(".files-workbench");
+  if (!(workbench instanceof HTMLElement)) {
+    return;
+  }
+
+  event.preventDefault();
+  const rect = workbench.getBoundingClientRect();
+  const max = Math.min(Math.max(MIN_TREE_PANE_WIDTH, rect.width - MIN_PREVIEW_PANE_WIDTH), 760);
+  const step = event.shiftKey ? 48 : 16;
+  const nextWidth =
+    event.key === "Home"
+      ? MIN_TREE_PANE_WIDTH
+      : event.key === "End"
+        ? max
+        : state.treePaneWidth + (event.key === "ArrowLeft" ? -step : step);
+  state.treePaneWidth = clamp(Math.round(nextWidth), MIN_TREE_PANE_WIDTH, max);
+  workbench.style.setProperty("--tree-pane-width", `${state.treePaneWidth}px`);
+  handle.setAttribute("aria-valuenow", String(state.treePaneWidth));
+  persistSettings();
+}
+
+function applyTreePaneWidth(clientX) {
+  if (!treePaneResizeDrag) {
+    return;
+  }
+  const width = clamp(Math.round(clientX - treePaneResizeDrag.left), treePaneResizeDrag.min, treePaneResizeDrag.max);
+  state.treePaneWidth = width;
+  treePaneResizeDrag.workbench.style.setProperty("--tree-pane-width", `${width}px`);
+  treePaneResizeDrag.workbench.querySelector("[data-resize='tree-pane']")?.setAttribute("aria-valuenow", String(width));
+}
+
 async function connectRepository({ silent = false } = {}) {
   captureTokenFromAuthForm();
 
@@ -490,10 +622,10 @@ async function connectRepository({ silent = false } = {}) {
   await withBusy("Připojuji GitHub repo", async () => {
     state.connectionError = "";
     state.user = null;
-    const repo = await state.client.getRepository(state.owner, state.repo);
+    await state.client.getRepository(state.owner, state.repo);
     const userResult = await state.client.getAuthenticatedUser().catch(() => null);
     state.user = userResult;
-    state.defaultBranch = repo.default_branch || state.defaultBranch || "main";
+    state.defaultBranch = FIXED_DEFAULT_BRANCH;
     state.branch = state.branch || state.defaultBranch;
     state.branches = await state.client.listBranches(state.owner, state.repo);
 
@@ -512,6 +644,7 @@ async function connectRepository({ silent = false } = {}) {
     persistSettings();
     await refreshRepositoryData({ keepBusy: true });
     await restoreSelectionFromLocation({ keepBusy: true });
+    await selectDefaultRootReadme({ keepBusy: true });
     updateBrowserNavigation({ mode: "replace" });
     await checkTokenAccess({ keepBusy: true });
     if (!silent) {
@@ -889,7 +1022,12 @@ function applyRepositoryTree(tree) {
   state.treeTruncated = tree.truncated;
   state.files = tree.tree
     .filter((entry) => entry.type === "blob")
+    .map((entry) => ({
+      ...entry,
+      frontMatterTitle: state.frontMatterTitleBySha.get(entry.sha) || "",
+    }))
     .sort((a, b) => a.path.localeCompare(b.path));
+  scheduleFrontMatterTitleScan();
 }
 
 async function startEditSession({ forceNewBranch = false } = {}) {
@@ -938,7 +1076,7 @@ function leaveEditSession() {
   render();
 }
 
-async function loadFile(path, { keepBusy = false, syncLatest = false, navigation = "" } = {}) {
+async function loadFile(path, { keepBusy = false, syncLatest = false, navigation = "", revealInTree = false } = {}) {
   if (!path) {
     return;
   }
@@ -957,6 +1095,7 @@ async function loadFile(path, { keepBusy = false, syncLatest = false, navigation
     state.selectedPath = path;
     state.selectedDir = directoryOfPath(path);
     expandPathToFile(path);
+    state.revealSelectedInTree = state.revealSelectedInTree || revealInTree;
     state.editor = {
       path,
       sha: entry.sha,
@@ -969,6 +1108,11 @@ async function loadFile(path, { keepBusy = false, syncLatest = false, navigation
     if (isTextPath(path)) {
       const blob = await state.client.getBlob(state.owner, state.repo, entry.sha);
       state.editor.content = base64ToText(blob.content || "");
+      if (isMarkdownPath(path)) {
+        const title = extractFrontMatterTitle(state.editor.content);
+        state.frontMatterTitleBySha.set(entry.sha, title);
+        applyFrontMatterTitleToFile(entry.sha, title);
+      }
     }
 
     await buildPreview(entry, state.editor.content);
@@ -986,7 +1130,7 @@ async function loadFile(path, { keepBusy = false, syncLatest = false, navigation
 
 async function openMarkdownLink(path, anchor) {
   if (path) {
-    await loadFile(path, { navigation: "push" });
+    await loadFile(path, { navigation: "push", revealInTree: true });
   }
 
   if (anchor) {
@@ -1194,7 +1338,7 @@ async function createTextFile(form, data) {
     state.modal = null;
     await refreshRepositoryData({ keepBusy: true });
     state.selectedDir = dir;
-    await loadFile(path, { navigation: "push" });
+    await loadFile(path, { navigation: "push", revealInTree: true });
     await refreshActions({ keepBusy: true });
     startActionPolling();
     toast("Nový soubor je vytvořený. Actions sleduji nahoře v toolbaru.", "ok");
@@ -1515,21 +1659,24 @@ async function pollDeviceFlow() {
       saveToken(state.token, "session");
       state.modal = null;
       toast("OAuth token je uložený pro aktuální relaci.", "ok");
-      await checkTokenAccess({ keepBusy: true });
+      await connectRepository({ keepBusy: true });
       return;
     }
     toast(payload.error_description || "Autorizace zatím není dokončená.", "warn");
   });
 }
 
-function render() {
-  captureTreeScroll();
+function render({ treeScrollTop = null } = {}) {
+  if (treeScrollTop === null) {
+    captureTreeScroll();
+  } else {
+    state.treeScrollTop = treeScrollTop;
+  }
   const focusSnapshot = captureFocusSnapshot();
   app.innerHTML = `
     <div class="app-shell ${state.busy ? "loading" : ""}">
       ${renderTopbar()}
       <div class="layout">
-        <aside class="sidebar">${renderSidebar()}</aside>
         <main class="content">${renderContent()}</main>
       </div>
     </div>
@@ -1537,6 +1684,7 @@ function render() {
     <div class="toast-stack">${state.toasts.map(renderToast).join("")}</div>
   `;
   restoreTreeScroll();
+  revealSelectedTreeRow();
   restoreFocusSnapshot(focusSnapshot);
 }
 
@@ -1551,11 +1699,34 @@ function renderTopbar() {
       </div>
       <div class="top-actions">
         ${renderTopbarWorkflowControls()}
-        ${state.user ? `<span class="status-pill ok">${escapeHtml(state.user.login)}</span>` : `<span class="status-pill warn">nepřihlášeno</span>`}
+        ${renderUserMenu()}
         ${state.headSha ? `<span class="status-pill">${shortSha(state.headSha)}</span>` : ""}
         ${checkSummary}
       </div>
     </header>
+  `;
+}
+
+function renderUserMenu() {
+  if (!state.token) {
+    return `<button class="status-pill warn" type="button" data-action="login">Přihlásit</button>`;
+  }
+
+  const label = state.user?.login || "token uložen";
+  return `
+    <div class="user-menu-wrap">
+      <button class="status-pill ok user-menu-trigger" type="button" data-action="toggle-user-menu" aria-expanded="${state.userMenuOpen ? "true" : "false"}">
+        ${escapeHtml(label)}
+      </button>
+      ${
+        state.userMenuOpen
+          ? `<div class="user-menu" role="menu">
+              <button type="button" data-action="login" role="menuitem">Změnit token</button>
+              <button type="button" data-action="clear-token" role="menuitem">Logout</button>
+            </div>`
+          : ""
+      }
+    </div>
   `;
 }
 
@@ -1589,131 +1760,13 @@ function renderTopbarWorkflowControls() {
   `;
 }
 
-function renderSidebar() {
-  const tokenHint = state.token ? "Token je uložený. Vlož nový jen pokud ho chceš změnit." : "Fine-grained PAT nebo OAuth token.";
-  return `
-    <section class="section">
-      <h2 class="section-title">Přístup</h2>
-      <form class="form-grid" data-form="auth">
-        <div class="field">
-          <label for="token">GitHub token</label>
-          <input id="token" name="token" type="password" autocomplete="off" placeholder="${escapeHtml(tokenHint)}" />
-        </div>
-        <div class="field">
-          <label for="persistence">Uložení tokenu</label>
-          <select id="persistence" name="persistence">
-            <option value="session" ${state.tokenPersistence === "session" ? "selected" : ""}>jen aktuální relace</option>
-            <option value="local" ${state.tokenPersistence === "local" ? "selected" : ""}>trvale v tomto prohlížeči</option>
-          </select>
-        </div>
-        <div class="button-row">
-          <button class="primary" type="submit">Uložit token</button>
-          <button type="button" data-action="clear-token">Odstranit</button>
-        </div>
-        ${
-          state.publicConfig.githubOAuthClientId
-            ? `<button type="button" data-action="start-oauth">Přihlásit přes GitHub device flow</button>`
-            : ""
-        }
-        <p class="help">Doporučené minimum: Contents read/write, Pull requests read/write, Actions read a Metadata read. Checks detail je volitelný.</p>
-      </form>
-    </section>
-
-    ${renderTokenPermissionPanel()}
-
-    <section class="section">
-      <h2 class="section-title">Repozitář</h2>
-      <form class="form-grid" data-form="repository">
-        <div class="field">
-          <label for="repository">Private repo</label>
-          <input id="repository" name="repository" value="${escapeHtml(state.repositoryInput)}" placeholder="owner/repo" />
-        </div>
-        <div class="field">
-          <label for="default-branch">Defaultní větev</label>
-          <input id="default-branch" name="defaultBranch" value="${escapeHtml(state.defaultBranch)}" placeholder="main" />
-        </div>
-        <button class="primary" type="submit">Připojit repo</button>
-      </form>
-    </section>
-
-    <section class="section">
-      <h2 class="section-title">Approval workflow</h2>
-      <p class="help">Výchozí režim je read-only browse. Edit založí pracovní větev jen z defaultní větve; na pracovní větvi pokračuje ve stejné větvi. Novou větev lze založit explicitně.</p>
-    </section>
-  `;
-}
-
-function renderTokenPermissionPanel() {
-  const canCheck = Boolean(state.token && state.client);
-  return `
-    <section class="section">
-      <h2 class="section-title">Token permissions</h2>
-      <div class="form-grid">
-        <p class="help">Fine-grained token nastav pro vybrané repo a povol tyto repository permissions:</p>
-        ${renderTokenRequirements()}
-        <div class="button-row">
-          <button type="button" data-action="check-token-access" ${canCheck ? "" : "disabled"}>Zkontrolovat token</button>
-        </div>
-        ${renderTokenPermissionCheck()}
-      </div>
-    </section>
-  `;
-}
-
-function renderTokenRequirements() {
-  return `
-    <div class="permission-list">
-      ${TOKEN_PERMISSION_REQUIREMENTS.map(
-        (item) => `
-          <div class="permission-item">
-            <span class="permission-name">${escapeHtml(item.label)}</span>
-            <span class="tag">${escapeHtml(item.value)}</span>
-            <span class="permission-detail">${escapeHtml(item.detail)}</span>
-          </div>
-        `,
-      ).join("")}
-    </div>
-  `;
-}
-
-function renderTokenPermissionCheck() {
-  const check = state.permissionCheck;
-  if (!check) {
-    return `<p class="help">Po uložení tokenu nebo připojení repa tady bude výsledek kontroly. Write práva CMS pouze vypíše, netestuje je bez změny repozitáře.</p>`;
-  }
-
-  return `
-    <div class="permission-check ${escapeHtml(check.status)}">
-      <div class="permission-check-header">
-        <span class="tag ${escapeHtml(check.status)}">${escapeHtml(check.status)}</span>
-        <span class="micro">${escapeHtml(formatDate(check.checkedAt))}</span>
-      </div>
-      <p class="help">${escapeHtml(check.message)}</p>
-      <div class="permission-list permission-results">
-        ${(check.items || [])
-          .map(
-            (item) => `
-              <div class="permission-item">
-                <span class="permission-name">${escapeHtml(item.label)}</span>
-                <span class="tag ${escapeHtml(item.status)}">${escapeHtml(item.required)}</span>
-                ${item.endpoint ? `<span class="path">${escapeHtml(item.endpoint)}</span>` : ""}
-                <span class="permission-detail">${escapeHtml(item.detail)}</span>
-              </div>
-            `,
-          )
-          .join("")}
-      </div>
-    </div>
-  `;
-}
-
 function renderContent() {
   if (!state.token) {
-    return `${renderConnectionError()}${renderWelcome("Vlož GitHub token s minimálními právy a připoj private repo.")}`;
+    return `${renderConnectionError()}${renderWelcome("Přihlas se GitHub tokenem. Repozitář advantages-cz/avds a větev master jsou nastavené napevno.")}`;
   }
 
   if (!state.owner || !state.repo || !state.headSha) {
-    return `${renderConnectionError()}${renderWelcome("Připoj repozitář ve formátu owner/repo. Nastavení lze předvyplnit přes cms.config.json nebo query parametr ?repo=owner/repo.")}`;
+    return `${renderConnectionError()}${renderWelcome("Repozitář advantages-cz/avds je nastavený napevno. Obnov připojení nebo zkontroluj oprávnění tokenu.")}`;
   }
 
   return `
@@ -1743,13 +1796,14 @@ function renderConnectionError() {
 function renderWelcome(message) {
   return `
     <p class="banner info">${escapeHtml(message)}</p>
+    ${state.token ? "" : `<p><button class="primary" type="button" data-action="login">Přihlásit GitHub tokenem</button></p>`}
     <div class="split">
       <section class="panel">
         <div class="panel-header"><h2>Workflow</h2></div>
         <div class="panel-body">
           <div class="list">
-            <div class="row"><div class="row-main"><p class="row-title">1. Připojit private repo</p><p class="help">Aplikace běží staticky na GitHub Pages a používá token konkrétního uživatele.</p></div></div>
-            <div class="row"><div class="row-main"><p class="row-title">2. Vytvořit pracovní větev</p><p class="help">Defaultně se necommitují přímé změny do main/master.</p></div></div>
+            <div class="row"><div class="row-main"><p class="row-title">1. Přihlásit token</p><p class="help">Aplikace běží staticky na GitHub Pages a používá token konkrétního uživatele.</p></div></div>
+            <div class="row"><div class="row-main"><p class="row-title">2. Vytvořit pracovní větev</p><p class="help">Defaultně se necommitují přímé změny do master.</p></div></div>
             <div class="row"><div class="row-main"><p class="row-title">3. Editovat, otevřít PR, sledovat Actions</p><p class="help">CMS ukáže diff, automatické commity i preview HTML/PDF/image artefaktů v sandboxu.</p></div></div>
           </div>
         </div>
@@ -1757,7 +1811,7 @@ function renderWelcome(message) {
       <section class="panel">
         <div class="panel-header"><h2>Oprávnění</h2></div>
         <div class="panel-body">
-          <p class="help">Pro fine-grained token nastav jen cílové private repo. Potřebné permissions jsou Contents read/write, Pull requests read/write, Actions read a Metadata read. Checks API je jen volitelný detail.</p>
+          <p class="help">Pro fine-grained token nastav jen repo advantages-cz/avds. Potřebné permissions jsou Contents read/write, Pull requests read/write, Actions read a Metadata read. Checks API je jen volitelný detail.</p>
         </div>
       </section>
     </div>
@@ -1829,12 +1883,16 @@ function renderTabs() {
 }
 
 function renderTabBadge(tabId) {
-  if (tabId !== "review") {
-    return "";
+  if (tabId === "files") {
+    return `<span class="tab-badge">${escapeHtml(state.files.length)}</span>`;
   }
 
-  const count = changedFileCount();
-  return count ? `<span class="tab-badge">${escapeHtml(count)}</span>` : "";
+  if (tabId === "review") {
+    const count = changedFileCount();
+    return count ? `<span class="tab-badge">${escapeHtml(count)}</span>` : "";
+  }
+
+  return "";
 }
 
 function changedFileCount() {
@@ -1846,16 +1904,11 @@ function renderFilesTab() {
   const currentDir = currentDirectoryPath();
   const canDeleteFolder = state.editMode && Boolean(currentDir) && !state.selectedPath && filesInDirectory(currentDir).length > 0;
   return `
-    <div class="workbench files-workbench">
-      <section class="panel">
-        <div class="panel-header">
-          <h2>Soubory</h2>
-          <span class="tag">${state.files.length}</span>
-        </div>
+    <div class="workbench files-workbench ${state.treePaneResizing ? "is-resizing" : ""}" style="--tree-pane-width: ${state.treePaneWidth}px;">
+      <section class="panel tree-panel">
         <div class="panel-body">
           <div class="field">
-            <label for="path-filter">Filtr cest</label>
-            <input id="path-filter" value="${escapeHtml(state.pathFilter)}" placeholder="content/, .md, generated.html" />
+            <input id="path-filter" value="${escapeHtml(state.pathFilter)}" aria-label="Filtr cest" placeholder="Filtr cest: content/, .md, generated.html" />
           </div>
           ${
             state.editMode
@@ -1876,6 +1929,7 @@ function renderFilesTab() {
           ${renderFileList()}
         </div>
       </section>
+      <div class="tree-splitter" role="separator" aria-orientation="vertical" aria-label="Změnit šířku stromu" aria-valuemin="${MIN_TREE_PANE_WIDTH}" aria-valuenow="${state.treePaneWidth}" tabindex="0" data-resize="tree-pane"></div>
       <section class="panel editor-panel">
         <div class="panel-header">
           <h2>${state.selectedPath ? escapeHtml(state.selectedPath) : "Editor"}</h2>
@@ -1911,7 +1965,7 @@ function renderFileList() {
 }
 
 function renderTreeNodes(node, depth, forceExpanded = false) {
-  const children = [...node.dirs.values(), ...node.files];
+  const children = [...node.files, ...node.dirs.values()];
   if (!children.length) {
     return "";
   }
@@ -1944,12 +1998,16 @@ function renderTreeDirectory(dir, depth, forceExpanded = false) {
 function renderTreeFile(file, depth) {
   const previewable = isTextPath(file.path) || isImagePath(file.path) || isPdfPath(file.path);
   const ext = extensionOf(file.path);
+  const displayName = treeFileDisplayName(file);
   return `
     <button class="tree-row tree-file ${state.selectedPath === file.path ? "active" : ""}" role="treeitem" type="button" data-action="select-file" data-path="${escapeHtml(file.path)}" title="${escapeHtml(file.path)}" style="--depth: ${depth};">
       <span class="tree-spacer"></span>
       <span class="tree-icon tree-icon-file ${escapeHtml(fileIconClass(file.path))}" aria-hidden="true"></span>
       <span class="tree-label">
-        <span class="path">${escapeHtml(file.name)}</span>
+        <span class="path">
+          ${escapeHtml(displayName.title)}
+          ${displayName.filename ? `<span class="tree-file-name-muted">(${escapeHtml(displayName.filename)})</span>` : ""}
+        </span>
         <span class="tree-meta">${escapeHtml(ext || "file")}</span>
       </span>
       <span class="tree-size ${previewable ? "" : "is-binary"}">${previewable ? escapeHtml(humanBytes(file.size)) : "binary"}</span>
@@ -1957,7 +2015,16 @@ function renderTreeFile(file, depth) {
   `;
 }
 
+function treeFileDisplayName(file) {
+  const title = normalizeFrontMatterTitle(file.frontMatterTitle || "");
+  return title ? { title, filename: file.name } : { title: file.name, filename: "" };
+}
+
 function fileIconClass(path) {
+  if (isReadmePath(path)) {
+    return "tree-icon-home";
+  }
+
   const ext = extensionOf(path);
   if (["md", "mdx", "txt"].includes(ext)) {
     return "tree-icon-doc";
@@ -2020,10 +2087,6 @@ function renderBrowsePreview() {
   if (state.editor && isMarkdownPath(state.editor.path)) {
     return `
       <div class="browse-preview">
-        <div class="browse-preview-header">
-          <span class="status-pill">read-only preview</span>
-          <button class="primary" type="button" data-action="start-edit-session">Edit</button>
-        </div>
         <article class="markdown-preview">${renderMarkdown(state.editor.content)}</article>
       </div>
     `;
@@ -2031,10 +2094,6 @@ function renderBrowsePreview() {
 
   return `
     <div class="browse-preview">
-      <div class="browse-preview-header">
-        <span class="status-pill">read-only preview</span>
-        <button class="primary" type="button" data-action="start-edit-session">Edit</button>
-      </div>
       ${renderPreviewPane("full")}
     </div>
   `;
@@ -2688,6 +2747,7 @@ function renderModal() {
   }
 
   const body = {
+    auth: renderAuthModal,
     "create-text-file": renderCreateTextFileModal,
     "create-folder": renderCreateFolderModal,
     "create-pr": renderCreatePrModal,
@@ -2699,6 +2759,39 @@ function renderModal() {
   }
 
   return `<div class="modal-backdrop">${body}</div>`;
+}
+
+function renderAuthModal() {
+  const tokenHint = state.token ? "Token je uložený. Vlož nový jen pokud ho chceš změnit." : "Fine-grained PAT nebo OAuth token.";
+  return `
+    <form class="modal" data-form="auth">
+      <div class="modal-header"><h2>GitHub přihlášení</h2></div>
+      <div class="modal-body form-grid">
+        <p class="help">Repozitář je nastavený napevno na <span class="path">${escapeHtml(FIXED_REPOSITORY)}</span>, defaultní větev <span class="path">${escapeHtml(FIXED_DEFAULT_BRANCH)}</span>.</p>
+        <div class="field">
+          <label for="token">GitHub token</label>
+          <input id="token" name="token" type="password" autocomplete="off" placeholder="${escapeHtml(tokenHint)}" autofocus />
+        </div>
+        <div class="field">
+          <label for="persistence">Uložení tokenu</label>
+          <select id="persistence" name="persistence">
+            <option value="session" ${state.tokenPersistence === "session" ? "selected" : ""}>jen aktuální relace</option>
+            <option value="local" ${state.tokenPersistence === "local" ? "selected" : ""}>trvale v tomto prohlížeči</option>
+          </select>
+        </div>
+        <p class="help">Doporučené minimum: Contents read/write, Pull requests read/write, Actions read a Metadata read. Checks detail je volitelný.</p>
+        ${
+          state.publicConfig.githubOAuthClientId
+            ? `<button type="button" data-action="start-oauth">Přihlásit přes GitHub device flow</button>`
+            : ""
+        }
+      </div>
+      <div class="modal-footer">
+        <button type="button" data-action="close-modal">Zrušit</button>
+        <button class="primary" type="submit">Přihlásit</button>
+      </div>
+    </form>
+  `;
 }
 
 function renderCreateTextFileModal() {
@@ -2916,14 +3009,111 @@ function createTreeDir(name, path) {
 }
 
 function sortTree(node) {
-  node.files.sort((a, b) => a.name.localeCompare(b.name));
-  const sortedDirs = [...node.dirs.entries()].sort(([a], [b]) => a.localeCompare(b));
+  node.files.sort(compareTreeFiles);
+  const sortedDirs = [...node.dirs.entries()].sort(([, a], [, b]) => compareTreeDirs(a, b));
   node.dirs = new Map(sortedDirs);
   node.count = node.files.length;
   for (const child of node.dirs.values()) {
     sortTree(child);
     node.count += child.count || 0;
   }
+}
+
+function compareTreeFiles(a, b) {
+  const rankDiff = treeFileRank(a) - treeFileRank(b);
+  if (rankDiff) {
+    return rankDiff;
+  }
+  return a.name.localeCompare(b.name, undefined, { sensitivity: "base" });
+}
+
+function compareTreeDirs(a, b) {
+  const rankDiff = treeDirRank(a) - treeDirRank(b);
+  if (rankDiff) {
+    return rankDiff;
+  }
+  return a.name.localeCompare(b.name, undefined, { sensitivity: "base" });
+}
+
+function treeFileRank(file) {
+  if (isReadmePath(file.path)) {
+    return 0;
+  }
+  return file.name.startsWith(".") ? 2 : 1;
+}
+
+function treeDirRank(dir) {
+  return dir.name.startsWith(".") ? 1 : 0;
+}
+
+function isReadmePath(path) {
+  const name = String(path || "").split("/").pop() || "";
+  return /^readme\.md$/i.test(name);
+}
+
+function scheduleFrontMatterTitleScan() {
+  const scanId = ++frontMatterTitleScanId;
+  const candidates = state.files
+    .filter((file) => isMarkdownPath(file.path) && file.size <= MAX_FRONT_MATTER_TITLE_BYTES && !state.frontMatterTitleBySha.has(file.sha))
+    .slice(0, MAX_FRONT_MATTER_TITLE_FILES);
+
+  if (!state.client || !state.owner || !state.repo || !candidates.length) {
+    return;
+  }
+
+  void scanFrontMatterTitles(candidates, scanId);
+}
+
+async function scanFrontMatterTitles(files, scanId) {
+  let changed = false;
+  let index = 0;
+
+  async function worker() {
+    while (index < files.length && scanId === frontMatterTitleScanId) {
+      const file = files[index];
+      index += 1;
+      try {
+        const blob = await state.client.getBlob(state.owner, state.repo, file.sha);
+        const title = extractFrontMatterTitle(base64ToText(blob.content || ""));
+        state.frontMatterTitleBySha.set(file.sha, title);
+        if (applyFrontMatterTitleToFile(file.sha, title)) {
+          changed = true;
+        }
+      } catch {
+        state.frontMatterTitleBySha.set(file.sha, "");
+      }
+    }
+  }
+
+  await Promise.all(Array.from({ length: Math.min(FRONT_MATTER_TITLE_CONCURRENCY, files.length) }, worker));
+
+  if (changed && scanId === frontMatterTitleScanId) {
+    render();
+  }
+}
+
+function applyFrontMatterTitleToFile(sha, title) {
+  let changed = false;
+  state.files = state.files.map((file) => {
+    if (file.sha !== sha || file.frontMatterTitle === title) {
+      return file;
+    }
+    changed = true;
+    return { ...file, frontMatterTitle: title };
+  });
+  return changed;
+}
+
+function extractFrontMatterTitle(markdown) {
+  const entry = splitFrontMatter(markdown).frontMatter.find((item) => item.key.toLowerCase() === "title");
+  return normalizeFrontMatterTitle(entry?.value || "");
+}
+
+function normalizeFrontMatterTitle(value) {
+  return String(value || "")
+    .trim()
+    .replace(/^['"]|['"]$/g, "")
+    .trim();
 }
 
 function navigationFromLocation() {
@@ -2935,13 +3125,27 @@ function navigationFromLocation() {
   };
 }
 
+async function selectDefaultRootReadme({ keepBusy = false } = {}) {
+  const navigation = navigationFromLocation();
+  if (navigation.path || navigation.dir || state.selectedPath || state.selectedDir) {
+    return;
+  }
+
+  const readme = state.files.find((file) => /^readme\.md$/i.test(file.path));
+  if (!readme) {
+    return;
+  }
+
+  await loadFile(readme.path, { keepBusy, revealInTree: true });
+}
+
 function updateBrowserNavigation({ mode = "replace" } = {}) {
   if (!state.owner || !state.repo || restoringBrowserNavigation) {
     return;
   }
 
   const url = new URL(window.location.href);
-  url.searchParams.set("repo", `${state.owner}/${state.repo}`);
+  url.searchParams.delete("repo");
   if (state.branch) {
     url.searchParams.set("branch", state.branch);
   } else {
@@ -3016,7 +3220,7 @@ async function restoreSelectionFromLocation({ keepBusy = false } = {}) {
       }
 
       if (nextPath) {
-        await loadFile(nextPath, { keepBusy: true });
+        await loadFile(nextPath, { keepBusy: true, revealInTree: true });
         return;
       }
 
@@ -3026,7 +3230,7 @@ async function restoreSelectionFromLocation({ keepBusy = false } = {}) {
       state.preview = null;
       if (nextDir && directoryExists(nextDir)) {
         state.selectedDir = nextDir;
-        state.expandedDirs.add(nextDir);
+        expandPathToDir(nextDir);
       } else {
         state.selectedDir = "";
       }
@@ -3075,11 +3279,16 @@ function expandPathToFile(path) {
   persistSettings();
 }
 
-function captureTreeScroll() {
-  const list = document.querySelector(".file-list");
-  if (list instanceof HTMLElement) {
-    state.treeScrollTop = list.scrollTop;
+function expandPathToDir(path) {
+  const parts = String(path || "").split("/").filter(Boolean);
+  for (let index = 1; index <= parts.length; index += 1) {
+    state.expandedDirs.add(parts.slice(0, index).join("/"));
   }
+  persistSettings();
+}
+
+function captureTreeScroll() {
+  state.treeScrollTop = currentTreeScrollTop();
 }
 
 function restoreTreeScroll() {
@@ -3089,6 +3298,37 @@ function restoreTreeScroll() {
       list.scrollTop = state.treeScrollTop;
     }
   });
+}
+
+function revealSelectedTreeRow() {
+  if (!state.revealSelectedInTree || !state.selectedPath) {
+    return;
+  }
+
+  window.requestAnimationFrame(() => {
+    const list = document.querySelector(".file-list");
+    const active = list?.querySelector(".tree-file.active");
+    if (!(list instanceof HTMLElement) || !(active instanceof HTMLElement)) {
+      state.revealSelectedInTree = false;
+      return;
+    }
+
+    const listRect = list.getBoundingClientRect();
+    const activeRect = active.getBoundingClientRect();
+    const padding = 12;
+    if (activeRect.top < listRect.top + padding) {
+      list.scrollTop -= listRect.top + padding - activeRect.top;
+    } else if (activeRect.bottom > listRect.bottom - padding) {
+      list.scrollTop += activeRect.bottom - (listRect.bottom - padding);
+    }
+    state.treeScrollTop = list.scrollTop;
+    state.revealSelectedInTree = false;
+  });
+}
+
+function currentTreeScrollTop() {
+  const list = document.querySelector(".file-list");
+  return list instanceof HTMLElement ? list.scrollTop : state.treeScrollTop;
 }
 
 function captureFocusSnapshot() {
@@ -3143,9 +3383,11 @@ function assertCanWrite() {
 }
 
 async function withBusy(label, task) {
+  const preservedTreeScrollTop = currentTreeScrollTop();
+  state.treeScrollTop = preservedTreeScrollTop;
   state.busy = true;
   state.busyLabel = label;
-  render();
+  render({ treeScrollTop: preservedTreeScrollTop });
   try {
     await task();
   } catch (error) {
@@ -3154,7 +3396,12 @@ async function withBusy(label, task) {
   } finally {
     state.busy = false;
     state.busyLabel = "";
-    render();
+    if (state.revealSelectedInTree) {
+      render();
+    } else {
+      state.treeScrollTop = preservedTreeScrollTop;
+      render({ treeScrollTop: preservedTreeScrollTop });
+    }
   }
 }
 
@@ -3284,9 +3531,18 @@ function persistSettings() {
     defaultBranch: state.defaultBranch,
     branch: state.branch,
     tab: state.tab,
+    treePaneWidth: state.treePaneWidth,
     expandedDirs: [...state.expandedDirs],
     allowDefaultBranchEdits: state.allowDefaultBranchEdits,
   });
+}
+
+function normalizeTreePaneWidth(value) {
+  return clamp(Number(value) || DEFAULT_TREE_PANE_WIDTH, MIN_TREE_PANE_WIDTH, 760);
+}
+
+function clamp(value, min, max) {
+  return Math.min(Math.max(value, min), max);
 }
 
 function parseRepository(value) {

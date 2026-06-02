@@ -18,6 +18,7 @@ The product should stay small, auditable, and easy to deploy.
 
 - Run as a public static application on GitHub Pages.
 - Connect to a private GitHub repository using a per-user GitHub token.
+- Target `advantages-cz/avds` with `master` as the fixed default branch.
 - Avoid storing secrets on a server.
 - Support a branch-first editing workflow.
 - Support pull request creation and review readiness checks.
@@ -44,8 +45,8 @@ The product should stay small, auditable, and easy to deploy.
 ## Expected Workflow
 
 1. The user opens the public CMS page.
-2. The user provides a GitHub token scoped to the private Adaptivio repository.
-3. The CMS connects to the private repository.
+2. The user opens the login modal and provides a GitHub token scoped to `advantages-cz/avds`.
+3. The CMS connects to `advantages-cz/avds` on the `master` default branch.
 4. The user browses files in read-only mode and inspects previews.
 5. The user presses Edit when they want to make changes.
 6. If the user is on the default branch, the CMS creates a working branch automatically from the current head.
@@ -64,7 +65,7 @@ The product should stay small, auditable, and easy to deploy.
 - Default token storage is session-only.
 - Persistent token storage must be an explicit user choice.
 - The application sends tokens only to GitHub API endpoints.
-- Fine-grained GitHub tokens should be scoped to the target repository only.
+- Fine-grained GitHub tokens should be scoped to `advantages-cz/avds` only.
 - Default product mode is read-only browsing.
 - Pressing Edit creates a working branch only from the default branch; existing working branches are reused.
 - Direct commits to the default branch are disabled by default.
@@ -104,11 +105,14 @@ Key files:
 
 Implemented capabilities:
 
-- Token entry and storage mode selection.
-- Repository connection.
+- Modal token entry and storage mode selection.
+- Fixed repository connection to `advantages-cz/avds`, default branch `master`.
 - Branch listing and branch creation.
 - Repository tree loading.
 - Tree browser for repository contents.
+- CMS-oriented tree sorting: root `README.md` opens by default; each level sorts `README.md` first, regular files, dotfiles, regular folders, then dot-prefixed folders.
+- Markdown front matter titles in the tree when available, with the filename shown in muted parentheses.
+- Collapsed tree by default, except when opening a URL or link that targets a deeper file or directory.
 - Browse-first approval workflow.
 - Automatic edit branch creation from the default branch.
 - Reuse of the current working branch when editing outside the default branch.
@@ -129,19 +133,19 @@ Implemented capabilities:
 - Browser history integration for repository file and folder navigation via URL `path` and `dir` parameters.
 - Sandboxed HTML preview with relative image, SVG, and CSS assets inlined from the current branch.
 - Fixed-height application shell with internal scrolling in the tree and preview regions.
+- Resizable file tree width in the files workbench.
 - Dismissible error and notification messages.
 - Consolidated top workflow toolbar for branch, mode, edit, pull request, and refresh actions.
+- User menu in the top toolbar for changing the token and logging out.
 
 ## Open Questions
 
-- Which private repository will be the canonical Adaptivio content source?
 - Which paths should be editable by default?
 - Which paths should be considered generated preview outputs?
 - Should the CMS support GitHub App authentication later, or is per-user PAT enough?
 - Should workflow reruns be enabled by default, or kept as an optional permission?
 - Which generated artifact types are most important: PDF, static HTML, images, JSON reports, or something else?
 - Should we add schema-aware editors for Markdown, YAML, JSON, or frontmatter?
-- Should we support multiple repositories in one CMS instance?
 - Should preview include downloaded Actions artifacts, not only files committed to the branch?
 
 ## Backlog
@@ -251,6 +255,42 @@ Reasoning: The current editing workflow should stay focused on deliberate source
 Decision: The main UI is organized around a large repository tree and a large preview/detail region. Redundant per-panel breadcrumbs and extra tree controls were removed, while the branch picker and workflow controls moved into the top toolbar.
 
 Reasoning: The CMS is mostly a browse/review tool until the user explicitly enters editing. Vertical space should go to repository navigation and content inspection.
+
+### 2026-06-02: Fix The Target Repository
+
+Decision: The CMS targets `advantages-cz/avds` with `master` as the fixed default branch. Repository and default branch inputs were removed from the always-visible UI.
+
+Reasoning: The current deployment is specialized for one Adaptivio repository. Removing repository setup keeps login from interrupting normal browsing and reduces accidental connection to the wrong repository.
+
+### 2026-06-02: Move Login Into A Modal
+
+Decision: GitHub token entry now opens as a modal from the top toolbar or empty state. Once authenticated, the top toolbar shows the GitHub login/token state as a menu with token change and logout actions.
+
+Reasoning: Authentication is setup work, not primary content work. Keeping it out of the persistent sidebar gives more attention to repository navigation and preview while preserving explicit logout.
+
+### 2026-06-02: Make Tree Width Resizable
+
+Decision: The files workbench includes a draggable splitter between the repository tree and preview/editor panel. The chosen tree width is stored in browser settings.
+
+Reasoning: Repository trees and previews need different amounts of space depending on path depth, file names, and review task. A splitter keeps the no-sidebar layout flexible without adding more persistent chrome.
+
+### 2026-06-02: Sort Tree For CMS Browsing
+
+Decision: If no URL selection is present, the CMS opens root `README.md` by default. Each tree level shows `README.md` first, then regular files, dotfiles, regular folders, and dot-prefixed folders such as `.github`. `README.md` uses a home-style icon.
+
+Reasoning: Content editors usually need the local landing page or index before implementation folders. This keeps CMS-oriented content near the top without changing repository structure.
+
+### 2026-06-02: Show Front Matter Titles In Tree
+
+Decision: Markdown files can display their front matter `title` in the tree, with the filename in parentheses. Titles are loaded from smaller Markdown blobs in a capped background scan and cached by blob SHA.
+
+Reasoning: Editors recognize content by page title more easily than by slug. Capping and caching the scan keeps the static GitHub API workflow reasonable for larger repositories.
+
+### 2026-06-02: Keep Initial Tree Collapsed
+
+Decision: The repository tree starts collapsed on a fresh load. Deep links and URL-restored selections still expand the ancestors needed to reveal the target file or directory.
+
+Reasoning: A collapsed tree keeps the first view compact and CMS-like, while preserving orientation when the user enters through a link into the middle of the content structure.
 
 ## Update Protocol
 

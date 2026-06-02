@@ -14,6 +14,7 @@ Pro Adaptivio ale potrebujeme v jednom pracovnim toku jeste stav GitHub Actions,
 ## Co umi
 
 - Pripojeni na private repo pres per-user GitHub token.
+- Cilove repo je v aplikaci nastavene napevno na `advantages-cz/avds`, defaultni vetev `master`.
 - Stromove prochazeni obsahu repozitare.
 - Browser back/forward funguje pro navigaci mezi soubory a slozkami v CMS.
 - Read-only browse workflow s preview souboru.
@@ -55,8 +56,6 @@ Volitelny soubor `cms.config.json` muze byt vedle `index.html`:
 
 ```json
 {
-  "defaultRepository": "owner/private-adaptivio-repo",
-  "defaultBranch": "main",
   "branchPrefix": "cms/",
   "editablePathHints": ["content/", "docs/", "data/", "assets/"],
   "previewPathHints": ["dist/", "public/", "site/", "exports/"],
@@ -64,16 +63,12 @@ Volitelny soubor `cms.config.json` muze byt vedle `index.html`:
 }
 ```
 
-Repo lze predvyplnit i URL parametrem:
-
-```text
-https://example.github.io/adaptivio-cms/?repo=owner/private-adaptivio-repo&branch=main
-```
+Repozitar a defaultni vetev nejsou uzivatelsky konfigurovatelne v UI; aplikace pouziva `advantages-cz/avds` a `master`.
 
 Vyber souboru nebo slozky si CMS uklada do URL pres `path` nebo `dir`, takze odkaz muze otevrit konkretni misto ve vetvi:
 
 ```text
-https://example.github.io/adaptivio-cms/?repo=owner/private-adaptivio-repo&branch=main&path=content/page.md
+https://example.github.io/adaptivio-cms/?branch=master&path=content/page.md
 ```
 
 `githubOAuthClientId` je volitelne. Device flow nevyzaduje client secret, ale GitHub OAuth endpointy mohou v cistem browser kontextu narazit na CORS; fine-grained PAT je proto primarni a nejpredikovatelnejsi varianta.
