@@ -380,7 +380,20 @@ textarea:focus {
 }
 
 .tree-actions {
+  display: grid;
+  gap: 8px;
   margin: 8px 0;
+}
+
+.current-dir {
+  min-width: 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.panel-actions {
+  align-items: center;
+  justify-content: flex-end;
 }
 
 .primary {
@@ -413,6 +426,9 @@ textarea:focus {
 }
 
 .tabbar button {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
   min-height: 42px;
   border: 0;
   border-bottom: 3px solid transparent;
@@ -422,9 +438,29 @@ textarea:focus {
   font-weight: 720;
 }
 
+.tab-badge {
+  display: inline-grid;
+  place-items: center;
+  min-width: 20px;
+  height: 20px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 0 6px;
+  background: var(--surface-alt);
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1;
+}
+
 .tabbar button.active {
   border-bottom-color: var(--accent);
   color: var(--text);
+}
+
+.tabbar button.active .tab-badge {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent);
 }
 
 .toolbar {
@@ -645,6 +681,11 @@ textarea:focus {
 .tree-dir.contains-active > .tree-toggle .path {
   color: var(--accent-strong);
   font-weight: 780;
+}
+
+.tree-dir.active-dir > .tree-toggle {
+  background: #dff2ef;
+  box-shadow: inset 3px 0 0 var(--accent);
 }
 
 .tree-toggle {

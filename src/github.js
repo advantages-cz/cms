@@ -145,6 +145,48 @@ export class GitHubClient {
     });
   }
 
+  deleteFile(owner, repo, path, { branch, message, sha }) {
+    return this.request(`/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/contents/${encodePath(path)}`, {
+      method: "DELETE",
+      body: JSON.stringify({
+        message,
+        sha,
+        branch,
+      }),
+    });
+  }
+
+  createTree(owner, repo, { baseTree, tree }) {
+    return this.request(`/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/git/trees`, {
+      method: "POST",
+      body: JSON.stringify({
+        base_tree: baseTree,
+        tree,
+      }),
+    });
+  }
+
+  createCommit(owner, repo, { message, tree, parents }) {
+    return this.request(`/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/git/commits`, {
+      method: "POST",
+      body: JSON.stringify({
+        message,
+        tree,
+        parents,
+      }),
+    });
+  }
+
+  updateBranchRef(owner, repo, branch, { sha, force = false }) {
+    return this.request(`/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/git/refs/heads/${encodePath(branch)}`, {
+      method: "PATCH",
+      body: JSON.stringify({
+        sha,
+        force,
+      }),
+    });
+  }
+
   listPullRequests(owner, repo, params = {}) {
     const query = new URLSearchParams({ state: "open", ...params });
     return this.paginate(`/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/pulls?${query.toString()}`);

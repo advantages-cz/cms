@@ -126,6 +126,7 @@ Implemented capabilities:
 - Front matter-aware Markdown rendering.
 - Collapsed front matter display in rendered Markdown preview.
 - Internal Markdown links resolved through the CMS tree instead of navigating the browser frame.
+- Browser history integration for repository file and folder navigation via URL `path` and `dir` parameters.
 - Sandboxed HTML preview with relative image, SVG, and CSS assets inlined from the current branch.
 - Fixed-height application shell with internal scrolling in the tree and preview regions.
 - Dismissible error and notification messages.
@@ -220,6 +221,12 @@ Reasoning: Most CMS sessions should be safe inspection sessions. Branch creation
 Decision: Changes are committed explicitly with a Save commit action rather than on every local edit.
 
 Reasoning: Explicit commits produce cleaner history, avoid excessive CI runs, and give the CMS a clear moment to refresh GitHub Actions, check-run errors, annotations, automation commits, and previews.
+
+### 2026-06-02: Treat File Navigation As Browser History
+
+Decision: Selecting files and folders updates the URL with repository, branch, and selected path state, and browser back/forward restores that CMS selection.
+
+Reasoning: File browsing is a primary navigation workflow. The browser history controls should move through selected repository files without leaving the static CMS shell.
 
 ### 2026-06-02: Edit Markdown Only
 

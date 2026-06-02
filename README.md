@@ -15,6 +15,7 @@ Pro Adaptivio ale potrebujeme v jednom pracovnim toku jeste stav GitHub Actions,
 
 - Pripojeni na private repo pres per-user GitHub token.
 - Stromove prochazeni obsahu repozitare.
+- Browser back/forward funguje pro navigaci mezi soubory a slozkami v CMS.
 - Read-only browse workflow s preview souboru.
 - Vytvoreni pracovni vetve z defaultni vetve az pri stisku Edit.
 - Pokracovani ve stejne pracovni vetvi, pokud uzivatel neni na defaultni vetvi.
@@ -24,8 +25,8 @@ Pro Adaptivio ale potrebujeme v jednom pracovnim toku jeste stav GitHub Actions,
 - Vytvoreni pull requestu do defaultni vetve.
 - Diff vetve proti defaultni vetvi.
 - Detekce zmen po poslednim CMS commitu, typicky pokud GitHub Action pushne dalsi commit.
-- Stav check runs a workflow runs pro aktualni vetev.
-- Nacteni check annotations pro chyby z CI.
+- Stav workflow runs pro aktualni vetev.
+- Volitelne nacteni check runs a check annotations pro chyby z CI, pokud token/instalace podporuje Checks API.
 - Renderovane Markdown preview vcetne front matter.
 - Preview HTML v sandboxovanem iframe vcetne relativnich image/SVG/CSS assetu.
 - Preview PDF, SVG, obrazku a textu.
@@ -40,7 +41,7 @@ Doporucena prava pro fine-grained token:
 - `Contents`: read/write
 - `Pull requests`: read/write
 - `Actions`: read
-- `Checks`: read
+- `Checks`: volitelne, jen pro detailni check runs a anotace; pokud fine-grained PAT tuhle permission nenabizi, CMS pouzije `Actions: read`.
 
 Volitelne je mozne povolit `Actions: write`, pokud ma CMS znovu spoustet workflow runs.
 
@@ -67,6 +68,12 @@ Repo lze predvyplnit i URL parametrem:
 
 ```text
 https://example.github.io/adaptivio-cms/?repo=owner/private-adaptivio-repo&branch=main
+```
+
+Vyber souboru nebo slozky si CMS uklada do URL pres `path` nebo `dir`, takze odkaz muze otevrit konkretni misto ve vetvi:
+
+```text
+https://example.github.io/adaptivio-cms/?repo=owner/private-adaptivio-repo&branch=main&path=content/page.md
 ```
 
 `githubOAuthClientId` je volitelne. Device flow nevyzaduje client secret, ale GitHub OAuth endpointy mohou v cistem browser kontextu narazit na CORS; fine-grained PAT je proto primarni a nejpredikovatelnejsi varianta.
