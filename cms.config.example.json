@@ -1,0 +1,18 @@
+{
+  "defaultRepository": "owner/private-adaptivio-repo",
+  "defaultBranch": "main",
+  "branchPrefix": "cms/",
+  "editablePathHints": [
+    "content/",
+    "docs/",
+    "data/",
+    "assets/"
+  ],
+  "previewPathHints": [
+    "dist/",
+    "public/",
+    "site/",
+    "exports/"
+  ],
+  "githubOAuthClientId": ""
+}
