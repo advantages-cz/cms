@@ -1,4 +1,5 @@
 import { GitHubClient, GitHubError } from "./github.js";
+import { DEFAULT_LANGUAGE, LANGUAGES, normalizeLanguage, translate } from "./i18n.js";
 import {
   clearToken,
   loadLastSave,
@@ -46,6 +47,7 @@ const state = {
   client: tokenInfo.token ? new GitHubClient(tokenInfo.token) : null,
   token: tokenInfo.token,
   tokenPersistence: tokenInfo.persistence,
+  language: normalizeLanguage(settings.language || DEFAULT_LANGUAGE),
   user: null,
   userMenuOpen: false,
   owner: "",
@@ -106,47 +108,13 @@ function normalizeTab(tab) {
   return ["files", "changes", "commits", "actions"].includes(tab) ? tab : tab === "review" ? "changes" : "files";
 }
 
-const TOKEN_PERMISSION_REQUIREMENTS = [
-  {
-    label: "Repository access",
-    value: "Only selected repository",
-    detail: "Fine-grained token musí mít přístup ke konkrétnímu private repo.",
-  },
-  {
-    label: "Metadata",
-    value: "read",
-    detail: "Základní informace o repozitáři a branche.",
-  },
-  {
-    label: "Contents",
-    value: "read/write",
-    detail: "Čtení stromu, blobů a commitování souborů.",
-  },
-  {
-    label: "Pull requests",
-    value: "read/write",
-    detail: "Diff větve, soubory PR, commity PR a vytvoření PR.",
-  },
-  {
-    label: "Actions",
-    value: "read",
-    detail: "Seznam workflow runs pro větev.",
-  },
-  {
-    label: "Checks",
-    value: "volitelné",
-    detail: "Volitelný stav checků. Fine-grained PAT ho nemusí nabízet; CMS potom použije Actions.",
-  },
-  {
-    label: "Actions",
-    value: "write, volitelné",
-    detail: "Jen pokud chceš z CMS znovu spouštět workflow runs.",
-  },
-];
-
 const scheduleFilterRender = debounce(() => render(), 160);
 
 void init();
+
+function t(key, params = {}) {
+  return translate(state.language, key, params);
+}
 
 app.addEventListener("submit", (event) => {
   const form = event.target.closest("form[data-form]");
@@ -262,11 +230,11 @@ async function handleForm(form) {
       state.client = new GitHubClient(token);
       state.permissionCheck = null;
       saveToken(token, persistence);
-      toast("Token je uložený pro tento prohlížeč.", "ok");
+      toast(t("auth.tokenSaved"), "ok");
       shouldCheckToken = true;
     } else if (state.token) {
       saveToken(state.token, persistence);
-      toast("Změnil jsem způsob uložení tokenu.", "ok");
+      toast(t("auth.tokenStorageChanged"), "ok");
       shouldCheckToken = true;
     }
     if (shouldCheckToken && state.owner && state.repo) {
@@ -321,7 +289,7 @@ async function handleAction(button) {
     state.userMenuOpen = false;
     state.permissionCheck = null;
     clearToken();
-    toast("Token je odstraněný z localStorage i sessionStorage.", "ok");
+    toast(t("auth.tokenCleared"), "ok");
     render();
     return;
   }
@@ -407,7 +375,7 @@ async function handleAction(button) {
   }
 
   if (action === "missing-markdown-link") {
-    toast(`Odkaz neodpovídá žádnému souboru v aktuální větvi: ${button.dataset.href || ""}`, "warn");
+    toast(t("markdown.missingLink", { href: button.dataset.href || "" }), "warn");
     return;
   }
 
@@ -441,7 +409,7 @@ async function handleAction(button) {
 
   if (action === "open-modal") {
     if (["create-text-file", "create-folder"].includes(button.dataset.modal || "") && !state.editMode) {
-      toast("Nejdřív klikni na Edit. CMS založí pracovní větev a odemkne změny.", "warn");
+      toast(t("edit.startFirst"), "warn");
       return;
     }
     state.modal = { type: button.dataset.modal };
@@ -500,14 +468,14 @@ async function handleAction(button) {
     const code = button.dataset.code;
     if (code && navigator.clipboard) {
       await navigator.clipboard.writeText(code);
-      toast("Kód je zkopírovaný.", "ok");
+      toast(t("auth.codeCopied"), "ok");
     }
   }
 }
 
 async function handleChange(target) {
   if (target.id === "branch-select" && target instanceof HTMLSelectElement) {
-    if (state.editor?.dirty && !window.confirm("Soubor má neuložené změny. Přepnout větev?")) {
+    if (state.editor?.dirty && !window.confirm(t("files.switchBranchConfirm"))) {
       target.value = state.branch;
       return;
     }
@@ -524,6 +492,12 @@ async function handleChange(target) {
 
   if (target.id === "allow-default-edits" && target instanceof HTMLInputElement) {
     state.allowDefaultBranchEdits = target.checked;
+    persistSettings();
+    render();
+  }
+
+  if (target.dataset.setting === "language" && target instanceof HTMLSelectElement) {
+    state.language = normalizeLanguage(target.value);
     persistSettings();
     render();
   }
@@ -621,16 +595,16 @@ async function connectRepository({ silent = false } = {}) {
   captureTokenFromAuthForm();
 
   if (!state.token || !state.client) {
-    toast("Nejdřív vlož GitHub token.", "warn");
+    toast(t("auth.needToken"), "warn");
     return;
   }
 
   if (!state.owner || !state.repo) {
-    toast("Doplň repozitář ve formátu owner/repo.", "warn");
+    toast(t("repo.needRepo"), "warn");
     return;
   }
 
-  await withBusy("Připojuji GitHub repo", async () => {
+  await withBusy(t("repo.connecting"), async () => {
     state.connectionError = "";
     state.user = null;
     await state.client.getRepository(state.owner, state.repo);
@@ -659,7 +633,7 @@ async function connectRepository({ silent = false } = {}) {
     updateBrowserNavigation({ mode: "replace" });
     await checkTokenAccess({ keepBusy: true });
     if (!silent) {
-      toast("Repo je připojené.", "ok");
+      toast(t("repo.connected"), "ok");
     }
   });
 }
@@ -675,8 +649,8 @@ async function checkTokenAccess({ keepBusy = false } = {}) {
     const checkedAt = new Date().toISOString();
     const items = [];
     const userProbe = await probeTokenEndpoint(items, {
-      label: "GitHub login",
-      required: "validní token",
+      label: t("permissions.loginProbe"),
+      required: t("permissions.validToken"),
       run: () => state.client.requestWithMeta("/user"),
     });
 
@@ -686,11 +660,11 @@ async function checkTokenAccess({ keepBusy = false } = {}) {
 
     const repoReady = Boolean(state.owner && state.repo);
     if (!repoReady) {
-      addManualTokenChecks(items, "Doplň owner/repo a spusť kontrolu znovu.");
+      addManualTokenChecks(items, t("permissions.addRepoAndRetry"));
       state.permissionCheck = {
         status: userProbe ? "warn" : "danger",
         checkedAt,
-        message: "Bez vybraného repozitáře jde ověřit jen platnost tokenu.",
+        message: t("permissions.tokenOnlyMessage"),
         items,
       };
       return;
@@ -704,13 +678,13 @@ async function checkTokenAccess({ keepBusy = false } = {}) {
     let branchPayload = null;
 
     await probeTokenEndpoint(items, {
-      label: "Repo metadata",
+      label: t("permissions.repoMetadata"),
       required: "Metadata: read a repository access",
       run: () => state.client.requestWithMeta(repoPath),
     });
 
     const contentsReadProbe = await probeTokenEndpoint(items, {
-      label: "Contents read",
+      label: t("permissions.contentsRead"),
       required: "Contents: read",
       run: async () => {
         const branchResult = await state.client.requestWithMeta(branchPath);
@@ -723,33 +697,31 @@ async function checkTokenAccess({ keepBusy = false } = {}) {
     });
 
     await probeTokenEndpoint(items, {
-      label: "Pull requests read",
+      label: t("permissions.pullRequestsRead"),
       required: "Pull requests: read",
       run: () => state.client.requestWithMeta(`${repoPath}/pulls?state=open&per_page=1`),
     });
 
     const ref = branchPayload?.commit?.sha || state.headSha || state.branch || state.defaultBranch || "main";
     await probeTokenEndpoint(items, {
-      label: "Checks",
-      required: "Checks: volitelné",
+      label: t("permissions.checks"),
+      required: `Checks: ${t("permissions.checksOptional")}`,
       optional: true,
       run: () => state.client.requestWithMeta(`${repoPath}/commits/${encodeURIComponent(ref)}/check-runs?per_page=1`),
     });
 
     await probeTokenEndpoint(items, {
-      label: "Actions read",
+      label: t("permissions.actionsRead"),
       required: "Actions: read",
       run: () => state.client.requestWithMeta(`${repoPath}/actions/runs?branch=${branch}&per_page=1`),
     });
 
-    addManualTokenChecks(items, contentsReadProbe ? "Write práva se bezpečně netestují bez změny repozitáře." : "");
+    addManualTokenChecks(items, contentsReadProbe ? t("permissions.safeWriteNotTested") : "");
     const failed = items.filter((item) => item.status === "danger" && !item.optional).length;
     state.permissionCheck = {
       status: failed ? "danger" : "warn",
       checkedAt,
-      message: failed
-        ? `${failed} kontrol neprošlo. Uprav repository access nebo permissions tokenu.`
-        : "Read endpointy prošly. Write permissions zkontroluj ručně podle checklistu.",
+      message: failed ? t("permissions.failedMessage", { count: failed }) : t("permissions.readPassedMessage"),
       items,
     };
   };
@@ -757,7 +729,7 @@ async function checkTokenAccess({ keepBusy = false } = {}) {
   if (keepBusy) {
     await run();
   } else {
-    await withBusy("Kontroluji token", run);
+    await withBusy(t("repo.checkingToken"), run);
   }
 }
 
@@ -790,25 +762,25 @@ async function probeTokenEndpoint(items, { label, required, optional = false, ru
 function addManualTokenChecks(items, detail) {
   items.push(
     {
-      label: "Contents write",
+      label: t("permissions.contentsWrite"),
       required: "Contents: write",
       status: "warn",
       endpoint: "PUT /repos/{owner}/{repo}/contents/{path}",
-      detail: detail || "Nutné pro ukládání souborů. Bezpečně netestováno bez commitu.",
+      detail: detail || t("permissions.contentsWriteDetail"),
     },
     {
-      label: "Pull requests write",
+      label: t("permissions.pullRequestsWrite"),
       required: "Pull requests: write",
       status: "warn",
       endpoint: "POST /repos/{owner}/{repo}/pulls",
-      detail: "Nutné pro vytvoření PR. Bezpečně netestováno bez založení PR.",
+      detail: t("permissions.pullRequestsWriteDetail"),
     },
     {
       label: "Actions write",
-      required: "Actions: write, volitelné",
+      required: `Actions: ${t("permissions.actionsWriteOptional")}`,
       status: "warn",
       endpoint: "POST /repos/{owner}/{repo}/actions/runs/{run_id}/rerun",
-      detail: "Pouze pro tlačítko Spustit znovu. Jinak stačí Actions: read.",
+      detail: t("permissions.actionsWriteManualDetail"),
     },
   );
 }
@@ -841,7 +813,7 @@ async function refreshRepositoryData({ keepBusy = false, preserveSelection = fal
   if (keepBusy) {
     await run();
   } else {
-    await withBusy("Načítám větev", run);
+    await withBusy(t("repo.loadingBranch"), run);
   }
 }
 
@@ -882,7 +854,7 @@ async function refreshReviewData({ keepBusy = false } = {}) {
   if (keepBusy) {
     await run();
   } else {
-    await withBusy("Načítám review data", run);
+    await withBusy(t("repo.loadingReview"), run);
   }
 }
 
@@ -914,7 +886,7 @@ async function refreshActions({ keepBusy = false, syncBranch = true } = {}) {
   if (keepBusy) {
     await run();
   } else {
-    await withBusy("Načítám GitHub Actions", run);
+    await withBusy(t("repo.loadingActions"), run);
   }
 
   return { headChanged };
@@ -964,7 +936,7 @@ async function pollActionsUntilIdle() {
         return;
       }
       stopActionPolling();
-      toast("Actions posunuly větev. Head a preview jsou obnovené.", "ok");
+      toast(t("actions.actionsMovedBranch"), "ok");
       render();
       return;
     }
@@ -977,7 +949,7 @@ async function pollActionsUntilIdle() {
 
     stopActionPolling();
     await refreshRepositoryData({ keepBusy: true, preserveSelection: true });
-    toast("Actions doběhly. Větev a preview jsou obnovené.", "ok");
+    toast(t("actions.actionsFinished"), "ok");
     render();
   } catch (error) {
     stopActionPolling();
@@ -1020,7 +992,7 @@ async function syncRepositoryHead({ reloadSelection = true, notify = true } = {}
   }
 
   if (notify) {
-    toast(`Větev se posunula na ${shortSha(state.headSha)}. Preview jsem obnovil z nového headu.`, "ok");
+    toast(t("repo.branchMoved", { sha: shortSha(state.headSha) }), "ok");
   }
   return true;
 }
@@ -1040,16 +1012,16 @@ function applyRepositoryTree(tree) {
 
 async function startEditSession({ forceNewBranch = false } = {}) {
   if (state.editor?.dirty) {
-    toast("Aktuální soubor už má rozepsané změny.", "warn");
+    toast(t("edit.dirty"), "warn");
     return;
   }
 
   if (state.selectedPath && !isMarkdownPath(state.selectedPath)) {
-    toast("Editace je dostupná jen pro Markdown soubory .md a .mdx.", "warn");
+    toast(t("files.markdownOnlyEdit"), "warn");
     return;
   }
 
-  await withBusy("Připravuji editaci", async () => {
+  await withBusy(t("edit.preparing"), async () => {
     assertConnected();
     const previousPath = state.selectedPath;
 
@@ -1058,10 +1030,10 @@ async function startEditSession({ forceNewBranch = false } = {}) {
       state.branch = branchName;
       state.branches = await state.client.listBranches(state.owner, state.repo);
       upsertBranchOption(branchName);
-      toast(`Vytvořil jsem pracovní větev ${branchName}.`, "ok");
+      toast(t("edit.branchCreated", { branch: branchName }), "ok");
     } else {
       upsertBranchOption(state.branch);
-      toast(`Pokračuji v editaci větve ${state.branch}.`, "ok");
+      toast(t("edit.branchContinued", { branch: state.branch }), "ok");
     }
 
     state.editMode = true;
@@ -1075,7 +1047,7 @@ async function startEditSession({ forceNewBranch = false } = {}) {
 }
 
 function leaveEditSession() {
-  if (state.editor?.dirty && !window.confirm("Soubor má neuložené změny. Ukončit editaci?")) {
+  if (state.editor?.dirty && !window.confirm(t("files.leaveUnsavedConfirm"))) {
     return;
   }
 
@@ -1097,7 +1069,7 @@ async function loadFile(path, { keepBusy = false, syncLatest = false, navigation
     revokePreviewUrls();
     const entry = state.files.find((file) => file.path === path);
     if (!entry) {
-      throw new Error("Soubor není v aktuálním stromu větve.");
+      throw new Error(t("files.fileMissingInTree"));
     }
 
     state.selectedPath = path;
@@ -1132,7 +1104,7 @@ async function loadFile(path, { keepBusy = false, syncLatest = false, navigation
   if (keepBusy) {
     await run();
   } else {
-    await withBusy("Načítám soubor", run);
+    await withBusy(t("repo.loadingFile"), run);
   }
 }
 
@@ -1155,7 +1127,7 @@ function scrollMarkdownAnchor(anchor) {
   if (target instanceof HTMLElement) {
     target.scrollIntoView({ block: "start", behavior: "smooth" });
   } else {
-    toast(`Kotva v dokumentu nebyla nalezena: #${anchor}`, "warn");
+    toast(t("markdown.missingAnchor", { anchor }), "warn");
   }
 }
 
@@ -1168,11 +1140,11 @@ async function refreshSelectedPreview() {
     return;
   }
 
-  await withBusy("Aktualizuji preview", async () => {
+  await withBusy(t("actions.refreshPreview"), async () => {
     if (state.editor?.dirty) {
       const entry = state.files.find((file) => file.path === state.selectedPath);
       if (!entry) {
-        throw new Error("Vybraný soubor už není v aktuálním stromu.");
+        throw new Error(t("files.selectedMissing"));
       }
       await buildPreview(entry, state.editor.content || "");
       return;
@@ -1209,7 +1181,7 @@ async function buildPreview(entry, textContent = "") {
   state.preview = {
     kind: "unsupported",
     path,
-    text: `Preview pro typ ${mime} zatím není podporované.`,
+    text: t("files.unsupportedPreview", { mime }),
   };
 }
 
@@ -1269,12 +1241,12 @@ function resolvePreviewAssetPath(ref, fromPath) {
 
 async function saveCurrentFile(message) {
   if (!state.editor || state.editor.binary) {
-    toast("Vyber Markdown soubor k editaci.", "warn");
+    toast(t("files.selectMarkdown"), "warn");
     return;
   }
 
   if (!isMarkdownPath(state.editor.path)) {
-    toast("Editace je povolená jen pro Markdown soubory .md a .mdx.", "warn");
+    toast(t("files.markdownOnlyEdit"), "warn");
     return;
   }
 
@@ -1283,7 +1255,7 @@ async function saveCurrentFile(message) {
     state.editor.content = textarea.value;
   }
 
-  await withBusy("Ukládám commit", async () => {
+  await withBusy(t("files.savingCommit"), async () => {
     assertCanWrite();
     const savedPath = state.editor.path;
     const commitMessage = message || `CMS: update ${state.editor.path}`;
@@ -1311,7 +1283,7 @@ async function saveCurrentFile(message) {
     await refreshReviewData({ keepBusy: true });
     startActionPolling();
     persistSettings();
-    toast("Commit je ve větvi. Actions sleduji vpravo v pruhu záložek.", "ok");
+    toast(t("files.commitSaved"), "ok");
   });
 }
 
@@ -1323,21 +1295,21 @@ async function createTextFile(form, data) {
   const message = String(data.get("message") || "").trim() || `CMS: create ${path}`;
 
   if (!name) {
-    toast("Doplň název nového Markdown souboru.", "warn");
+    toast(t("files.needFileName"), "warn");
     return;
   }
 
   if (!isMarkdownPath(path)) {
-    toast("Nové soubory v CMS musí být Markdown: .md nebo .mdx.", "warn");
+    toast(t("files.newMarkdownOnly"), "warn");
     return;
   }
 
   if (state.files.some((file) => file.path === path)) {
-    toast("Soubor v aktuální složce už existuje.", "warn");
+    toast(t("files.fileExists"), "warn");
     return;
   }
 
-  await withBusy("Vytvářím soubor", async () => {
+  await withBusy(t("files.creatingFile"), async () => {
     assertCanWrite();
     await state.client.putFile(state.owner, state.repo, path, {
       branch: state.branch,
@@ -1351,7 +1323,7 @@ async function createTextFile(form, data) {
     await refreshActions({ keepBusy: true });
     await refreshReviewData({ keepBusy: true });
     startActionPolling();
-    toast("Nový soubor je vytvořený. Actions sleduji vpravo v pruhu záložek.", "ok");
+    toast(t("files.fileCreated"), "ok");
   });
 }
 
@@ -1363,16 +1335,16 @@ async function createFolder(data) {
   const message = String(data.get("message") || "").trim() || `CMS: create folder ${dirPath || "/"}`;
 
   if (!name) {
-    toast("Doplň název nové složky.", "warn");
+    toast(t("files.needFolderName"), "warn");
     return;
   }
 
   if (state.files.some((file) => file.path === markerPath || file.path.startsWith(`${dirPath}/`))) {
-    toast("Složka v aktuálním umístění už existuje.", "warn");
+    toast(t("files.folderExists"), "warn");
     return;
   }
 
-  await withBusy("Vytvářím složku", async () => {
+  await withBusy(t("files.creatingFolder"), async () => {
     assertCanWrite();
     await state.client.putFile(state.owner, state.repo, markerPath, {
       branch: state.branch,
@@ -1389,31 +1361,31 @@ async function createFolder(data) {
     await refreshActions({ keepBusy: true });
     await refreshReviewData({ keepBusy: true });
     startActionPolling();
-    toast("Složka je vytvořená. Actions sleduji vpravo v pruhu záložek.", "ok");
+    toast(t("files.folderCreated"), "ok");
   });
 }
 
 async function deleteSelectedFile() {
   if (!state.selectedPath || !state.editor) {
-    toast("Vyber soubor ke smazání.", "warn");
+    toast(t("files.selectFileToDelete"), "warn");
     return;
   }
 
   const path = state.selectedPath;
-  if (state.editor.dirty && !window.confirm("Soubor má neuložené změny. Opravdu ho smazat?")) {
+  if (state.editor.dirty && !window.confirm(t("files.deleteUnsavedConfirm"))) {
     return;
   }
 
-  if (!window.confirm(`Smazat soubor ${path}? Tahle akce vytvoří commit ve větvi ${state.branch}.`)) {
+  if (!window.confirm(t("files.deleteFileConfirm", { path, branch: state.branch }))) {
     return;
   }
 
-  await withBusy("Mažu soubor", async () => {
+  await withBusy(t("files.deletingFile"), async () => {
     assertCanWrite();
     const entry = state.files.find((file) => file.path === path);
     const sha = entry?.sha || state.editor.sha;
     if (!sha) {
-      throw new Error("Chybí SHA souboru pro smazání.");
+      throw new Error(t("files.missingFileSha"));
     }
 
     const response = await state.client.deleteFile(state.owner, state.repo, path, {
@@ -1436,32 +1408,32 @@ async function deleteSelectedFile() {
     removeFilesFromState([path]);
     updateBrowserNavigation({ mode: "replace" });
     startActionPolling();
-    toast("Soubor je smazaný. Actions sleduji vpravo v pruhu záložek.", "ok");
+    toast(t("files.fileDeleted"), "ok");
   });
 }
 
 async function deleteSelectedFolder() {
   const dir = currentDirectoryPath();
   if (!dir) {
-    toast("Vyber složku ke smazání.", "warn");
+    toast(t("files.needFolderName"), "warn");
     return;
   }
 
   const files = filesInDirectory(dir);
   if (!files.length) {
-    toast("Složka je prázdná nebo není v aktuálním stromu.", "warn");
+    toast(t("files.folderEmpty"), "warn");
     return;
   }
 
   if (
     !window.confirm(
-      `Smazat složku ${dir} včetně ${files.length} souborů? Tahle akce vytvoří jeden commit ve větvi ${state.branch}.`,
+      t("files.deleteFolderConfirm", { dir, count: files.length, branch: state.branch }),
     )
   ) {
     return;
   }
 
-  await withBusy("Mažu složku", async () => {
+  await withBusy(t("files.deletingFolder"), async () => {
     assertCanWrite();
     const branchInfo = await state.client.getBranch(state.owner, state.repo, state.branch);
     const parentSha = branchInfo.commit.sha;
@@ -1503,23 +1475,23 @@ async function deleteSelectedFolder() {
     state.selectedDir = parentDirectoryOfDir(dir);
     updateBrowserNavigation({ mode: "replace" });
     startActionPolling();
-    toast("Složka je smazaná. Actions sleduji vpravo v pruhu záložek.", "ok");
+    toast(t("files.folderDeleted"), "ok");
   });
 }
 
 async function createBranch(rawName) {
   const name = normalizeBranchName(rawName);
   if (!name) {
-    toast("Doplň název větve.", "warn");
+    toast(t("edit.needBranchName"), "warn");
     return;
   }
 
   if (state.branches.some((branch) => branch.name === name)) {
-    toast("Tahle větev už existuje.", "warn");
+    toast(t("edit.branchExists"), "warn");
     return;
   }
 
-  await withBusy("Vytvářím větev", async () => {
+  await withBusy(t("edit.creatingBranch"), async () => {
     assertConnected();
     await state.client.createBranch(state.owner, state.repo, name, state.headSha);
     state.branches = await state.client.listBranches(state.owner, state.repo);
@@ -1527,7 +1499,7 @@ async function createBranch(rawName) {
     upsertBranchOption(name);
     persistSettings();
     await refreshRepositoryData({ keepBusy: true });
-    toast(`Větev ${name} je připravená.`, "ok");
+    toast(t("edit.branchReady", { branch: name }), "ok");
   });
 }
 
@@ -1556,7 +1528,7 @@ async function createAutomaticEditBranch() {
     }
   }
 
-  throw new Error("Nepodařilo se najít volný název pracovní větve.");
+  throw new Error(t("edit.cannotFindBranchName"));
 }
 
 async function branchExistsOnGitHub(branchName) {
@@ -1587,16 +1559,16 @@ function upsertBranchOption(branchName) {
 
 async function createPullRequest(data) {
   if (state.branch === state.defaultBranch) {
-    toast("Pull request se vytváří z pracovní větve, ne z defaultní.", "warn");
+    toast(t("pr.defaultBranch"), "warn");
     return;
   }
 
-  await withBusy("Vytvářím pull request", async () => {
+  await withBusy(t("pr.creating"), async () => {
     assertConnected();
     const title = String(data.get("title") || "").trim() || `CMS: ${state.branch}`;
     const body =
       String(data.get("body") || "").trim() ||
-      "Created from Adaptivio CMS. Please review generated artifacts and GitHub Actions before merge.";
+      t("pr.fallbackBody");
     state.pullRequest = await state.client.createPullRequest(state.owner, state.repo, {
       title,
       body,
@@ -1609,7 +1581,7 @@ async function createPullRequest(data) {
     await refreshReviewData({ keepBusy: true });
     state.tab = "changes";
     persistSettings();
-    toast("Pull request je vytvořený.", "ok");
+    toast(t("pr.created"), "ok");
   });
 }
 
@@ -1618,7 +1590,7 @@ async function loadAnnotations(checkRunId) {
     return;
   }
 
-  await withBusy("Načítám anotace", async () => {
+  await withBusy(t("actions.annotations"), async () => {
     assertConnected();
     state.annotations[checkRunId] = await state.client.getCheckRunAnnotations(state.owner, state.repo, checkRunId);
   });
@@ -1629,23 +1601,23 @@ async function rerunWorkflow(runId) {
     return;
   }
 
-  await withBusy("Spouštím workflow znovu", async () => {
+  await withBusy(t("actions.rerunning"), async () => {
     assertConnected();
     await state.client.rerunWorkflowRun(state.owner, state.repo, runId);
     await refreshActions({ keepBusy: true });
     startActionPolling();
-    toast("Workflow bylo zařazené ke znovuspuštění.", "ok");
+    toast(t("actions.rerunQueued"), "ok");
   });
 }
 
 async function startDeviceFlow() {
   const clientId = state.publicConfig.githubOAuthClientId;
   if (!clientId) {
-    toast("V cms.config.json není nastavené githubOAuthClientId.", "warn");
+    toast(t("auth.oauthMissing"), "warn");
     return;
   }
 
-  await withBusy("Připravuji GitHub OAuth", async () => {
+  await withBusy(t("auth.oauthPreparing"), async () => {
     const client = new GitHubClient("");
     const payload = await client.requestDeviceCode(clientId, "repo workflow read:user");
     state.modal = {
@@ -1662,7 +1634,7 @@ async function pollDeviceFlow() {
     return;
   }
 
-  await withBusy("Kontroluji GitHub autorizaci", async () => {
+  await withBusy(t("auth.oauthChecking"), async () => {
     const client = new GitHubClient("");
     const payload = await client.pollDeviceToken(state.modal.clientId, state.modal.payload.device_code);
     if (payload.access_token) {
@@ -1671,11 +1643,11 @@ async function pollDeviceFlow() {
       state.client = new GitHubClient(state.token);
       saveToken(state.token, "session");
       state.modal = null;
-      toast("OAuth token je uložený pro aktuální relaci.", "ok");
+      toast(t("auth.oauthSaved"), "ok");
       await connectRepository({ keepBusy: true });
       return;
     }
-    toast(payload.error_description || "Autorizace zatím není dokončená.", "warn");
+    toast(payload.error_description || t("auth.oauthPending"), "warn");
   });
 }
 
@@ -1702,7 +1674,7 @@ function render({ treeScrollTop = null } = {}) {
 }
 
 function renderTopbar() {
-  const repoLabel = state.owner && state.repo ? `${state.owner}/${state.repo}` : "repo zatím není připojené";
+  const repoLabel = state.owner && state.repo ? `${state.owner}/${state.repo}` : t("repo.disconnected");
   const modeClass = state.editMode ? "is-editing" : "is-browsing";
   return `
     <header class="topbar ${modeClass}">
@@ -1714,6 +1686,7 @@ function renderTopbar() {
         </div>
       </div>
       <div class="top-actions">
+        ${renderLanguageSelect("toolbar")}
         ${renderTopbarWorkflowControls()}
         ${renderUserMenu()}
       </div>
@@ -1721,12 +1694,24 @@ function renderTopbar() {
   `;
 }
 
+function renderLanguageSelect(location = "") {
+  const id = `language-select${location ? `-${location}` : ""}`;
+  return `
+    <label class="language-control ${location ? `language-control-${escapeHtml(location)}` : ""}">
+      <span class="sr-only">${t("common.language")}</span>
+      <select id="${escapeHtml(id)}" data-setting="language" aria-label="${t("common.language")}">
+        ${LANGUAGES.map((language) => `<option value="${escapeHtml(language.code)}" ${language.code === state.language ? "selected" : ""}>${escapeHtml(language.label)}</option>`).join("")}
+      </select>
+    </label>
+  `;
+}
+
 function renderUserMenu() {
   if (!state.token) {
-    return `<button class="account-button is-logged-out" type="button" data-action="login">Přihlásit</button>`;
+    return `<button class="account-button is-logged-out" type="button" data-action="login">${t("auth.login")}</button>`;
   }
 
-  const label = state.user?.login || "token uložen";
+  const label = state.user?.login || t("auth.tokenSavedLabel");
   return `
     <div class="user-menu-wrap">
       <button class="account-button user-menu-trigger" type="button" data-action="toggle-user-menu" aria-expanded="${state.userMenuOpen ? "true" : "false"}" aria-haspopup="menu">
@@ -1737,8 +1722,8 @@ function renderUserMenu() {
       ${
         state.userMenuOpen
           ? `<div class="user-menu" role="menu">
-              <button type="button" data-action="login" role="menuitem">Změnit token</button>
-              <button type="button" data-action="clear-token" role="menuitem">Logout</button>
+              <button type="button" data-action="login" role="menuitem">${t("auth.changeToken")}</button>
+              <button type="button" data-action="clear-token" role="menuitem">${t("auth.logout")}</button>
             </div>`
           : ""
       }
@@ -1754,7 +1739,7 @@ function renderTopbarWorkflowControls() {
   const branchOptions = state.branches
     .map((branch) => `<option value="${escapeHtml(branch.name)}" ${branch.name === state.branch ? "selected" : ""}>${escapeHtml(branch.name)}</option>`)
     .join("");
-  const branchKind = state.branch === state.defaultBranch ? "chráněná větev" : "pracovní větev";
+  const branchKind = state.branch === state.defaultBranch ? t("toolbar.protectedBranch") : t("toolbar.workingBranch");
   const branchClass = state.branch === state.defaultBranch ? "branch-default" : "branch-working";
   const hasChanges = changedFileCount() > 0;
   const prButton = state.branch === state.defaultBranch
@@ -1762,41 +1747,41 @@ function renderTopbarWorkflowControls() {
     : state.pullRequest
       ? `<button class="button-secondary external-link-button" type="button" data-action="open-link" data-url="${escapeHtml(state.pullRequest.html_url)}">PR #${state.pullRequest.number}</button>`
       : hasChanges
-        ? `<button class="primary" type="button" data-action="prepare-pr">Vytvořit PR</button>`
+        ? `<button class="primary" type="button" data-action="prepare-pr">${t("common.createPr")}</button>`
         : "";
   const editButton = state.editMode
-    ? `<button class="button-secondary" type="button" data-action="leave-edit-session">Zpět na náhled</button>`
-    : `<button class="primary" type="button" data-action="start-edit-session">Edit</button>`;
+    ? `<button class="button-secondary" type="button" data-action="leave-edit-session">${t("toolbar.backToPreview")}</button>`
+    : `<button class="primary" type="button" data-action="start-edit-session">${t("common.edit")}</button>`;
   const newBranchButton = state.branch === state.defaultBranch
     ? ""
-    : `<button type="button" data-action="new-edit-branch" title="Create a new edit branch from current head">Nová větev</button>`;
+    : `<button type="button" data-action="new-edit-branch" title="${t("toolbar.newBranchTitle")}">${t("toolbar.newBranch")}</button>`;
 
   return `
     <div class="branch-control">
       <span class="status-pill ${branchClass}">${branchKind}</span>
-      <select id="branch-select" class="top-branch-select" aria-label="Aktuální větev">${branchOptions}</select>
-      <span class="status-pill status-sha" title="Head commit aktuální větve">head ${escapeHtml(shortSha(state.headSha))}</span>
+      <select id="branch-select" class="top-branch-select" aria-label="${t("toolbar.currentBranch")}">${branchOptions}</select>
+      <span class="status-pill status-sha" title="${t("common.headTitle")}">head ${escapeHtml(shortSha(state.headSha))}</span>
     </div>
     ${editButton}
     ${newBranchButton}
     ${prButton}
-    <button class="icon-button button-quiet refresh-button" type="button" data-action="refresh" title="Obnovit data z GitHubu" aria-label="Obnovit data z GitHubu">${treeIconSvg("refresh")}</button>
+    <button class="icon-button button-quiet refresh-button" type="button" data-action="refresh" title="${t("toolbar.refreshGithub")}" aria-label="${t("toolbar.refreshGithub")}">${treeIconSvg("refresh")}</button>
   `;
 }
 
 function renderContent() {
   if (!state.token) {
-    return `${renderConnectionError()}${renderWelcome("Přihlas se GitHub tokenem. Repozitář advantages-cz/avds a větev master jsou nastavené napevno.")}`;
+    return `${renderConnectionError()}${renderWelcome(t("repo.loginPrompt"))}`;
   }
 
   if (!state.owner || !state.repo || !state.headSha) {
-    return `${renderConnectionError()}${renderWelcome("Repozitář advantages-cz/avds je nastavený napevno. Obnov připojení nebo zkontroluj oprávnění tokenu.")}`;
+    return `${renderConnectionError()}${renderWelcome(t("repo.fixedMissing"))}`;
   }
 
   return `
     ${renderConnectionError()}
     ${renderWorkflowBanners()}
-    ${state.treeTruncated ? `<p class="banner warn">GitHub vrátil zkrácený strom. Pro velmi velké repo bude potřeba zpřesnit editablePathHints nebo doplnit stránkované načítání.</p>` : ""}
+    ${state.treeTruncated ? `<p class="banner warn">${t("repo.treeTruncated")}</p>` : ""}
     ${renderTabs()}
     <div class="tab-content tab-content-${escapeHtml(state.tab)}">
       ${state.tab === "files" ? renderFilesTab() : ""}
@@ -1812,7 +1797,7 @@ function renderConnectionError() {
     ? `
       <div class="banner danger dismissible">
         <span>${escapeHtml(state.connectionError)}</span>
-        <button class="dismiss-button" type="button" data-action="dismiss-connection-error" aria-label="Close error">×</button>
+        <button class="dismiss-button" type="button" data-action="dismiss-connection-error" aria-label="${t("common.closeError")}">×</button>
       </div>
     `
     : "";
@@ -1821,22 +1806,22 @@ function renderConnectionError() {
 function renderWelcome(message) {
   return `
     <p class="banner info">${escapeHtml(message)}</p>
-    ${state.token ? "" : `<p><button class="primary" type="button" data-action="login">Přihlásit GitHub tokenem</button></p>`}
+    ${state.token ? "" : `<p><button class="primary" type="button" data-action="login">${t("auth.loginWithToken")}</button></p>`}
     <div class="split">
       <section class="panel">
-        <div class="panel-header"><h2>Workflow</h2></div>
+        <div class="panel-header"><h2>${t("workflow.title")}</h2></div>
         <div class="panel-body">
           <div class="list">
-            <div class="row"><div class="row-main"><p class="row-title">1. Přihlásit token</p><p class="help">Aplikace běží staticky na GitHub Pages a používá token konkrétního uživatele.</p></div></div>
-            <div class="row"><div class="row-main"><p class="row-title">2. Vytvořit pracovní větev</p><p class="help">Defaultně se necommitují přímé změny do master.</p></div></div>
-            <div class="row"><div class="row-main"><p class="row-title">3. Editovat, otevřít PR, sledovat Actions</p><p class="help">CMS ukáže diff, automatické commity i preview HTML/PDF/image artefaktů v sandboxu.</p></div></div>
+            <div class="row"><div class="row-main"><p class="row-title">${t("workflow.step1Title")}</p><p class="help">${t("workflow.step1Help")}</p></div></div>
+            <div class="row"><div class="row-main"><p class="row-title">${t("workflow.step2Title")}</p><p class="help">${t("workflow.step2Help")}</p></div></div>
+            <div class="row"><div class="row-main"><p class="row-title">${t("workflow.step3Title")}</p><p class="help">${t("workflow.step3Help")}</p></div></div>
           </div>
         </div>
       </section>
       <section class="panel">
-        <div class="panel-header"><h2>Oprávnění</h2></div>
+        <div class="panel-header"><h2>${t("workflow.permissionsTitle")}</h2></div>
         <div class="panel-body">
-          <p class="help">Pro fine-grained token nastav jen repo advantages-cz/avds. Potřebné permissions jsou Contents read/write, Pull requests read/write, Actions read a Metadata read. Checks API je jen volitelný detail.</p>
+          <p class="help">${t("workflow.permissionsHelp")}</p>
         </div>
       </section>
     </div>
@@ -1855,14 +1840,14 @@ function renderPostPushStatus() {
   const statusItems = actionStatusItems();
   const failing = statusItems.filter((run) => classifyConclusion(run.conclusion, run.status) === "danger");
   const running = statusItems.filter((run) => run.status && run.status !== "completed");
-  const source = currentHeadCheckRuns().length ? "checků" : "workflow runs";
+  const source = actionStatusSource();
 
   if (failing.length) {
-    return `<p class="banner danger">Po posledním commitu selhává ${failing.length} ${source}. Otevři Actions a oprav větev dalším commitem.</p>`;
+    return `<p class="banner danger">${t("actions.afterCommitFailing", { count: failing.length, source })}</p>`;
   }
 
   if (running.length) {
-    return `<p class="banner warn">Po posledním commitu stále běží ${running.length} ${source}. Stav můžeš obnovit v záložce Actions.</p>`;
+    return `<p class="banner warn">${t("actions.afterCommitRunning", { count: running.length, source })}</p>`;
   }
 
   return renderAutomationFilesBanner();
@@ -1887,7 +1872,7 @@ function renderAutomationFilesBanner() {
           <button class="file-link" type="button" data-action="preview-file" data-path="${escapeHtml(file.filename)}">
             <span class="tree-icon tree-icon-lucide tree-icon-file file-link-icon ${escapeHtml(iconClass)}" aria-hidden="true">${treeIconSvg(iconClass)}</span>
             <span class="path">${escapeHtml(file.filename)}</span>
-            <span class="tag status-${escapeHtml(normalizeFileStatus(file.status))}">${escapeHtml(file.status)}</span>
+            <span class="tag status-${escapeHtml(normalizeFileStatus(file.status))}">${escapeHtml(formatFileStatusLabel(file.status))}</span>
           </button>
         `;
       },
@@ -1897,10 +1882,10 @@ function renderAutomationFilesBanner() {
   return `
     <div class="banner info automation-files-banner dismissible">
       <div>
-        <p>Actions doběhly a automatizace změnila soubory po posledním CMS commitu ${escapeHtml(shortSha(state.lastSave.commitSha))}.</p>
-        ${fileLinks ? `<div class="file-link-list">${fileLinks}</div>` : `<p class="help">Automatizace změnila jen soubory, které už v aktuální větvi nejdou otevřít jako preview.</p>`}
+        <p>${t("actions.automationFiles", { sha: shortSha(state.lastSave.commitSha) })}</p>
+        ${fileLinks ? `<div class="file-link-list">${fileLinks}</div>` : `<p class="help">${t("actions.automationOnlyMissing")}</p>`}
       </div>
-      <button class="dismiss-button" type="button" data-action="dismiss-automation-banner" aria-label="Zavřít seznam automatických změn">×</button>
+      <button class="dismiss-button" type="button" data-action="dismiss-automation-banner" aria-label="${t("actions.closeAutomation")}">×</button>
     </div>
   `;
 }
@@ -1917,15 +1902,37 @@ function normalizeFileStatus(status) {
   return "other";
 }
 
+function formatFileStatusLabel(status) {
+  const normalized = normalizeFileStatus(status);
+  const translated = t(`status.file.${normalized}`);
+  return translated === `status.file.${normalized}` ? String(status || normalized) : translated;
+}
+
+function normalizeRunStatus(status) {
+  return String(status || "")
+    .trim()
+    .toLowerCase()
+    .replace(/-/g, "_");
+}
+
+function formatRunStatusLabel(status) {
+  const normalized = normalizeRunStatus(status);
+  if (!normalized) {
+    return "";
+  }
+  const translated = t(`status.run.${normalized}`);
+  return translated === `status.run.${normalized}` ? String(status) : translated;
+}
+
 function renderTabs() {
   const tabs = [
-    ["files", "Soubory"],
-    ["changes", "Změny"],
-    ["commits", "Commity"],
-    ["actions", "Actions"],
+    ["files", t("tabs.files")],
+    ["changes", t("tabs.changes")],
+    ["commits", t("tabs.commits")],
+    ["actions", t("tabs.actions")],
   ];
   return `
-    <nav class="tabbar" aria-label="Sekce">
+    <nav class="tabbar" aria-label="${t("tabs.sections")}">
       <div class="tabbar-tabs">
         ${tabs
           .map(([id, label]) => `<button type="button" class="${state.tab === id ? "active" : ""}" data-action="tab" data-tab="${id}">${label}${renderTabBadge(id)}</button>`)
@@ -2011,18 +2018,18 @@ function renderFilesTab() {
       <section class="panel tree-panel">
         <div class="panel-body">
           <div class="field">
-            <input id="path-filter" value="${escapeHtml(state.pathFilter)}" aria-label="Filtr cest" placeholder="Filtr cest: content/, .md, generated.html" />
+            <input id="path-filter" value="${escapeHtml(state.pathFilter)}" aria-label="${t("files.pathFilter")}" placeholder="${t("files.pathFilterPlaceholder")}" />
           </div>
           ${
             state.editMode
               ? `<div class="tree-actions">
-                  <div class="current-dir">Složka: <span class="path">${escapeHtml(currentDir || "/")}</span></div>
+                  <div class="current-dir">${t("files.currentFolder", { dir: "" })}<span class="path">${escapeHtml(currentDir || "/")}</span></div>
                   <div class="button-row">
-                    <button type="button" data-action="open-modal" data-modal="create-text-file">New Markdown</button>
-                    <button type="button" data-action="open-modal" data-modal="create-folder">New Folder</button>
+                    <button type="button" data-action="open-modal" data-modal="create-text-file">${t("files.newMarkdown")}</button>
+                    <button type="button" data-action="open-modal" data-modal="create-folder">${t("files.newFolder")}</button>
                     ${
                       canDeleteFolder
-                        ? `<button class="danger" type="button" data-action="delete-folder">Smazat složku</button>`
+                        ? `<button class="danger" type="button" data-action="delete-folder">${t("files.deleteFolder")}</button>`
                         : ""
                     }
                   </div>
@@ -2032,15 +2039,15 @@ function renderFilesTab() {
           ${renderFileList()}
         </div>
       </section>
-      <div class="tree-splitter" role="separator" aria-orientation="vertical" aria-label="Změnit šířku stromu" aria-valuemin="${MIN_TREE_PANE_WIDTH}" aria-valuenow="${state.treePaneWidth}" tabindex="0" data-resize="tree-pane"></div>
+      <div class="tree-splitter" role="separator" aria-orientation="vertical" aria-label="${t("files.resizeTree")}" aria-valuemin="${MIN_TREE_PANE_WIDTH}" aria-valuenow="${state.treePaneWidth}" tabindex="0" data-resize="tree-pane"></div>
       <section class="panel editor-panel">
         <div class="panel-header">
-          <h2>${state.selectedPath ? escapeHtml(state.selectedPath) : "Editor"}</h2>
+          ${renderSelectedFileHeading()}
           <div class="button-row panel-actions">
-            ${state.editor?.dirty ? `<span class="tag warn">neuloženo</span>` : ""}
+            ${state.editor?.dirty ? `<span class="tag warn">${t("files.unsaved")}</span>` : ""}
             ${
               state.editMode && state.selectedPath
-                ? `<button class="danger" type="button" data-action="delete-file">Smazat</button>`
+                ? `<button class="danger" type="button" data-action="delete-file">${t("files.delete")}</button>`
                 : ""
             }
           </div>
@@ -2051,10 +2058,21 @@ function renderFilesTab() {
   `;
 }
 
+function renderSelectedFileHeading() {
+  const label = state.selectedPath ? state.selectedPath : t("files.editor");
+  const selectedStatus = state.selectedPath ? changedFileStatusByPath().get(state.selectedPath) || "" : "";
+  return `
+    <div class="selected-file-heading">
+      <h2>${escapeHtml(label)}</h2>
+      ${selectedStatus ? `<span class="tag status-${escapeHtml(selectedStatus)}">${escapeHtml(formatFileStatusLabel(selectedStatus))}</span>` : ""}
+    </div>
+  `;
+}
+
 function renderFileList() {
   const files = filteredFiles();
   if (!files.length) {
-    return `<div class="empty">Žádné soubory neodpovídají filtru.</div>`;
+    return `<div class="empty">${t("files.noMatches")}</div>`;
   }
 
   const tree = buildFileTree(files);
@@ -2062,7 +2080,7 @@ function renderFileList() {
   const changedStatuses = changedFileStatusByPath();
 
   return `
-    <div class="file-list tree-browser" role="tree" aria-label="Repository files">
+    <div class="file-list tree-browser" role="tree" aria-label="${t("files.repositoryFiles")}">
       ${renderTreeNodes(tree, 0, filtering, changedStatuses)}
     </div>
   `;
@@ -2086,13 +2104,13 @@ function renderTreeDirectory(dir, depth, forceExpanded = false, changedStatuses 
   const isSelectedDir = state.selectedDir === dir.path && !state.selectedPath;
   return `
     <div class="tree-row tree-dir ${isSelectedAncestor ? "contains-active" : ""} ${isSelectedDir ? "active-dir" : ""}" role="treeitem" aria-expanded="${expanded}" style="--depth: ${depth};">
-      <button class="tree-toggle" type="button" data-action="toggle-dir" data-path="${escapeHtml(dir.path)}" aria-label="${expanded ? "Sbalit" : "Rozbalit"} ${escapeHtml(dir.name)}">
+      <button class="tree-toggle" type="button" data-action="toggle-dir" data-path="${escapeHtml(dir.path)}" aria-label="${expanded ? t("files.collapse") : t("files.expand")} ${escapeHtml(dir.name)}">
         <span class="tree-caret" aria-hidden="true">${expanded ? "" : ""}</span>
         <span class="tree-icon tree-icon-lucide tree-icon-dir" aria-hidden="true">${treeIconSvg("folder")}</span>
         <span class="tree-label">
           <span class="path">${escapeHtml(dir.name)}</span>
         </span>
-        <span class="tree-size">${fileCount} files</span>
+        <span class="tree-size">${fileCount} ${t("common.files")}</span>
       </button>
     </div>
     ${expanded ? renderTreeNodes(dir, depth + 1, forceExpanded, changedStatuses) : ""}
@@ -2116,7 +2134,7 @@ function renderTreeFile(file, depth, changedStatuses = new Map()) {
           ${displayName.filename ? `<span class="tree-file-name-muted">(${escapeHtml(displayName.filename)})</span>` : ""}
         </span>
       </span>
-      <span class="tree-size ${previewable ? "" : "is-binary"}">${previewable ? escapeHtml(humanBytes(file.size)) : "binary"}</span>
+      <span class="tree-size ${previewable ? "" : "is-binary"}">${previewable ? escapeHtml(humanBytes(file.size)) : t("common.binary")}</span>
     </button>
   `;
 }
@@ -2188,7 +2206,7 @@ function isLowEmphasisTreeFile(path) {
 
 function renderEditor() {
   if (!state.editor) {
-    return `<div class="empty">Vyber soubor vlevo. V browse mode uvidíš preview, v edit session se textové soubory změní na editor.</div>`;
+    return `<div class="empty">${t("files.selectFileEmpty")}</div>`;
   }
 
   if (!state.editMode) {
@@ -2198,7 +2216,7 @@ function renderEditor() {
   if (!isMarkdownPath(state.editor.path)) {
     return `
       <div class="browse-preview">
-        <p class="banner warn">Tento soubor je jen pro čtení. Edit session podporuje pouze Markdown soubory .md a .mdx.</p>
+        <p class="banner warn">${t("files.readOnlyMarkdownOnly")}</p>
         ${renderPreviewPane("full")}
       </div>
     `;
@@ -2209,13 +2227,13 @@ function renderEditor() {
       <div>
         <textarea id="editor-content" class="editor-textarea editor-textarea-full" spellcheck="false">${escapeHtml(state.editor.content)}</textarea>
         <div class="field" style="margin-top: 10px;">
-          <label for="message">Commit message</label>
+          <label for="message">${t("files.commitMessage")}</label>
           <input id="message" name="message" placeholder="CMS: update ${escapeHtml(state.editor.path)}" />
         </div>
         <div class="button-row" style="margin-top: 10px;">
-          <button class="primary" type="submit">Save commit & check branch</button>
+          <button class="primary" type="submit">${t("files.saveCommit")}</button>
         </div>
-        <p class="help" style="margin-top: 10px;">Markdown preview je záměrně vypnutý během editace. Ulož logický commit, CMS potom přepne na Actions a ukáže CI chyby, anotace nebo automatické změny.</p>
+        <p class="help" style="margin-top: 10px;">${t("files.editPreviewHelp")}</p>
       </div>
     </form>
   `;
@@ -2223,7 +2241,7 @@ function renderEditor() {
 
 function renderBrowsePreview() {
   if (!state.preview) {
-    return `<div class="empty">Preview není načtené.</div>`;
+    return `<div class="empty">${t("files.previewNotLoaded")}</div>`;
   }
 
   if (state.editor && isMarkdownPath(state.editor.path)) {
@@ -2243,7 +2261,7 @@ function renderBrowsePreview() {
 
 function renderPreviewPane(mode = "") {
   if (!state.preview) {
-    return `<div class="empty">Preview není načtené.</div>`;
+    return `<div class="empty">${t("files.previewNotLoaded")}</div>`;
   }
 
   const fullClass = mode === "full" ? " preview-full" : "";
@@ -2257,7 +2275,7 @@ function renderPreviewPane(mode = "") {
   }
 
   if (state.preview.kind === "pdf") {
-    return `<object class="preview-object${fullClass}" data="${escapeHtml(state.preview.url)}" type="application/pdf"><a href="${escapeHtml(state.preview.url)}" download>Stáhnout PDF</a></object>`;
+    return `<object class="preview-object${fullClass}" data="${escapeHtml(state.preview.url)}" type="application/pdf"><a href="${escapeHtml(state.preview.url)}" download>${t("files.downloadPdf")}</a></object>`;
   }
 
   return `<pre class="preview-code${fullClass}">${escapeHtml(state.preview.text || "")}</pre>`;
@@ -2585,7 +2603,7 @@ function renderFrontMatter(entries) {
 
   return `
     <details class="frontmatter-preview">
-      <summary>Front matter</summary>
+      <summary>${t("common.frontMatter")}</summary>
       <dl>
         ${entries
           .map((entry) => `<div><dt>${escapeHtml(entry.key)}</dt><dd>${renderMarkdownInline(entry.value)}</dd></div>`)
@@ -2621,7 +2639,7 @@ function splitMarkdownTableRow(line) {
 
 function renderChangesTab() {
   if (state.branch === state.defaultBranch) {
-    return `<p class="banner info">Změny jsou dostupné pro pracovní větev. Kliknutím na Edit CMS založí větev z ${escapeHtml(state.defaultBranch)}.</p>`;
+    return `<p class="banner info">${t("changes.defaultBranchInfo", { branch: state.defaultBranch })}</p>`;
   }
 
   const files = changedFilesForBranch();
@@ -2630,18 +2648,18 @@ function renderChangesTab() {
     ${renderBranchCompareBanner()}
     <section class="panel">
       <div class="panel-header">
-        <h2>Změněné soubory</h2>
-        <span class="tag">${escapeHtml(files.length)} souborů</span>
+        <h2>${t("changes.changedFiles")}</h2>
+        <span class="tag">${t("changes.fileCount", { count: files.length })}</span>
       </div>
       <div class="panel-body">${renderChangedFiles(files)}</div>
     </section>
     ${
       externalFiles.length
-        ? `<p class="banner warn" style="margin-top: 10px;">Po posledním CMS commitu se větev ještě změnila. Zkontroluj hlavně automatické nebo externí změny.</p>
+        ? `<p class="banner warn" style="margin-top: 10px;">${t("changes.changedAfterLastCommit")}</p>
           <section class="panel" style="margin-top: 10px;">
             <div class="panel-header">
-              <h2>Změny po posledním CMS commitu</h2>
-              <span class="tag warn">${escapeHtml(externalFiles.length)} souborů</span>
+              <h2>${t("changes.changesAfterLastCommit")}</h2>
+              <span class="tag warn">${t("changes.fileCount", { count: externalFiles.length })}</span>
             </div>
             <div class="panel-body">${renderChangedFiles(externalFiles)}</div>
           </section>`
@@ -2652,15 +2670,15 @@ function renderChangesTab() {
 
 function renderCommitsTab() {
   if (state.branch === state.defaultBranch) {
-    return `<p class="banner info">Commity pracovní větve se zobrazí po založení edit branch.</p>`;
+    return `<p class="banner info">${t("commits.defaultBranchInfo")}</p>`;
   }
 
   return `
     ${renderBranchCompareBanner()}
     <section class="panel">
       <div class="panel-header">
-        <h2>Commity větve</h2>
-        <span class="tag">${escapeHtml(commitCount())} commitů</span>
+        <h2>${t("commits.branchCommits")}</h2>
+        <span class="tag">${t("commits.commitCount", { count: commitCount() })}</span>
       </div>
       <div class="panel-body">${renderCommitList()}</div>
     </section>
@@ -2669,20 +2687,24 @@ function renderCommitsTab() {
 
 function renderBranchCompareBanner() {
   if (!state.compare) {
-    return `<p class="banner info">Data pracovní větve zatím nejsou načtená.</p>`;
+    return `<p class="banner info">${t("changes.branchDataMissing")}</p>`;
   }
+  const detail = state.pullRequest
+    ? t("changes.prOpen", { number: state.pullRequest.number })
+    : changedFileCount()
+      ? t("changes.prCanCreate")
+      : t("changes.noPrNeeded");
 
   return `
     <p class="banner info">
-      Větev je ahead ${escapeHtml(state.compare.ahead_by || 0)} a behind ${escapeHtml(state.compare.behind_by || 0)} proti ${escapeHtml(state.defaultBranch)}.
-      ${state.pullRequest ? `PR #${escapeHtml(state.pullRequest.number)} je otevřený.` : changedFileCount() ? "PR můžeš vytvořit v horním toolbaru." : "Bez změn není potřeba vytvářet PR."}
+      ${t("changes.branchCompare", { ahead: state.compare.ahead_by || 0, behind: state.compare.behind_by || 0, branch: state.defaultBranch, detail })}
     </p>
   `;
 }
 
 function renderChangedFiles(files) {
   if (!files.length) {
-    return `<div class="empty">Žádné změněné soubory.</div>`;
+    return `<div class="empty">${t("changes.noChangedFiles")}</div>`;
   }
 
   return `
@@ -2702,7 +2724,7 @@ function renderChangedFiles(files) {
               <div class="row-main">
                 ${fileTitle}
                 <div class="row-meta">
-                  <span class="tag ${escapeHtml(statusClass)}">${escapeHtml(file.status)}</span>
+                  <span class="tag ${escapeHtml(statusClass)}">${escapeHtml(formatFileStatusLabel(file.status))}</span>
                   <span class="tag ok">+${file.additions || 0}</span>
                   <span class="tag danger">-${file.deletions || 0}</span>
                 </div>
@@ -2723,7 +2745,7 @@ function changedFileFrontMatterTitle(file) {
 function renderCommitList() {
   const commits = state.pullCommits.length ? state.pullCommits : state.compare?.commits || [];
   if (!commits.length) {
-    return `<div class="empty">Commity zatím nejsou načtené.</div>`;
+    return `<div class="empty">${t("commits.notLoaded")}</div>`;
   }
 
   return `
@@ -2739,7 +2761,7 @@ function renderCommitList() {
               <div class="row-meta">
                 <span class="tag">${escapeHtml(shortSha(commit.sha))}</span>
                 <span class="tag">${escapeHtml(author)}</span>
-                ${action ? `<span class="tag warn">automatizace</span>` : ""}
+                ${action ? `<span class="tag warn">${t("commits.automation")}</span>` : ""}
               </div>
             </div>
           `;
@@ -2754,8 +2776,8 @@ function renderActionsTab() {
     ${renderActionsOverview()}
     <section class="panel">
       <div class="panel-header">
-        <h2>Workflow runs větve</h2>
-        <button type="button" data-action="refresh-actions">Obnovit</button>
+        <h2>${t("actions.branchRuns")}</h2>
+        <button type="button" data-action="refresh-actions">${t("common.refresh")}</button>
       </div>
       <div class="panel-body">${renderWorkflowRuns()}</div>
     </section>
@@ -2764,7 +2786,7 @@ function renderActionsTab() {
 
 function renderActionsOverview() {
   if (!state.lastSave) {
-    return `<p class="banner info">Po prvním commitu v edit session tady uvidíš, jestli GitHub Actions běží, selhaly, nebo přidaly další změny do větve.</p>`;
+    return `<p class="banner info">${t("actions.firstCommitInfo")}</p>`;
   }
 
   const statusItems = actionStatusItems();
@@ -2773,34 +2795,38 @@ function renderActionsOverview() {
   const actionCommits = (state.pullCommits.length ? state.pullCommits : state.compare?.commits || []).filter(isActionAuthor);
 
   if (failing.length) {
-    return `<p class="banner danger">Action required: ${failing.length} ${currentHeadCheckRuns().length ? "checků" : "workflow runs"} selhává. Oprav soubory v edit session a ulož další commit do stejné větve.</p>`;
+    return `<p class="banner danger">${t("actions.required", { count: failing.length, source: actionStatusSource() })}</p>`;
   }
 
   if (running.length) {
-    return `<p class="banner warn">${running.length} ${currentHeadCheckRuns().length ? "checků" : "workflow runs"} stále běží. Obnov stav za chvíli; případné automatické commity se ukážou v Commitech.</p>`;
+    return `<p class="banner warn">${t("actions.stillRunning", { count: running.length, source: actionStatusSource() })}</p>`;
   }
 
   if (state.externalCompare || actionCommits.length) {
-    return `<p class="banner warn">Automation changed the branch. Zkontroluj záložky Změny a Commity, diff po posledním CMS commitu a preview generovaných artefaktů před vytvořením PR.</p>`;
+    return `<p class="banner warn">${t("actions.automationChanged")}</p>`;
   }
 
   if (statusItems.length) {
-    return `<p class="banner info">Actions jsou hotové. Další krok: zkontroluj preview a vytvoř nebo otevři PR.</p>`;
+    return `<p class="banner info">${t("actions.done")}</p>`;
   }
 
   return "";
 }
 
+function actionStatusSource() {
+  return currentHeadCheckRuns().length ? t("actions.sourceChecks") : t("actions.sourceWorkflowRuns");
+}
+
 function renderCheckRuns() {
   if (state.checkRunsError) {
     return `
-      <p class="banner warn">Detailní Checks API není dostupné pro aktuální token. To nevadí pro běžný workflow; stav sleduj vpravo přes Workflow runs.</p>
+      <p class="banner warn">${t("actions.checksUnavailable")}</p>
       <p class="help">${escapeHtml(state.checkRunsError)}</p>
     `;
   }
 
   if (!state.checkRuns.length) {
-    return `<div class="empty">Na head commitu nejsou žádné check runs.</div>`;
+    return `<div class="empty">${t("actions.noCheckRuns")}</div>`;
   }
 
   return `
@@ -2814,15 +2840,15 @@ function renderCheckRuns() {
               <div class="row-main">
                 <p class="row-title">${escapeHtml(run.name)}</p>
                 <div class="row-meta">
-                  <span class="tag ${tone}">${escapeHtml(run.conclusion || run.status)}</span>
+                  <span class="tag ${tone}">${escapeHtml(formatRunStatusLabel(run.conclusion || run.status))}</span>
                   <span class="tag">${escapeHtml(formatDate(run.completed_at || run.started_at))}</span>
                 </div>
                 ${run.output?.summary ? `<p class="help">${escapeHtml(run.output.summary).slice(0, 400)}</p>` : ""}
                 ${annotations.length ? renderAnnotations(annotations) : ""}
               </div>
               <div class="button-row">
-                <button type="button" data-action="load-annotations" data-check-id="${run.id}">Anotace</button>
-                <button class="external-link-button" type="button" data-action="open-link" data-url="${escapeHtml(run.html_url)}">GitHub</button>
+                <button type="button" data-action="load-annotations" data-check-id="${run.id}">${t("actions.annotations")}</button>
+                <button class="external-link-button" type="button" data-action="open-link" data-url="${escapeHtml(run.html_url)}">${t("common.github")}</button>
               </div>
             </div>
           `;
@@ -2834,7 +2860,7 @@ function renderCheckRuns() {
 
 function renderWorkflowRuns() {
   if (!state.workflowRuns.length) {
-    return `<div class="empty">Pro tuhle větev nejsou workflow runs nebo token nemá Actions read.</div>`;
+    return `<div class="empty">${t("actions.noWorkflowRuns")}</div>`;
   }
 
   return `
@@ -2847,14 +2873,14 @@ function renderWorkflowRuns() {
               <div class="row-main">
                 <p class="row-title">${escapeHtml(run.name || run.display_title)}</p>
                 <div class="row-meta">
-                  <span class="tag ${tone}">${escapeHtml(run.conclusion || run.status)}</span>
+                  <span class="tag ${tone}">${escapeHtml(formatRunStatusLabel(run.conclusion || run.status))}</span>
                   <span class="tag">${escapeHtml(shortSha(run.head_sha))}</span>
                   <span class="tag">${escapeHtml(formatDate(run.updated_at || run.created_at))}</span>
                 </div>
               </div>
               <div class="button-row">
-                <button type="button" data-action="rerun-workflow" data-run-id="${run.id}">Spustit znovu</button>
-                <button class="external-link-button" type="button" data-action="open-link" data-url="${escapeHtml(run.html_url)}">GitHub</button>
+                <button type="button" data-action="rerun-workflow" data-run-id="${run.id}">${t("actions.rerun")}</button>
+                <button class="external-link-button" type="button" data-action="open-link" data-url="${escapeHtml(run.html_url)}">${t("common.github")}</button>
               </div>
             </div>
           `;
@@ -2898,33 +2924,34 @@ function renderModal() {
 }
 
 function renderAuthModal() {
-  const tokenHint = state.token ? "Token je uložený. Vlož nový jen pokud ho chceš změnit." : "Fine-grained PAT nebo OAuth token.";
+  const tokenHint = state.token ? t("auth.tokenStoredHint") : t("auth.tokenHint");
   return `
     <form class="modal" data-form="auth">
-      <div class="modal-header"><h2>GitHub přihlášení</h2></div>
+      <div class="modal-header"><h2>${t("auth.title")}</h2></div>
       <div class="modal-body form-grid">
-        <p class="help">Repozitář je nastavený napevno na <span class="path">${escapeHtml(FIXED_REPOSITORY)}</span>, defaultní větev <span class="path">${escapeHtml(FIXED_DEFAULT_BRANCH)}</span>.</p>
+        ${renderLanguageSelect("auth")}
+        <p class="help">${t("auth.fixedRepo", { repo: `<span class="path">${escapeHtml(FIXED_REPOSITORY)}</span>`, branch: `<span class="path">${escapeHtml(FIXED_DEFAULT_BRANCH)}</span>` })}</p>
         <div class="field">
-          <label for="token">GitHub token</label>
+          <label for="token">${t("auth.tokenLabel")}</label>
           <input id="token" name="token" type="password" autocomplete="off" placeholder="${escapeHtml(tokenHint)}" autofocus />
         </div>
         <div class="field">
-          <label for="persistence">Uložení tokenu</label>
+          <label for="persistence">${t("auth.persistence")}</label>
           <select id="persistence" name="persistence">
-            <option value="session" ${state.tokenPersistence === "session" ? "selected" : ""}>jen aktuální relace</option>
-            <option value="local" ${state.tokenPersistence === "local" ? "selected" : ""}>trvale v tomto prohlížeči</option>
+            <option value="session" ${state.tokenPersistence === "session" ? "selected" : ""}>${t("auth.sessionOnly")}</option>
+            <option value="local" ${state.tokenPersistence === "local" ? "selected" : ""}>${t("auth.localStorage")}</option>
           </select>
         </div>
-        <p class="help">Doporučené minimum: Contents read/write, Pull requests read/write, Actions read a Metadata read. Checks jsou volitelné.</p>
+        <p class="help">${t("auth.minimumPermissions")}</p>
         ${
           state.publicConfig.githubOAuthClientId
-            ? `<button type="button" data-action="start-oauth">Přihlásit přes GitHub device flow</button>`
+            ? `<button type="button" data-action="start-oauth">${t("auth.deviceFlow")}</button>`
             : ""
         }
       </div>
       <div class="modal-footer">
-        <button type="button" data-action="close-modal">Zrušit</button>
-        <button class="primary" type="submit">Přihlásit</button>
+        <button type="button" data-action="close-modal">${t("common.cancel")}</button>
+        <button class="primary" type="submit">${t("auth.login")}</button>
       </div>
     </form>
   `;
@@ -2932,28 +2959,29 @@ function renderAuthModal() {
 
 function renderCreateTextFileModal() {
   const dir = currentDirectoryPath();
-  const placeholderPath = joinPath(dir, "stranka.md");
+  const placeholderName = t("files.placeholderNewFile");
+  const placeholderPath = joinPath(dir, placeholderName);
   return `
     <form class="modal" data-form="create-text-file">
-      <div class="modal-header"><h2>New Markdown file</h2></div>
+      <div class="modal-header"><h2>${t("files.createFileTitle")}</h2></div>
       <div class="modal-body form-grid">
         <div class="field">
-          <label for="new-file-name">Název</label>
-          <input id="new-file-name" name="name" placeholder="stranka.md" autofocus />
-          <p class="help">Složka: <span class="path">${escapeHtml(dir || "/")}</span></p>
+          <label for="new-file-name">${t("files.name")}</label>
+          <input id="new-file-name" name="name" placeholder="${escapeHtml(placeholderName)}" autofocus />
+          <p class="help">${t("files.currentFolder", { dir: "" })}<span class="path">${escapeHtml(dir || "/")}</span></p>
         </div>
         <div class="field">
-          <label for="new-file-content">Obsah</label>
+          <label for="new-file-content">${t("files.content")}</label>
           <textarea id="new-file-content" name="content" spellcheck="false"></textarea>
         </div>
         <div class="field">
-          <label for="new-file-message">Commit message</label>
+          <label for="new-file-message">${t("files.commitMessage")}</label>
           <input id="new-file-message" name="message" placeholder="CMS: create ${escapeHtml(placeholderPath)}" />
         </div>
       </div>
       <div class="modal-footer">
-        <button type="button" data-action="close-modal">Zrušit</button>
-        <button class="primary" type="submit">Vytvořit</button>
+        <button type="button" data-action="close-modal">${t("common.cancel")}</button>
+        <button class="primary" type="submit">${t("common.create")}</button>
       </div>
     </form>
   `;
@@ -2961,23 +2989,24 @@ function renderCreateTextFileModal() {
 
 function renderCreateFolderModal() {
   const dir = currentDirectoryPath();
+  const placeholderName = t("files.placeholderNewFolder");
   return `
     <form class="modal" data-form="create-folder">
-      <div class="modal-header"><h2>New folder</h2></div>
+      <div class="modal-header"><h2>${t("files.createFolderTitle")}</h2></div>
       <div class="modal-body form-grid">
         <div class="field">
-          <label for="new-folder-name">Název</label>
-          <input id="new-folder-name" name="name" placeholder="sekce" autofocus />
-          <p class="help">Složka: <span class="path">${escapeHtml(dir || "/")}</span></p>
+          <label for="new-folder-name">${t("files.name")}</label>
+          <input id="new-folder-name" name="name" placeholder="${escapeHtml(placeholderName)}" autofocus />
+          <p class="help">${t("files.currentFolder", { dir: "" })}<span class="path">${escapeHtml(dir || "/")}</span></p>
         </div>
         <div class="field">
-          <label for="new-folder-message">Commit message</label>
-          <input id="new-folder-message" name="message" placeholder="CMS: create folder ${escapeHtml(joinPath(dir, "sekce"))}" />
+          <label for="new-folder-message">${t("files.commitMessage")}</label>
+          <input id="new-folder-message" name="message" placeholder="CMS: create folder ${escapeHtml(joinPath(dir, placeholderName))}" />
         </div>
       </div>
       <div class="modal-footer">
-        <button type="button" data-action="close-modal">Zrušit</button>
-        <button class="primary" type="submit">Vytvořit</button>
+        <button type="button" data-action="close-modal">${t("common.cancel")}</button>
+        <button class="primary" type="submit">${t("common.create")}</button>
       </div>
     </form>
   `;
@@ -2985,23 +3014,23 @@ function renderCreateFolderModal() {
 
 function renderCreatePrModal() {
   const title = `CMS: ${state.branch}`;
-  const body = `Změny připravené v Adaptivio CMS.\n\n- Branch: ${state.branch}\n- Base: ${state.defaultBranch}\n- Head: ${shortSha(state.headSha)}\n`;
+  const body = t("pr.defaultBody", { branch: state.branch, base: state.defaultBranch, head: shortSha(state.headSha) });
   return `
     <form class="modal" data-form="create-pr">
-      <div class="modal-header"><h2>Vytvořit pull request</h2></div>
+      <div class="modal-header"><h2>${t("pr.title")}</h2></div>
       <div class="modal-body form-grid">
         <div class="field">
-          <label for="pr-title">Titulek</label>
+          <label for="pr-title">${t("pr.titleLabel")}</label>
           <input id="pr-title" name="title" value="${escapeHtml(title)}" />
         </div>
         <div class="field">
-          <label for="pr-body">Popis</label>
+          <label for="pr-body">${t("pr.bodyLabel")}</label>
           <textarea id="pr-body" name="body">${escapeHtml(body)}</textarea>
         </div>
       </div>
       <div class="modal-footer">
-        <button type="button" data-action="close-modal">Zrušit</button>
-        <button class="primary" type="submit">Vytvořit PR</button>
+        <button type="button" data-action="close-modal">${t("common.cancel")}</button>
+        <button class="primary" type="submit">${t("common.createPr")}</button>
       </div>
     </form>
   `;
@@ -3011,23 +3040,23 @@ function renderDeviceFlowModal() {
   const payload = state.modal.payload;
   return `
     <div class="modal">
-      <div class="modal-header"><h2>GitHub device flow</h2></div>
+      <div class="modal-header"><h2>${t("auth.deviceTitle")}</h2></div>
       <div class="modal-body form-grid">
-        <p class="help">Otevři ověřovací stránku, vlož kód a potom tady potvrď dokončení. Pokud GitHub OAuth endpoint v prohlížeči blokuje CORS, použij fine-grained token.</p>
+        <p class="help">${t("auth.deviceHelp")}</p>
         <div class="row">
           <div class="row-main">
             <p class="row-title path">${escapeHtml(payload.user_code)}</p>
             <p class="help">${escapeHtml(payload.verification_uri)}</p>
           </div>
           <div class="button-row">
-            <button type="button" data-action="copy-code" data-code="${escapeHtml(payload.user_code)}">Kopírovat</button>
-            <button class="external-link-button" type="button" data-action="open-link" data-url="${escapeHtml(payload.verification_uri)}">Otevřít</button>
+            <button type="button" data-action="copy-code" data-code="${escapeHtml(payload.user_code)}">${t("common.copy")}</button>
+            <button class="external-link-button" type="button" data-action="open-link" data-url="${escapeHtml(payload.verification_uri)}">${t("common.open")}</button>
           </div>
         </div>
       </div>
       <div class="modal-footer">
-        <button type="button" data-action="close-modal">Zrušit</button>
-        <button class="primary" type="button" data-action="poll-oauth">Autorizováno</button>
+        <button type="button" data-action="close-modal">${t("common.cancel")}</button>
+        <button class="primary" type="button" data-action="poll-oauth">${t("common.authorized")}</button>
       </div>
     </div>
   `;
@@ -3037,7 +3066,7 @@ function renderToast(toastItem) {
   return `
     <div class="toast ${escapeHtml(toastItem.tone)}">
       <span>${escapeHtml(toastItem.message)}</span>
-      <button class="dismiss-button" type="button" data-action="dismiss-toast" data-toast-id="${escapeHtml(toastItem.id)}" aria-label="Close notification">×</button>
+      <button class="dismiss-button" type="button" data-action="dismiss-toast" data-toast-id="${escapeHtml(toastItem.id)}" aria-label="${t("common.closeNotification")}">×</button>
     </div>
   `;
 }
@@ -3045,19 +3074,19 @@ function renderToast(toastItem) {
 function summarizeChecks() {
   const statusItems = actionStatusItems();
   if (!statusItems.length) {
-    return state.actionPolling ? `<span class="status-pill warn">actions čekám</span>` : "";
+    return state.actionPolling ? `<span class="status-pill warn">${t("actions.waiting")}</span>` : "";
   }
 
   const failing = statusItems.filter((run) => classifyConclusion(run.conclusion, run.status) === "danger").length;
   const running = statusItems.filter((run) => run.status && run.status !== "completed").length;
-  const polling = state.actionPolling ? `<span class="status-pill">auto refresh</span>` : "";
+  const polling = state.actionPolling ? `<span class="status-pill">${t("actions.autoRefresh")}</span>` : "";
   if (failing) {
-    return `<span class="status-pill danger">${failing} failing</span>${polling}`;
+    return `<span class="status-pill danger">${t("actions.failing", { count: failing })}</span>${polling}`;
   }
   if (running) {
-    return `<span class="status-pill warn">${running} running</span>${polling}`;
+    return `<span class="status-pill warn">${t("actions.running", { count: running })}</span>${polling}`;
   }
-  return `<span class="status-pill ok">actions ok</span>`;
+  return `<span class="status-pill ok">${t("actions.ok")}</span>`;
 }
 
 function actionStatusItems() {
@@ -3327,7 +3356,7 @@ async function restoreSelectionFromLocation({ keepBusy = false } = {}) {
     return;
   }
 
-  if (state.editor?.dirty && !window.confirm("Soubor má neuložené změny. Přejít na vybraný stav historie?")) {
+  if (state.editor?.dirty && !window.confirm(t("files.historyConfirm"))) {
     updateBrowserNavigation({ mode: "push" });
     return;
   }
@@ -3341,7 +3370,7 @@ async function restoreSelectionFromLocation({ keepBusy = false } = {}) {
         const knownBranch = state.branches.some((branch) => branch.name === nextBranch);
         const branchAvailable = knownBranch || (await branchExistsOnGitHub(nextBranch));
         if (!branchAvailable) {
-          throw new Error(`Větev z historie neexistuje: ${nextBranch}`);
+          throw new Error(t("errors.historyBranchMissing", { branch: nextBranch }));
         }
 
         state.editMode = false;
@@ -3387,7 +3416,7 @@ async function restoreSelectionFromLocation({ keepBusy = false } = {}) {
     return;
   }
 
-  await withBusy("Načítám stav z historie", run);
+  await withBusy(t("repo.checkingHistory"), run);
 }
 
 function toggleDirectory(path, { navigation = "" } = {}) {
@@ -3504,17 +3533,17 @@ function restoreFocusSnapshot(snapshot) {
 
 function assertConnected() {
   if (!state.client || !state.owner || !state.repo) {
-    throw new Error("Repo není připojené.");
+    throw new Error(t("repo.notConnected"));
   }
 }
 
 function assertCanWrite() {
   assertConnected();
   if (!state.editMode) {
-    throw new Error("Nejdřív spusť edit session tlačítkem Edit.");
+    throw new Error(t("edit.startFirst"));
   }
   if (state.branch === state.defaultBranch && !state.allowDefaultBranchEdits) {
-    throw new Error("Přímé ukládání do defaultní větve je vypnuté.");
+    throw new Error(t("edit.defaultWriteDisabled"));
   }
 }
 
@@ -3584,8 +3613,8 @@ function summarizeTokenProbeError(error) {
     const required = formatPermissionMeta(error.meta);
     return [
       `GitHub ${error.status || ""}: ${error.message}`,
-      required ? `Vyžaduje: ${required}` : "",
-      error.payload?.documentation_url ? `Docs: ${error.payload.documentation_url}` : "",
+      required ? t("errors.githubRequires", { required }) : "",
+      error.payload?.documentation_url ? t("errors.docs", { url: error.payload.documentation_url }) : "",
     ]
       .filter(Boolean)
       .join(" · ");
@@ -3614,8 +3643,8 @@ function formatPermissionMeta(meta) {
     return githubPermissions;
   }
 
-  const acceptedScopes = meta.acceptedOauthScopes ? `accepted OAuth scopes: ${meta.acceptedOauthScopes}` : "";
-  const tokenScopes = meta.oauthScopes ? `token scopes: ${meta.oauthScopes}` : "";
+  const acceptedScopes = meta.acceptedOauthScopes ? t("errors.acceptedOauthScopes", { scopes: meta.acceptedOauthScopes }) : "";
+  const tokenScopes = meta.oauthScopes ? t("errors.tokenScopes", { scopes: meta.oauthScopes }) : "";
   return [acceptedScopes, tokenScopes].filter(Boolean).join("; ");
 }
 
@@ -3636,27 +3665,27 @@ function formatAcceptedGithubPermissions(value) {
         .filter(Boolean)
         .join(", "),
     )
-    .join(" nebo ");
+    .join(` ${t("errors.or")} `);
 }
 
 function formatError(error) {
   if (error instanceof GitHubError) {
     const request = formatRequestMeta(error.meta);
-    const requestDetail = request ? ` Požadavek: ${request}.` : "";
+    const requestDetail = request ? ` ${t("errors.request", { request })}` : "";
     const permissionDetail = formatPermissionMeta(error.meta);
-    const permissions = permissionDetail ? ` GitHub endpoint vyžaduje: ${permissionDetail}.` : "";
-    const docs = error.payload?.documentation_url ? ` Docs: ${error.payload.documentation_url}.` : "";
-    const requestId = error.meta?.requestId ? ` Request ID: ${error.meta.requestId}.` : "";
+    const permissions = permissionDetail ? ` ${t("errors.endpointRequires", { permissions: permissionDetail })}` : "";
+    const docs = error.payload?.documentation_url ? ` ${t("errors.docs", { url: error.payload.documentation_url })}.` : "";
+    const requestId = error.meta?.requestId ? ` ${t("errors.requestId", { requestId: error.meta.requestId })}` : "";
     if (error.status === 401) {
-      return `GitHub 401: token není platný nebo vypršel.${requestDetail} Vytvoř nový fine-grained token pro cílové repo.${docs}`;
+      return t("errors.tokenInvalid", { requestDetail, docs });
     }
     if (error.status === 403) {
-      return `GitHub 403: token nemá potřebná oprávnění nebo narazil na limit.${requestDetail}${permissions} Detail: ${error.message}.${docs}${requestId}`;
+      return t("errors.forbidden", { requestDetail, permissions, message: error.message, docs, requestId });
     }
     if (error.status === 404) {
-      return `GitHub 404: repo nebylo nalezeno nebo token nemá přístup k tomuto private repo.${requestDetail} Zkontroluj owner/repo a repository access u tokenu.${docs}`;
+      return t("errors.notFound", { requestDetail, docs });
     }
-    return `GitHub ${error.status || ""}: ${error.message}.${requestDetail}${permissions}${docs}`;
+    return t("errors.genericGithub", { status: error.status || "", message: error.message, requestDetail, permissions, docs });
   }
   return error?.message || String(error);
 }
@@ -3670,6 +3699,7 @@ function persistSettings() {
     treePaneWidth: state.treePaneWidth,
     expandedDirs: [...state.expandedDirs],
     allowDefaultBranchEdits: state.allowDefaultBranchEdits,
+    language: state.language,
   });
 }
 

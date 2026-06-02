@@ -99,6 +99,15 @@ a:hover {
   text-decoration: underline;
 }
 
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+}
+
 .app-shell {
   position: fixed;
   inset: 0;
@@ -181,6 +190,19 @@ a:hover {
 .top-actions button,
 .top-actions select {
   min-height: 32px;
+}
+
+.language-control {
+  display: inline-flex;
+  align-items: center;
+}
+
+.language-control select {
+  min-width: 112px;
+}
+
+.language-control-auth {
+  justify-content: flex-start;
 }
 
 .top-branch-select {
@@ -923,6 +945,17 @@ body.is-resizing-tree-pane {
   font-weight: 780;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.selected-file-heading {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.selected-file-heading h2 {
+  min-width: 0;
 }
 
 .panel-body {

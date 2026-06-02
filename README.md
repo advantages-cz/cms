@@ -1,58 +1,59 @@
 # Adaptivio CMS
 
-Staticke GitHub CMS pro verejnou GitHub Pages aplikaci, ktera edituje private GitHub repozitar pres GitHub API. Cilem je mit maly, auditovatelny nastroj pro obsah, data a artefakty projektu Adaptivio bez vlastni databaze a bez serveroveho tajemstvi.
+Adaptivio CMS is a static GitHub CMS for a public GitHub Pages app that edits a private GitHub repository through the GitHub API. The goal is a small, auditable tool for Adaptivio content, data, and generated project artifacts without a custom database or server-side secret.
 
-## Proc vlastni aplikace
+## Why A Custom App
 
-Existuji dobre OSS Git CMS nastroje:
+Good open-source Git CMS tools already exist:
 
-- Decap CMS umi GitHub backend a editorial workflow nad vetvemi a pull requesty.
-- Pages CMS je jednoduche editacni UI nad GitHub repozitari.
+- Decap CMS supports a GitHub backend and an editorial workflow built around branches and pull requests.
+- Pages CMS provides a simple editing UI for GitHub repositories.
 
-Pro Adaptivio ale potrebujeme v jednom pracovnim toku jeste stav GitHub Actions, anotace failing checks, detekci commitu pridaneho automatizaci po ulozeni z CMS a preview generovanych HTML/PDF/image souboru primo z pracovni vetve. Proto je tady mala specializovana aplikace misto obecneho CMS.
+Adaptivio also needs GitHub Actions status, failing check annotations, detection of automation commits pushed after a CMS save, and previews of generated HTML/PDF/image files from the working branch in the same workflow. This repository therefore contains a small specialized app instead of a general-purpose CMS.
 
-## Co umi
+## Features
 
-- Pripojeni na private repo pres per-user GitHub token.
-- Cilove repo je v aplikaci nastavene napevno na `advantages-cz/avds`, defaultni vetev `master`.
-- Stromove prochazeni obsahu repozitare.
-- Browser back/forward funguje pro navigaci mezi soubory a slozkami v CMS.
-- Read-only browse workflow s preview souboru.
-- Vytvoreni pracovni vetve z defaultni vetve az pri stisku Edit.
-- Pokracovani ve stejne pracovni vetvi, pokud uzivatel neni na defaultni vetvi.
-- Explicitni zalozeni nove pracovni vetve, kdyz o to uzivatel pozada.
-- Markdown-only editace `.md` a `.mdx` souboru.
-- Explicitni commit pres Contents API.
-- Vytvoreni pull requestu do defaultni vetve.
-- Diff vetve proti defaultni vetvi.
-- Detekce zmen po poslednim CMS commitu, typicky pokud GitHub Action pushne dalsi commit.
-- Stav workflow runs pro aktualni vetev.
-- Volitelne nacteni check runs a check annotations pro chyby z CI, pokud token/instalace podporuje Checks API.
-- Renderovane Markdown preview vcetne front matter.
-- Preview HTML v sandboxovanem iframe vcetne relativnich image/SVG/CSS assetu.
-- Preview PDF, SVG, obrazku a textu.
+- Connects to a private repo with a per-user GitHub token.
+- The target repo is fixed in the app to `advantages-cz/avds`, default branch `master`.
+- Browse repository content as a tree.
+- Browser back/forward works for file and folder navigation inside the CMS.
+- Read-only browsing workflow with file previews.
+- Creates a working branch from the default branch only when the user presses Edit.
+- Keeps using the same working branch when the user is already away from the default branch.
+- Creates another working branch only when explicitly requested.
+- Edits only `.md` and `.mdx` files.
+- Commits explicitly through the Contents API.
+- Creates pull requests into the default branch.
+- Shows branch diff against the default branch.
+- Detects changes after the last CMS commit, typically when GitHub Actions push an additional commit.
+- Shows workflow runs for the current branch.
+- Optionally loads check runs and check annotations for CI errors when the token/installation supports the Checks API.
+- Renders Markdown previews including front matter.
+- Previews HTML in a sandboxed iframe with relative image/SVG/CSS assets resolved when possible.
+- Previews PDF, SVG, images, and text.
+- Supports English and Czech UI through `src/i18n.js`; English is the default language.
 
-## Bezpecnostni model
+## Security Model
 
-Aplikace je ciste staticka. Neexistuje zadny backend, ktery by drzel secret nebo proxyoval private data. Token zustava v prohlizeci uzivatele a posila se jen na `https://api.github.com`.
+The app is fully static. There is no backend that stores secrets or proxies private data. The token stays in the user's browser and is sent only to `https://api.github.com`.
 
-Doporucena prava pro fine-grained token:
+Recommended permissions for a fine-grained token:
 
 - `Metadata`: read
 - `Contents`: read/write
 - `Pull requests`: read/write
 - `Actions`: read
-- `Checks`: volitelne, jen pro detailni check runs a anotace; pokud fine-grained PAT tuhle permission nenabizi, CMS pouzije `Actions: read`.
+- `Checks`: optional, only for detailed check runs and annotations; if fine-grained PATs do not expose this permission, the CMS uses `Actions: read`.
 
-Volitelne je mozne povolit `Actions: write`, pokud ma CMS znovu spoustet workflow runs.
+Optionally allow `Actions: write` if the CMS should rerun workflow runs.
 
-Vychozi ulozeni tokenu je `sessionStorage`. Trvale ulozeni do `localStorage` je mozne, ale melo by zustat jen pro duveryhodny pocitac. Primy commit do defaultni vetve je vypnuty.
+The default token storage is `sessionStorage`. Persistent storage in `localStorage` is available, but should be used only on a trusted computer. Direct commits to the default branch are disabled.
 
-HTML preview je sandboxovane bez `allow-scripts` a bez `allow-same-origin`. Aplikace nikdy neinjektuje obsah souboru jako HTML do vlastniho DOM.
+HTML previews are sandboxed without `allow-scripts` and without `allow-same-origin`. The app never injects file content as HTML into its own DOM.
 
-## Konfigurace
+## Configuration
 
-Volitelny soubor `cms.config.json` muze byt vedle `index.html`:
+An optional `cms.config.json` file can live next to `index.html`:
 
 ```json
 {
@@ -63,42 +64,49 @@ Volitelny soubor `cms.config.json` muze byt vedle `index.html`:
 }
 ```
 
-Repozitar a defaultni vetev nejsou uzivatelsky konfigurovatelne v UI; aplikace pouziva `advantages-cz/avds` a `master`.
+The repository and default branch are not configurable in the UI; the app uses `advantages-cz/avds` and `master`.
 
-Vyber souboru nebo slozky si CMS uklada do URL pres `path` nebo `dir`, takze odkaz muze otevrit konkretni misto ve vetvi:
+The CMS stores the selected file or folder in the URL through `path` or `dir`, so links can open a specific branch location:
 
 ```text
 https://example.github.io/adaptivio-cms/?branch=master&path=content/page.md
 ```
 
-`githubOAuthClientId` je volitelne. Device flow nevyzaduje client secret, ale GitHub OAuth endpointy mohou v cistem browser kontextu narazit na CORS; fine-grained PAT je proto primarni a nejpredikovatelnejsi varianta.
+`githubOAuthClientId` is optional. Device flow does not require a client secret, but GitHub OAuth endpoints may hit CORS restrictions in a pure browser context. A fine-grained PAT remains the primary and most predictable option.
 
-## Nasazeni na GitHub Pages
+## Localization
 
-Projekt nepotrebuje build krok. Workflow v `.github/workflows/pages.yml` publikuje obsah repozitare jako statickou Pages aplikaci.
+All UI copy lives in `src/i18n.js`. Add or update strings there instead of hard-coding user-facing text in render or workflow functions.
 
-V GitHub repo nastav:
+The language selector is available in the top toolbar and in the GitHub sign-in modal. English is the default language, and the user's selection is saved with other local settings.
 
-1. Settings -> Pages -> Source: GitHub Actions.
-2. Push do `main` nebo `master`.
-3. Otevri publikovanou Pages URL.
+## Deploy To GitHub Pages
 
-## Lokalne
+The project has no build step. A workflow in `.github/workflows/pages.yml` can publish the repository contents as a static Pages app.
+
+In the GitHub repo:
+
+1. Open Settings -> Pages.
+2. Set Source to GitHub Actions.
+3. Push to `main` or `master`.
+4. Open the published Pages URL.
+
+## Run Locally
 
 ```sh
 python3 -m http.server 4173
 ```
 
-Potom otevri `http://localhost:4173`.
+Then open `http://localhost:4173`.
 
-## Omezeni
+## Limitations
 
-- CMS nacita strom repozitare pres Git Trees API. U velmi velkych repozitaru muze GitHub vratit zkraceny strom.
-- Editace je zamerne omezena na Markdown. Ostatni soubory se prohlizeji nebo vznikaji automatizaci.
-- Preview ukazuje soubory commitnute do vetve. Nestahuje samostatne Actions artifacts ZIPy.
-- Merge PR zustava v GitHub UI, aby ochrany vetvi a review pravidla zustaly zdrojem pravdy.
+- The CMS loads the repository tree through the Git Trees API. For very large repositories, GitHub may return a truncated tree.
+- Editing is intentionally limited to Markdown. Other files are browsed or created by automation.
+- Previews show files committed to the branch. The app does not download separate Actions artifact ZIPs.
+- PR merge stays in the GitHub UI so branch protection and review rules remain the source of truth.
 
-## Reference
+## References
 
 - Decap CMS GitHub backend: https://decapcms.org/docs/github-backend/
 - Decap CMS editorial workflow: https://decapcms.org/docs/editorial-workflows/

@@ -138,6 +138,7 @@ Implemented capabilities:
 - Dismissible error and notification messages.
 - Consolidated top workflow toolbar for branch, mode, edit, pull request, and refresh actions.
 - User menu in the top toolbar for changing the token and logging out.
+- English/Czech localization with English as the default language, UI copy centralized in `src/i18n.js`, and language selectors in both the top toolbar and GitHub sign-in modal.
 - CMS design-system pass based on Adaptivio brand rules: role-based CSS tokens, approved black Adaptivio symbol in the toolbar, compact product toolbar, explicit branch/mode status patterns, restrained brand treatment, quieter panels, denser tree rows, and document-like previews.
 - Refined toolbar action model: edit/browse state lives in the primary workflow button, refresh is icon-only with a local Lucide-style SVG and an accessible label, PR creation is hidden until the branch has changes, and the signed-in user control looks like an account menu.
 - Review workspace split into separate `Změny` and `Commity` tabs with badge counts. PR creation/opening lives in the toolbar, while the tabs focus on changed-file and commit lists and refresh after commit operations.
@@ -295,6 +296,12 @@ Reasoning: A generic completed-workflow banner does not help the editor decide w
 Decision: In `Změny`, changed file paths are the primary navigation targets and the separate Preview button is removed. The Actions tab no longer renders the check-runs detail panel, and buttons that open GitHub or other external pages show an external-link icon.
 
 Reasoning: Review lists should behave like lists first. Removing duplicate actions and broken detail surfaces makes the workflow easier to scan, while outbound icons make it clear when a button leaves the CMS.
+
+### 2026-06-03: Centralize UI Copy And Add Language Selection
+
+Decision: Move UI copy into `src/i18n.js`, ship English and Czech resources, default the app to English, and expose language selection in the toolbar and sign-in modal.
+
+Reasoning: The CMS is used by both Czech and English-speaking maintainers. Centralized resources keep translations auditable and prevent future UI copy from being scattered through workflow and render code.
 
 ### 2026-06-02: Move Login Into A Modal
 
