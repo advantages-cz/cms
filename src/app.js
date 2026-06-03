@@ -1175,7 +1175,7 @@ function openMarkdownDirectoryLink(path) {
     return;
   }
 
-  selectDirectory(dir, { navigation: "push" });
+  selectDirectory(dir, { navigation: "push", revealInTree: true });
 }
 
 function scrollMarkdownAnchor(anchor) {
@@ -3677,12 +3677,13 @@ function toggleDirectory(path, { navigation = "" } = {}) {
   render();
 }
 
-function selectDirectory(path, { navigation = "" } = {}) {
+function selectDirectory(path, { navigation = "", revealInTree = false } = {}) {
   state.selectedPath = "";
   state.selectedDir = path;
   state.editor = null;
   state.preview = null;
   expandPathToDir(path);
+  state.revealSelectedInTree = state.revealSelectedInTree || revealInTree;
   persistSettings();
   if (navigation) {
     updateBrowserNavigation({ mode: navigation });
@@ -3720,13 +3721,13 @@ function restoreTreeScroll() {
 }
 
 function revealSelectedTreeRow() {
-  if (!state.revealSelectedInTree || !state.selectedPath) {
+  if (!state.revealSelectedInTree || (!state.selectedPath && !state.selectedDir)) {
     return;
   }
 
   window.requestAnimationFrame(() => {
     const list = document.querySelector(".file-list");
-    const active = list?.querySelector(".tree-file.active");
+    const active = list?.querySelector(state.selectedPath ? ".tree-file.active" : ".tree-dir.active-dir");
     if (!(list instanceof HTMLElement) || !(active instanceof HTMLElement)) {
       state.revealSelectedInTree = false;
       return;
