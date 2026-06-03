@@ -1763,9 +1763,19 @@ async function startDeviceFlow() {
     return;
   }
 
+  const authWindow = window.open("", "_blank");
+  if (authWindow) {
+    authWindow.opener = null;
+    authWindow.document.title = t("auth.oauthPreparing");
+    authWindow.document.body.textContent = t("auth.oauthPreparing");
+  }
+
   await withBusy(t("auth.oauthPreparing"), async () => {
     const client = new GitHubClient("");
     const payload = await client.requestDeviceCode(clientId, "repo workflow read:user");
+    if (authWindow) {
+      authWindow.location.href = payload.verification_uri;
+    }
     state.modal = {
       type: "device-flow",
       clientId,
@@ -1773,6 +1783,10 @@ async function startDeviceFlow() {
       requestedAt: Date.now(),
     };
   });
+
+  if (authWindow && state.modal?.type !== "device-flow") {
+    authWindow.close();
+  }
 }
 
 async function pollDeviceFlow() {
@@ -3060,34 +3074,55 @@ function renderModal() {
 }
 
 function renderAuthModal() {
+  const hasOAuthClient = Boolean(state.publicConfig.githubOAuthClientId);
   const tokenHint = state.token ? t("auth.tokenStoredHint") : t("auth.tokenHint");
+  const tokenFields = `
+    <div class="field">
+      <label for="token">${t("auth.tokenLabel")}</label>
+      <input id="token" name="token" type="password" autocomplete="off" placeholder="${escapeHtml(tokenHint)}" ${hasOAuthClient ? "" : "autofocus"} />
+    </div>
+    <div class="field">
+      <label for="persistence">${t("auth.persistence")}</label>
+      <select id="persistence" name="persistence">
+        <option value="session" ${state.tokenPersistence === "session" ? "selected" : ""}>${t("auth.sessionOnly")}</option>
+        <option value="local" ${state.tokenPersistence === "local" ? "selected" : ""}>${t("auth.localStorage")}</option>
+      </select>
+    </div>
+    <p class="help">${t("auth.minimumPermissions")}</p>
+  `;
   return `
     <form class="modal" data-form="auth">
       <div class="modal-header"><h2>${t("auth.title")}</h2></div>
       <div class="modal-body form-grid">
         ${renderLanguageSelect("auth")}
         <p class="help">${t("auth.fixedRepo", { repo: `<span class="path">${escapeHtml(FIXED_REPOSITORY)}</span>`, branch: `<span class="path">${escapeHtml(FIXED_DEFAULT_BRANCH)}</span>` })}</p>
-        <div class="field">
-          <label for="token">${t("auth.tokenLabel")}</label>
-          <input id="token" name="token" type="password" autocomplete="off" placeholder="${escapeHtml(tokenHint)}" autofocus />
-        </div>
-        <div class="field">
-          <label for="persistence">${t("auth.persistence")}</label>
-          <select id="persistence" name="persistence">
-            <option value="session" ${state.tokenPersistence === "session" ? "selected" : ""}>${t("auth.sessionOnly")}</option>
-            <option value="local" ${state.tokenPersistence === "local" ? "selected" : ""}>${t("auth.localStorage")}</option>
-          </select>
-        </div>
-        <p class="help">${t("auth.minimumPermissions")}</p>
         ${
-          state.publicConfig.githubOAuthClientId
-            ? `<button type="button" data-action="start-oauth">${t("auth.deviceFlow")}</button>`
-            : ""
+          hasOAuthClient
+            ? `
+              <div class="auth-primary">
+                <button class="primary" type="button" data-action="start-oauth" autofocus>${t("auth.deviceFlow")}</button>
+                <p class="help">${t("auth.oauthHelp")}</p>
+              </div>
+              <details class="auth-fallback">
+                <summary>${t("auth.tokenFallback")}</summary>
+                <div class="form-grid">
+                  <p class="help">${t("auth.tokenFallbackHelp")}</p>
+                  ${tokenFields}
+                  <div class="button-row">
+                    <button type="submit">${t("auth.saveToken")}</button>
+                  </div>
+                </div>
+              </details>
+            `
+            : `
+              <p class="help">${t("auth.oauthMissing")}</p>
+              ${tokenFields}
+            `
         }
       </div>
       <div class="modal-footer">
         <button type="button" data-action="close-modal">${t("common.cancel")}</button>
-        <button class="primary" type="submit">${t("auth.login")}</button>
+        ${hasOAuthClient ? "" : `<button class="primary" type="submit">${t("auth.saveToken")}</button>`}
       </div>
     </form>
   `;

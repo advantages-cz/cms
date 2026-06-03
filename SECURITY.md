@@ -1,16 +1,18 @@
 # Security
 
-Adaptivio CMS is a public static application that can read and write a private GitHub repository only with the current user's GitHub token.
+Adaptivio CMS is a public static application that can read and write a private GitHub repository only with the current user's GitHub OAuth token or manual fallback token.
 
 ## Token handling
 
-- Tokens are accepted in the browser UI only.
-- The default storage is `sessionStorage`.
+- GitHub OAuth device flow is the primary sign-in path.
+- Tokens are accepted and stored in the browser UI only.
+- The default OAuth storage is `sessionStorage`.
 - Persistent storage uses `localStorage` only when the user selects it.
 - Tokens are sent only to `https://api.github.com` and GitHub OAuth endpoints.
 - No token is committed to this repository and no backend secret exists.
+- The app does not implement GitHub's standard redirect OAuth code exchange because that requires a server-side client secret/token exchange for a public static deployment.
 
-Use a fine-grained token scoped to the target repository. Prefer the minimum permissions documented in `README.md`.
+For the manual fallback, use a fine-grained token scoped to the target repository. Prefer the minimum permissions documented in `README.md`.
 
 ## Content rendering
 
@@ -32,4 +34,3 @@ Direct commits to the default branch are disabled by default. The normal flow is
 ## Reporting issues
 
 For private deployments, report suspected token leakage, XSS, or authorization bypasses directly to the repository maintainers and rotate affected GitHub tokens immediately.
-

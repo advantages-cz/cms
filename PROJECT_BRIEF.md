@@ -17,7 +17,7 @@ The product should stay small, auditable, and easy to deploy.
 ## Core Goals
 
 - Run as a public static application on GitHub Pages.
-- Connect to a private GitHub repository using a per-user GitHub token.
+- Connect to a private GitHub repository using per-user GitHub OAuth device flow, with a manual token fallback.
 - Target `advantages-cz/avds` with `master` as the fixed default branch.
 - Avoid storing secrets on a server.
 - Support a branch-first editing workflow.
@@ -45,7 +45,7 @@ The product should stay small, auditable, and easy to deploy.
 ## Expected Workflow
 
 1. The user opens the public CMS page.
-2. The user opens the login modal and provides a GitHub token scoped to `advantages-cz/avds`.
+2. The user opens the login modal and signs in through GitHub OAuth device flow.
 3. The CMS connects to `advantages-cz/avds` on the `master` default branch.
 4. The user browses files in read-only mode and inspects previews.
 5. The user presses Edit when they want to make changes.
@@ -61,11 +61,11 @@ The product should stay small, auditable, and easy to deploy.
 
 ## Security Principles
 
-- Tokens are entered by the user and stay in the browser.
-- Default token storage is session-only.
-- Persistent token storage must be an explicit user choice.
+- OAuth tokens stay in the browser.
+- Default OAuth token storage is session-only.
+- Persistent storage for manual fallback tokens must be an explicit user choice.
 - The application sends tokens only to GitHub API endpoints.
-- Fine-grained GitHub tokens should be scoped to `advantages-cz/avds` only.
+- Manual fallback fine-grained GitHub tokens should be scoped to `advantages-cz/avds` only.
 - Default product mode is read-only browsing.
 - Pressing Edit creates a working branch only from the default branch; existing working branches are reused.
 - Direct commits to the default branch are disabled by default.
@@ -73,7 +73,12 @@ The product should stay small, auditable, and easy to deploy.
 - User-provided repository content must be escaped unless intentionally rendered in a sandbox.
 - The app should avoid unnecessary third-party runtime dependencies.
 
-## Recommended GitHub Token Permissions
+## Recommended GitHub OAuth And Token Permissions
+
+For OAuth device flow:
+
+- Scope: `repo`
+- Scope: `workflow`, if rerunning workflows from the CMS is required.
 
 For a fine-grained personal access token:
 
@@ -105,7 +110,7 @@ Key files:
 
 Implemented capabilities:
 
-- Modal token entry and storage mode selection.
+- GitHub OAuth device flow sign-in with manual token fallback.
 - Fixed repository connection to `advantages-cz/avds`, default branch `master`.
 - Branch listing and branch creation.
 - Repository tree loading.
@@ -140,7 +145,7 @@ Implemented capabilities:
 - Resizable file tree width in the files workbench.
 - Dismissible error and notification messages.
 - Consolidated top workflow toolbar for branch, mode, edit, pull request, and refresh actions.
-- User menu in the top toolbar for changing the token and logging out.
+- User menu in the top toolbar for changing sign-in and logging out.
 - English/Czech localization with English as the default language, UI copy centralized in `src/i18n.js`, and language selectors in both the top toolbar and GitHub sign-in modal.
 - CMS design-system pass based on Adaptivio brand rules: role-based CSS tokens, approved black Adaptivio symbol in the toolbar, compact product toolbar, explicit branch/mode status patterns, restrained brand treatment, quieter panels, denser tree rows, and document-like previews.
 - Refined toolbar action model: edit/browse state lives in the primary workflow button, refresh is icon-only with a local Lucide-style SVG and an accessible label, PR creation is hidden until the branch has changes, and the signed-in user control looks like an account menu.
@@ -158,7 +163,7 @@ Implemented capabilities:
 
 - Which paths should be editable by default?
 - Which paths should be considered generated preview outputs?
-- Should the CMS support GitHub App authentication later, or is per-user PAT enough?
+- Should the CMS support GitHub App authentication later, or is OAuth App device flow enough?
 - Should workflow reruns be enabled by default, or kept as an optional permission?
 - Which generated artifact types are most important: PDF, static HTML, images, JSON reports, or something else?
 - Should we add schema-aware editors for Markdown, YAML, JSON, or frontmatter?
@@ -199,7 +204,7 @@ Implemented capabilities:
 ### Security
 
 - Add a content security policy suitable for GitHub Pages.
-- Document token creation with screenshots or exact GitHub settings.
+- Document OAuth App setup with screenshots or exact GitHub settings.
 - Add dependency policy before introducing external packages.
 - Review sandbox settings before enabling any richer preview mode.
 
@@ -223,6 +228,12 @@ Reasoning: The Adaptivio workflow needs branch editing, pull requests, GitHub Ac
 Decision: Start with per-user GitHub tokens stored in the browser.
 
 Reasoning: A public GitHub Pages application cannot safely hold a server-side secret. Per-user tokens keep repository access tied to GitHub identity and permissions.
+
+### 2026-06-03: Make GitHub OAuth Device Flow The Primary Sign-In
+
+Decision: GitHub sign-in now uses OAuth device flow as the primary path when `githubOAuthClientId` is configured. Manual token entry remains available as an advanced fallback.
+
+Reasoning: Asking editors to create and paste a PAT is too demanding for normal use. GitHub's standard redirect OAuth flow requires a server-side client secret/token exchange and is not safe for a public static GitHub Pages app, while device flow gives users a GitHub-hosted authorization UI without adding a custom backend.
 
 ### 2026-06-02: Keep Merge In GitHub
 
@@ -322,7 +333,7 @@ Reasoning: The CMS is used by both Czech and English-speaking maintainers. Centr
 
 ### 2026-06-02: Move Login Into A Modal
 
-Decision: GitHub token entry now opens as a modal from the top toolbar or empty state. Once authenticated, the top toolbar shows the GitHub login/token state as a menu with token change and logout actions.
+Decision: GitHub sign-in opens as a modal from the top toolbar or empty state. Once authenticated, the top toolbar shows the GitHub login/token state as a menu with sign-in change and logout actions.
 
 Reasoning: Authentication is setup work, not primary content work. Keeping it out of the persistent sidebar gives more attention to repository navigation and preview while preserving explicit logout.
 

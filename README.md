@@ -13,7 +13,7 @@ Adaptivio also needs GitHub Actions status, failing check annotations, detection
 
 ## Features
 
-- Connects to a private repo with a per-user GitHub token.
+- Connects to a private repo with per-user GitHub OAuth device flow. A manual token remains available as a fallback.
 - The target repo is fixed in the app to `advantages-cz/avds`, default branch `master`.
 - Browse repository content as a tree.
 - Browser back/forward works for file and folder navigation inside the CMS.
@@ -35,9 +35,9 @@ Adaptivio also needs GitHub Actions status, failing check annotations, detection
 
 ## Security Model
 
-The app is fully static. There is no backend that stores secrets or proxies private data. The token stays in the user's browser and is sent only to `https://api.github.com`.
+The app is fully static. There is no backend that stores secrets or proxies private data. The OAuth token stays in the user's browser and is sent only to `https://api.github.com`.
 
-Recommended permissions for a fine-grained token:
+The recommended OAuth scope is `repo` so the CMS can read and write the private target repository, create pull requests, and read workflow state. For manual fallback tokens, use these fine-grained permissions:
 
 - `Metadata`: read
 - `Contents`: read/write
@@ -47,7 +47,7 @@ Recommended permissions for a fine-grained token:
 
 Optionally allow `Actions: write` if the CMS should rerun workflow runs.
 
-The default token storage is `sessionStorage`. Persistent storage in `localStorage` is available, but should be used only on a trusted computer. Direct commits to the default branch are disabled.
+OAuth sign-in stores the token in `sessionStorage`. Manual fallback tokens can be persisted in `localStorage`, but should be used only on a trusted computer. Direct commits to the default branch are disabled.
 
 HTML previews are sandboxed without `allow-scripts` and without `allow-same-origin`. The app never injects file content as HTML into its own DOM.
 
@@ -60,7 +60,7 @@ An optional `cms.config.json` file can live next to `index.html`:
   "branchPrefix": "cms/",
   "editablePathHints": ["content/", "docs/", "data/", "assets/"],
   "previewPathHints": ["dist/", "public/", "site/", "exports/"],
-  "githubOAuthClientId": ""
+  "githubOAuthClientId": "your_oauth_app_client_id"
 }
 ```
 
@@ -72,7 +72,7 @@ The CMS stores the selected file or folder in the URL through `path` or `dir`, s
 https://example.github.io/adaptivio-cms/?branch=master&path=content/page.md
 ```
 
-`githubOAuthClientId` is optional. Device flow does not require a client secret, but GitHub OAuth endpoints may hit CORS restrictions in a pure browser context. A fine-grained PAT remains the primary and most predictable option.
+`githubOAuthClientId` enables GitHub OAuth device flow and should be configured for production. Device flow does not require a client secret, so it preserves the static GitHub Pages deployment model. GitHub's standard web application OAuth redirect flow requires a server-side token exchange with a client secret and is not implemented in this public static app. A fine-grained PAT remains available only as a fallback.
 
 ## Localization
 

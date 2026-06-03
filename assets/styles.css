@@ -514,6 +514,37 @@ textarea:focus {
   gap: 8px;
 }
 
+.auth-primary {
+  display: grid;
+  gap: 8px;
+  align-items: start;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  padding: 12px;
+  background: var(--surface-alt);
+}
+
+.auth-primary .primary {
+  justify-self: start;
+}
+
+.auth-fallback {
+  border-top: 1px solid var(--line);
+  padding-top: 10px;
+}
+
+.auth-fallback summary {
+  cursor: pointer;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.auth-fallback[open] summary {
+  margin-bottom: 10px;
+  color: var(--text);
+}
+
 .icon-button {
   display: inline-grid;
   place-items: center;
