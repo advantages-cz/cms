@@ -2625,14 +2625,32 @@ function renderMarkdownLink(label, href) {
   }
 
   if (target.path) {
-    return `<a href="#${escapeHtml(target.anchor || "")}" data-action="open-markdown-link" data-path="${escapeHtml(target.path)}" data-anchor="${escapeHtml(target.anchor || "")}">${label}</a>`;
+    const href = internalSelectionHref({ path: target.path, anchor: target.anchor });
+    return `<a href="${escapeHtml(href)}" data-action="open-markdown-link" data-path="${escapeHtml(target.path)}" data-anchor="${escapeHtml(target.anchor || "")}">${label}</a>`;
   }
 
   if (target.dir) {
-    return `<a href="#" data-action="open-markdown-dir-link" data-path="${escapeHtml(target.dir)}">${label}</a>`;
+    const href = internalSelectionHref({ dir: target.dir });
+    return `<a href="${escapeHtml(href)}" data-action="open-markdown-dir-link" data-path="${escapeHtml(target.dir)}">${label}</a>`;
   }
 
   return `<a href="#" data-action="missing-markdown-link" data-href="${escapeHtml(safeHref)}">${label}</a>`;
+}
+
+function internalSelectionHref({ path = "", dir = "", anchor = "" } = {}) {
+  const url = new URL(window.location.href);
+  if (state.branch) {
+    url.searchParams.set("branch", state.branch);
+  }
+  if (path) {
+    url.searchParams.set("path", path);
+    url.searchParams.delete("dir");
+  } else if (dir) {
+    url.searchParams.set("dir", dir);
+    url.searchParams.delete("path");
+  }
+  url.hash = anchor ? `#${anchor}` : "";
+  return `${url.pathname}${url.search}${url.hash}`;
 }
 
 function normalizeMarkdownHref(href) {
@@ -2668,7 +2686,7 @@ function resolveMarkdownLinkTarget(href) {
   }
 
   const cleanPath = rawPath.split("?")[0];
-  const resolved = resolveRepoRelativePath(cleanPath, state.editor?.path || "");
+  const resolved = normalizePath(resolveRepoRelativePath(cleanPath, state.editor?.path || "")).replace(/\/+$/g, "");
   if (state.files.some((file) => file.path === resolved)) {
     return { path: resolved, anchor };
   }
