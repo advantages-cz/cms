@@ -10,6 +10,7 @@ Adaptivio CMS is a public static application that can read and write a private G
 - Persistent storage uses `localStorage` only when the user selects it.
 - Tokens are sent only to `https://api.github.com` and GitHub OAuth endpoints.
 - No token is committed to this repository and no backend secret exists.
+- Direct browser calls to GitHub OAuth endpoints are blocked by GitHub CORS behavior; production OAuth needs a trusted OAuth proxy/serverless function or the manual token fallback.
 - The app does not implement GitHub's standard redirect OAuth code exchange because that requires a server-side client secret/token exchange for a public static deployment.
 
 For the manual fallback, use a fine-grained token scoped to the target repository. Prefer the minimum permissions documented in `README.md`.

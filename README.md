@@ -72,7 +72,7 @@ The CMS stores the selected file or folder in the URL through `path` or `dir`, s
 https://example.github.io/adaptivio-cms/?branch=master&path=content/page.md
 ```
 
-`githubOAuthClientId` enables GitHub OAuth device flow and should be configured for production. Device flow does not require a client secret, so it preserves the static GitHub Pages deployment model. GitHub's standard web application OAuth redirect flow requires a server-side token exchange with a client secret and is not implemented in this public static app. A fine-grained PAT remains available only as a fallback.
+`githubOAuthClientId` identifies the GitHub OAuth app. Device flow does not require a client secret, but GitHub's OAuth endpoints do not provide the CORS response needed for direct browser calls from a purely static app. Production OAuth therefore needs a small trusted OAuth proxy/serverless function, or the app must use the fine-grained PAT fallback. GitHub's standard web application OAuth redirect flow also requires a server-side token exchange with a client secret and is not implemented in this public static app.
 
 ## Localization
 

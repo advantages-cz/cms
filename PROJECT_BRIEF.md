@@ -231,9 +231,9 @@ Reasoning: A public GitHub Pages application cannot safely hold a server-side se
 
 ### 2026-06-03: Make GitHub OAuth Device Flow The Primary Sign-In
 
-Decision: GitHub sign-in now uses OAuth device flow as the primary path when `githubOAuthClientId` is configured. Manual token entry remains available as an advanced fallback.
+Decision: GitHub sign-in now presents OAuth device flow as the desired primary path when `githubOAuthClientId` is configured. Manual token entry remains available as an advanced fallback.
 
-Reasoning: Asking editors to create and paste a PAT is too demanding for normal use. GitHub's standard redirect OAuth flow requires a server-side client secret/token exchange and is not safe for a public static GitHub Pages app, while device flow gives users a GitHub-hosted authorization UI without adding a custom backend.
+Reasoning: Asking editors to create and paste a PAT is too demanding for normal use. GitHub's standard redirect OAuth flow requires a server-side client secret/token exchange and is not safe for a public static GitHub Pages app. Device flow avoids a client secret, but GitHub's OAuth endpoints do not provide the CORS response needed for direct browser calls, so production OAuth still needs a small trusted proxy/serverless function unless the CMS keeps using the token fallback.
 
 ### 2026-06-02: Keep Merge In GitHub
 

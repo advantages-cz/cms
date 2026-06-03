@@ -1763,18 +1763,16 @@ async function startDeviceFlow() {
     return;
   }
 
-  const authWindow = window.open("", "_blank");
-  if (authWindow) {
-    authWindow.opener = null;
-    authWindow.document.title = t("auth.oauthPreparing");
-    authWindow.document.body.textContent = t("auth.oauthPreparing");
-  }
-
   await withBusy(t("auth.oauthPreparing"), async () => {
     const client = new GitHubClient("");
-    const payload = await client.requestDeviceCode(clientId, "repo workflow read:user");
-    if (authWindow) {
-      authWindow.location.href = payload.verification_uri;
+    let payload;
+    try {
+      payload = await client.requestDeviceCode(clientId, "repo workflow read:user");
+    } catch (error) {
+      if (!(error instanceof GitHubError)) {
+        throw new Error(t("auth.oauthBrowserBlocked"));
+      }
+      throw error;
     }
     state.modal = {
       type: "device-flow",
@@ -1783,10 +1781,6 @@ async function startDeviceFlow() {
       requestedAt: Date.now(),
     };
   });
-
-  if (authWindow && state.modal?.type !== "device-flow") {
-    authWindow.close();
-  }
 }
 
 async function pollDeviceFlow() {
