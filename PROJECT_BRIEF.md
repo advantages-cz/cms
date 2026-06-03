@@ -137,7 +137,7 @@ Implemented capabilities:
 - Rendered Markdown preview in browse mode.
 - Front matter-aware Markdown rendering.
 - Collapsed front matter display in rendered Markdown preview.
-- Internal Markdown links resolved through the CMS tree instead of navigating the browser frame.
+- Internal Markdown links resolved through the CMS tree instead of navigating the browser frame; links to existing directories select and expand the matching tree folder.
 - Markdown preview hides HTML comments and supports angle-bracket link destinations with spaces, such as `[PDF](<vystupy/test pozvanky/file.pdf>)`.
 - Browser history integration for repository file and folder navigation via URL `path` and `dir` parameters.
 - Sandboxed HTML preview with relative image, SVG, and CSS assets inlined from the current branch.
@@ -384,6 +384,12 @@ Reasoning: The editor DOM can be replaced during busy rendering or delayed metad
 Decision: The repository tree starts collapsed on a fresh load. Deep links and URL-restored selections still expand the ancestors needed to reveal the target file or directory.
 
 Reasoning: A collapsed tree keeps the first view compact and CMS-like, while preserving orientation when the user enters through a link into the middle of the content structure.
+
+### 2026-06-03: Markdown Folder Links Select Tree Folders
+
+Decision: When a rendered Markdown link points at an existing repository directory rather than a direct file path, the CMS selects that directory in the tree and expands it instead of opening an inferred Markdown file such as `index.md`.
+
+Reasoning: Folder links are navigation cues for editors browsing a content structure. Keeping them in the tree preserves orientation and avoids surprising file selection when the Markdown source intentionally points to a directory.
 
 ## Update Protocol
 

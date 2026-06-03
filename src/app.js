@@ -385,6 +385,11 @@ async function handleAction(button) {
     return;
   }
 
+  if (action === "open-markdown-dir-link") {
+    openMarkdownDirectoryLink(button.dataset.path || "");
+    return;
+  }
+
   if (action === "missing-markdown-link") {
     toast(t("markdown.missingLink", { href: button.dataset.href || "" }), "warn");
     return;
@@ -1162,6 +1167,15 @@ async function openMarkdownLink(path, anchor) {
   if (anchor) {
     window.setTimeout(() => scrollMarkdownAnchor(anchor), 0);
   }
+}
+
+function openMarkdownDirectoryLink(path) {
+  const dir = normalizePath(path);
+  if (!dir || !directoryExists(dir)) {
+    return;
+  }
+
+  selectDirectory(dir, { navigation: "push" });
 }
 
 function scrollMarkdownAnchor(anchor) {
@@ -2614,6 +2628,10 @@ function renderMarkdownLink(label, href) {
     return `<a href="#${escapeHtml(target.anchor || "")}" data-action="open-markdown-link" data-path="${escapeHtml(target.path)}" data-anchor="${escapeHtml(target.anchor || "")}">${label}</a>`;
   }
 
+  if (target.dir) {
+    return `<a href="#" data-action="open-markdown-dir-link" data-path="${escapeHtml(target.dir)}">${label}</a>`;
+  }
+
   return `<a href="#" data-action="missing-markdown-link" data-href="${escapeHtml(safeHref)}">${label}</a>`;
 }
 
@@ -2651,8 +2669,15 @@ function resolveMarkdownLinkTarget(href) {
 
   const cleanPath = rawPath.split("?")[0];
   const resolved = resolveRepoRelativePath(cleanPath, state.editor?.path || "");
+  if (state.files.some((file) => file.path === resolved)) {
+    return { path: resolved, anchor };
+  }
+
+  if (directoryExists(resolved)) {
+    return { dir: resolved, anchor };
+  }
+
   const candidates = [
-    resolved,
     `${resolved}.md`,
     `${resolved}.mdx`,
     `${resolved}/index.md`,
@@ -3627,6 +3652,19 @@ function toggleDirectory(path, { navigation = "" } = {}) {
   } else {
     state.expandedDirs.add(path);
   }
+  persistSettings();
+  if (navigation) {
+    updateBrowserNavigation({ mode: navigation });
+  }
+  render();
+}
+
+function selectDirectory(path, { navigation = "" } = {}) {
+  state.selectedPath = "";
+  state.selectedDir = path;
+  state.editor = null;
+  state.preview = null;
+  expandPathToDir(path);
   persistSettings();
   if (navigation) {
     updateBrowserNavigation({ mode: navigation });
