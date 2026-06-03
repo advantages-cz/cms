@@ -1180,9 +1180,15 @@ function openMarkdownDirectoryLink(path) {
 
 function scrollMarkdownAnchor(anchor) {
   const preview = document.querySelector(".markdown-preview");
-  const byId = document.getElementById(anchor);
-  const byName = preview?.querySelector(`[name="${attrEscape(anchor)}"]`);
-  const target = byId && preview?.contains(byId) ? byId : byName;
+  const normalized = normalizeMarkdownAnchor(anchor);
+  const anchors = normalized && normalized !== anchor ? [anchor, normalized] : [anchor];
+  const target = anchors
+    .map((candidate) => {
+      const byId = document.getElementById(candidate);
+      const byName = preview?.querySelector(`[name="${attrEscape(candidate)}"]`);
+      return byId && preview?.contains(byId) ? byId : byName;
+    })
+    .find((candidate) => candidate instanceof HTMLElement);
 
   if (target instanceof HTMLElement) {
     target.scrollIntoView({ block: "start", behavior: "smooth" });
@@ -2608,6 +2614,11 @@ function slugifyMarkdownHeading(value) {
     .replace(/-+/g, "-");
 }
 
+function normalizeMarkdownAnchor(anchor) {
+  const decoded = decodeMarkdownHref(anchor);
+  return slugifyMarkdownHeading(decoded) || decoded;
+}
+
 function renderMarkdownLink(label, href) {
   const safeHref = normalizeMarkdownHref(href);
   if (!safeHref) {
@@ -2621,11 +2632,13 @@ function renderMarkdownLink(label, href) {
 
   const target = resolveMarkdownLinkTarget(safeHref);
   if (target.anchorOnly) {
-    return `<a href="#${escapeHtml(target.anchor)}" data-action="open-markdown-link" data-anchor="${escapeHtml(target.anchor)}">${label}</a>`;
+    const anchor = normalizeMarkdownAnchor(target.anchor);
+    return `<a href="#${escapeHtml(anchor)}" data-action="open-markdown-link" data-anchor="${escapeHtml(target.anchor)}">${label}</a>`;
   }
 
   if (target.path) {
-    const href = internalSelectionHref({ path: target.path, anchor: target.anchor });
+    const anchor = target.anchor ? normalizeMarkdownAnchor(target.anchor) : "";
+    const href = internalSelectionHref({ path: target.path, anchor });
     return `<a href="${escapeHtml(href)}" data-action="open-markdown-link" data-path="${escapeHtml(target.path)}" data-anchor="${escapeHtml(target.anchor || "")}">${label}</a>`;
   }
 

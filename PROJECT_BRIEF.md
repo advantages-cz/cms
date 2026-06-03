@@ -138,6 +138,7 @@ Implemented capabilities:
 - Front matter-aware Markdown rendering.
 - Collapsed front matter display in rendered Markdown preview.
 - Internal Markdown links resolved through the CMS tree instead of navigating the browser frame; links to existing directories select and expand the matching tree folder.
+- Markdown heading anchors normalize diacritics consistently between generated heading IDs and rendered internal links.
 - Markdown preview hides HTML comments and supports angle-bracket link destinations with spaces, such as `[PDF](<vystupy/test pozvanky/file.pdf>)`.
 - Browser history integration for repository file and folder navigation via URL `path` and `dir` parameters.
 - Sandboxed HTML preview with relative image, SVG, and CSS assets inlined from the current branch.
@@ -390,6 +391,12 @@ Reasoning: A collapsed tree keeps the first view compact and CMS-like, while pre
 Decision: When a rendered Markdown link points at an existing repository directory rather than a direct file path, the CMS selects that directory in the tree and expands it instead of opening an inferred Markdown file such as `index.md`.
 
 Reasoning: Folder links are navigation cues for editors browsing a content structure. Keeping them in the tree preserves orientation and avoids surprising file selection when the Markdown source intentionally points to a directory.
+
+### 2026-06-03: Normalize Markdown Anchors With Heading IDs
+
+Decision: Rendered internal Markdown links normalize hash anchors with the same diacritic-stripping slug logic used for generated Markdown heading IDs.
+
+Reasoning: Czech and Slovak headings can include diacritics while generated heading IDs do not. Using one normalization path keeps links such as `#expertíza` aligned with headings rendered as `id="expertiza"`.
 
 ## Update Protocol
 
