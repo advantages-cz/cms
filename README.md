@@ -99,6 +99,14 @@ python3 -m http.server 4173
 
 Then open `http://localhost:4173`.
 
+## Test
+
+The project uses Node's built-in test runner and has no package manager dependency.
+
+```sh
+node --test
+```
+
 ## Limitations
 
 - The CMS loads the repository tree through the Git Trees API. For very large repositories, GitHub may return a truncated tree.

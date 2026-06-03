@@ -39,6 +39,7 @@ export class GitHubClient {
     }
 
     const response = await fetch(url, {
+      cache: "no-store",
       ...options,
       headers,
     });
@@ -118,9 +119,13 @@ export class GitHubClient {
     });
   }
 
-  getContent(owner, repo, path, ref) {
+  getContent(owner, repo, path, ref, { cacheBust = false } = {}) {
+    const query = new URLSearchParams({ ref });
+    if (cacheBust) {
+      query.set("_", String(Date.now()));
+    }
     return this.request(
-      `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/contents/${encodePath(path)}?ref=${encodeURIComponent(ref)}`,
+      `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/contents/${encodePath(path)}?${query.toString()}`,
     );
   }
 

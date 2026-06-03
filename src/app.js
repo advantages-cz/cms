@@ -1,3 +1,12 @@
+import {
+  applyFrontMatterTitleToPath as applyFrontMatterTitleToPathState,
+  applyFrontMatterTitleToSha,
+  decodeContentApiText,
+  frontMatterTitleForEntry as frontMatterTitleForEntryState,
+  prepareEditorForSave,
+  readSaveFileFormData,
+  upsertFileMetadata as upsertFileMetadataState,
+} from "./editorWorkflow.js?v=20260603-post-save-ref";
 import { GitHubClient, GitHubError } from "./github.js";
 import { DEFAULT_LANGUAGE, LANGUAGES, normalizeLanguage, translate } from "./i18n.js";
 import {
@@ -59,6 +68,7 @@ const state = {
   branches: [],
   files: [],
   frontMatterTitleBySha: new Map(),
+  frontMatterTitleDraftByPath: new Map(),
   treeTruncated: false,
   headSha: "",
   tab: normalizeTab(settings.tab),
@@ -109,6 +119,7 @@ function normalizeTab(tab) {
 }
 
 const scheduleFilterRender = debounce(() => render(), 160);
+const scheduleEditorMetadataRender = debounce(() => render(), 160);
 
 void init();
 
@@ -260,7 +271,7 @@ async function handleForm(form) {
   }
 
   if (formName === "save-file") {
-    await saveCurrentFile(String(data.get("message") || "").trim());
+    await saveCurrentFile(readSaveFileFormData(data));
     return;
   }
 
@@ -513,6 +524,9 @@ function handleInput(target) {
   if (target.id === "editor-content" && target instanceof HTMLTextAreaElement && state.editor) {
     state.editor.content = target.value;
     state.editor.dirty = true;
+    if (syncEditorFrontMatterTitle()) {
+      scheduleEditorMetadataRender();
+    }
   }
 }
 
@@ -817,6 +831,24 @@ async function refreshRepositoryData({ keepBusy = false, preserveSelection = fal
   }
 }
 
+async function refreshRepositoryTree({ keepBusy = false, expectedHeadSha = "" } = {}) {
+  const run = async () => {
+    assertConnected();
+    const tree = await state.client.listTree(state.owner, state.repo, state.branch);
+    if (expectedHeadSha && tree.headSha !== expectedHeadSha) {
+      return;
+    }
+    applyRepositoryTree(tree);
+    state.lastSave = loadLastSave(state.owner, state.repo, state.branch);
+  };
+
+  if (keepBusy) {
+    await run();
+  } else {
+    await withBusy(t("repo.loadingBranch"), run);
+  }
+}
+
 async function refreshReviewData({ keepBusy = false } = {}) {
   const run = async () => {
     assertConnected();
@@ -1004,10 +1036,21 @@ function applyRepositoryTree(tree) {
     .filter((entry) => entry.type === "blob")
     .map((entry) => ({
       ...entry,
-      frontMatterTitle: state.frontMatterTitleBySha.get(entry.sha) || "",
+      frontMatterTitle: frontMatterTitleForEntry(entry),
     }))
     .sort((a, b) => a.path.localeCompare(b.path));
   scheduleFrontMatterTitleScan();
+}
+
+function frontMatterTitleForEntry(entry) {
+  return frontMatterTitleForEntryState(entry, {
+    draftByPath: state.frontMatterTitleDraftByPath,
+    titleBySha: state.frontMatterTitleBySha,
+  });
+}
+
+function setFrontMatterTitleDraft(path, title) {
+  state.frontMatterTitleDraftByPath.set(path, title);
 }
 
 async function startEditSession({ forceNewBranch = false } = {}) {
@@ -1081,6 +1124,7 @@ async function loadFile(path, { keepBusy = false, syncLatest = false, navigation
       sha: entry.sha,
       size: entry.size,
       content: "",
+      baseContent: "",
       binary: !isTextPath(path),
       dirty: false,
     };
@@ -1088,10 +1132,12 @@ async function loadFile(path, { keepBusy = false, syncLatest = false, navigation
     if (isTextPath(path)) {
       const blob = await state.client.getBlob(state.owner, state.repo, entry.sha);
       state.editor.content = base64ToText(blob.content || "");
+      state.editor.baseContent = state.editor.content;
       if (isMarkdownPath(path)) {
         const title = extractFrontMatterTitle(state.editor.content);
         state.frontMatterTitleBySha.set(entry.sha, title);
-        applyFrontMatterTitleToFile(entry.sha, title);
+        state.frontMatterTitleDraftByPath.delete(path);
+        applyFrontMatterTitleToPath(path, title);
       }
     }
 
@@ -1255,7 +1301,7 @@ function recordCmsCommit({ commitSha, path, message }) {
   state.dismissedAutomationBannerKey = "";
 }
 
-async function saveCurrentFile(message) {
+async function saveCurrentFile({ message = "", content = "" } = {}) {
   if (!state.editor || state.editor.binary) {
     toast(t("files.selectMarkdown"), "warn");
     return;
@@ -1266,34 +1312,119 @@ async function saveCurrentFile(message) {
     return;
   }
 
-  const textarea = document.querySelector("#editor-content");
-  if (textarea instanceof HTMLTextAreaElement) {
-    state.editor.content = textarea.value;
-  }
+  state.editor.content = content;
+  state.editor.dirty = true;
 
   await withBusy(t("files.savingCommit"), async () => {
     assertCanWrite();
     const savedPath = state.editor.path;
     const commitMessage = message || `CMS: update ${state.editor.path}`;
-    const response = await state.client.putFile(state.owner, state.repo, state.editor.path, {
-      branch: state.branch,
-      message: commitMessage,
-      contentBase64: textToBase64(state.editor.content),
-      sha: state.editor.sha,
-    });
+    syncEditorFrontMatterTitle();
+    await prepareCurrentFileForSave();
+    syncEditorFrontMatterTitle();
+    const response = await putCurrentEditorFile(commitMessage);
 
     state.editor.sha = response.content?.sha || state.editor.sha;
     state.editor.dirty = false;
+    state.editor.baseContent = state.editor.content;
     state.headSha = response.commit?.sha || state.headSha;
     recordCmsCommit({ commitSha: state.headSha, path: state.editor.path, message: commitMessage });
-    await refreshRepositoryData({ keepBusy: true });
-    await loadFile(savedPath);
-    await refreshActions({ keepBusy: true });
+    await refreshRepositoryTree({ keepBusy: true, expectedHeadSha: state.headSha });
+    await loadFileFromContents(savedPath, { ref: state.headSha || state.branch });
+    await refreshActions({ keepBusy: true, syncBranch: false });
     await refreshReviewData({ keepBusy: true });
     startActionPolling();
     persistSettings();
     toast(t("files.commitSaved"), "ok");
   });
+}
+
+async function loadFileFromContents(path, { ref = state.branch } = {}) {
+  const content = await state.client.getContent(state.owner, state.repo, path, ref, { cacheBust: true });
+  if (Array.isArray(content) || content.type !== "file" || !content.sha) {
+    throw new Error(t("files.selectedMissing"));
+  }
+
+  const existing = state.files.find((file) => file.path === path) || {};
+  const entry = {
+    ...existing,
+    path,
+    name: path.split("/").pop() || path,
+    type: "blob",
+    sha: content.sha,
+    size: content.size || existing.size || 0,
+    frontMatterTitle: existing.frontMatterTitle || "",
+  };
+  upsertFileMetadata(entry);
+
+  const textContent = isTextPath(path) ? decodeContentApiText(content.content || "") : "";
+  revokePreviewUrls();
+  state.selectedPath = path;
+  state.selectedDir = directoryOfPath(path);
+  expandPathToFile(path);
+  state.editor = {
+    path,
+    sha: entry.sha,
+    size: entry.size,
+    content: textContent,
+    baseContent: textContent,
+    binary: !isTextPath(path),
+    dirty: false,
+  };
+
+  if (isMarkdownPath(path)) {
+    const title = extractFrontMatterTitle(textContent);
+    state.frontMatterTitleBySha.set(entry.sha, title);
+    state.frontMatterTitleDraftByPath.delete(path);
+    applyFrontMatterTitleToPath(path, title);
+  }
+
+  await buildPreview(entry, textContent);
+}
+
+function upsertFileMetadata(entry) {
+  state.files = upsertFileMetadataState(state.files, entry);
+}
+
+async function putCurrentEditorFile(commitMessage) {
+  try {
+    return await putCurrentEditorFileOnce(commitMessage);
+  } catch (error) {
+    if (!(error instanceof GitHubError) || error.status !== 409) {
+      throw error;
+    }
+    await prepareCurrentFileForSave({ cacheBust: true });
+    syncEditorFrontMatterTitle();
+    return putCurrentEditorFileOnce(commitMessage);
+  }
+}
+
+function putCurrentEditorFileOnce(commitMessage) {
+  return state.client.putFile(state.owner, state.repo, state.editor.path, {
+    branch: state.branch,
+    message: commitMessage,
+    contentBase64: textToBase64(state.editor.content),
+    sha: state.editor.sha,
+  });
+}
+
+async function prepareCurrentFileForSave({ cacheBust = false } = {}) {
+  if (!state.editor) {
+    return;
+  }
+
+  const path = state.editor.path;
+  const result = await prepareEditorForSave({
+    client: state.client,
+    owner: state.owner,
+    repo: state.repo,
+    branch: state.branch,
+    editor: state.editor,
+    conflictMessage: t("files.remoteChangedConflict", { path }),
+    cacheBust,
+  });
+  state.editor = result.editor;
+  applyFrontMatterTitleToPath(path, extractFrontMatterTitle(state.editor.content || ""));
 }
 
 async function createTextFile(form, data) {
@@ -2230,7 +2361,7 @@ function renderEditor() {
   return `
     <form data-form="save-file">
       <div>
-        <textarea id="editor-content" class="editor-textarea editor-textarea-full" spellcheck="false">${escapeHtml(state.editor.content)}</textarea>
+        <textarea id="editor-content" name="content" class="editor-textarea editor-textarea-full" spellcheck="false">${escapeHtml(state.editor.content)}</textarea>
         <div class="field" style="margin-top: 10px;">
           <label for="message">${t("files.commitMessage")}</label>
           <input id="message" name="message" placeholder="CMS: update ${escapeHtml(state.editor.path)}" />
@@ -3286,15 +3417,25 @@ async function scanFrontMatterTitles(files, scanId) {
 }
 
 function applyFrontMatterTitleToFile(sha, title) {
-  let changed = false;
-  state.files = state.files.map((file) => {
-    if (file.sha !== sha || file.frontMatterTitle === title) {
-      return file;
-    }
-    changed = true;
-    return { ...file, frontMatterTitle: title };
-  });
-  return changed;
+  const result = applyFrontMatterTitleToSha(state.files, sha, title, state.frontMatterTitleDraftByPath);
+  state.files = result.files;
+  return result.changed;
+}
+
+function applyFrontMatterTitleToPath(path, title) {
+  const result = applyFrontMatterTitleToPathState(state.files, path, title);
+  state.files = result.files;
+  return result.changed;
+}
+
+function syncEditorFrontMatterTitle() {
+  if (!state.editor || !isMarkdownPath(state.editor.path)) {
+    return false;
+  }
+
+  const title = extractFrontMatterTitle(state.editor.content || "");
+  setFrontMatterTitleDraft(state.editor.path, title);
+  return applyFrontMatterTitleToPath(state.editor.path, title);
 }
 
 function extractFrontMatterTitle(markdown) {
@@ -3635,6 +3776,11 @@ function captureTokenFromAuthForm() {
   state.client = new GitHubClient(token);
   saveToken(token, persistence);
 }
+
+export const __testing = {
+  state,
+  saveCurrentFile,
+};
 
 function summarizeTokenProbeError(error) {
   if (error instanceof GitHubError) {

@@ -112,6 +112,7 @@ Implemented capabilities:
 - Tree browser for repository contents.
 - CMS-oriented tree sorting: root `README.md` opens by default; each level sorts `README.md` first, regular files, dotfiles, regular folders, then dot-prefixed folders.
 - Markdown front matter titles in the tree when available, with the filename shown in muted parentheses.
+- Live front matter title updates while editing Markdown, reflected in the tree and changed-file metadata before the commit finishes.
 - Collapsed tree by default, except when opening a URL or link that targets a deeper file or directory.
 - Browse-first approval workflow.
 - Automatic edit branch creation from the default branch.
@@ -119,6 +120,8 @@ Implemented capabilities:
 - Explicit new edit branch creation when the user asks for it.
 - Markdown-only editing for `.md` and `.mdx` files.
 - Commit creation through GitHub Contents API.
+- Pre-commit file SHA resync, 409 retry with cache-busted Contents reads, and post-commit selected-file reload through GitHub Contents API at the returned commit SHA.
+- Editor form submit captures Markdown content from form data before any busy-state render.
 - Pull request creation.
 - Pull request diff summary.
 - Detection of changes after the last CMS save.
@@ -340,6 +343,30 @@ Reasoning: Content editors usually need the local landing page or index before i
 Decision: Markdown files can display their front matter `title` in the tree, with the filename in parentheses. Titles are loaded from smaller Markdown blobs in a capped background scan and cached by blob SHA.
 
 Reasoning: Editors recognize content by page title more easily than by slug. Capping and caching the scan keeps the static GitHub API workflow reasonable for larger repositories.
+
+### 2026-06-03: Keep Edited Front Matter Titles Live
+
+Decision: While a Markdown file is being edited, changes to its front matter `title` update the current file metadata by path so the tree and changed-file lists reflect the draft title immediately.
+
+Reasoning: Editors expect a page rename in front matter to rename the CMS navigation label without waiting for a full Git blob refresh. Updating by path avoids corrupting the blob-SHA title cache with unsaved draft metadata.
+
+### 2026-06-03: Resync File SHA Before Commit
+
+Decision: Before committing an edited Markdown file, the CMS refreshes the file through GitHub's Contents API and updates the editor's file SHA when the remote content still matches the editor's original base content. GitHub API requests use `cache: "no-store"`, and a 409 save response retries once after a cache-busted Contents read. If the remote file content changed, the commit is blocked and the draft remains in the editor.
+
+Reasoning: GitHub's Contents API rejects writes with stale blob SHAs, so the preflight should use the same API surface that validates the write. This prevents avoidable 409 errors while still protecting against silent overwrites of external or automation edits.
+
+### 2026-06-03: Reload Saved File From Contents
+
+Decision: After a successful Markdown save, the CMS reloads the selected file from GitHub's Contents API using the returned commit SHA, applies tree refresh data only when it matches the known save commit, and skips an extra branch sync while refreshing Actions for that known commit.
+
+Reasoning: GitHub tree and branch reads can briefly lag a Contents write. Guarding tree refreshes and reloading the saved file through the immutable commit ref and the same API surface as the write prevents the editor from flashing back to the previous blob after commit.
+
+### 2026-06-03: Capture Editor Submit Content From Form Data
+
+Decision: The save form includes the Markdown textarea in `FormData`, and the submit handler passes that content into the save workflow before any busy-state render.
+
+Reasoning: The editor DOM can be replaced during busy rendering or delayed metadata refreshes. Reading the submitted form payload is the stable source of the user's current draft at commit time.
 
 ### 2026-06-02: Keep Initial Tree Collapsed
 
