@@ -117,6 +117,7 @@ Implemented capabilities:
 - Tree browser for repository contents.
 - CMS-oriented tree sorting: root `README.md` opens by default; each level sorts `README.md` first, regular files, dotfiles, regular folders, then dot-prefixed folders.
 - Markdown front matter titles in the tree when available, with the filename shown in muted parentheses.
+- Front matter title loading is prioritized immediately after tree refresh and fulltext content indexing waits until the title scan completes.
 - Live front matter title updates while editing Markdown, reflected in the tree and changed-file metadata before the commit finishes.
 - Collapsed tree by default, except when opening a URL or link that targets a deeper file or directory.
 - Browse-first approval workflow.
@@ -338,6 +339,12 @@ Reasoning: The CMS is used by both Czech and English-speaking maintainers. Centr
 Decision: Add light, dark, and automatic appearance modes. Automatic mode follows the browser or operating-system `prefers-color-scheme` setting, while explicit light/dark choices override it. The preference is saved in the same local CMS settings object as language, branch, tab, and tree width.
 
 Reasoning: Editors may use the CMS for long review sessions across different environments. A theme preference improves comfort without changing the GitHub workflow or adding dependencies, and keeping the default as automatic respects the user's device setting.
+
+### 2026-06-04: Prioritize Tree Titles Before Fulltext
+
+Decision: Repository refresh starts the front matter title scan immediately after applying the Git tree. Fulltext indexing remains delayed until the title scan finishes, and refresh side work such as review or Actions data must not block the first title updates in the tree.
+
+Reasoning: The tree is the primary navigation surface. Editors need readable page titles as soon as possible after load or refresh; fulltext search completeness is useful but secondary and can arrive later.
 
 ### 2026-06-02: Move Login Into A Modal
 

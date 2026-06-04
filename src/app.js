@@ -50,6 +50,8 @@ const MIN_PREVIEW_PANE_WIDTH = 360;
 const MAX_FRONT_MATTER_TITLE_FILES = 200;
 const MAX_FRONT_MATTER_TITLE_BYTES = 256 * 1024;
 const FRONT_MATTER_TITLE_CONCURRENCY = 4;
+const FRONT_MATTER_TITLE_EAGER_RENDER_COUNT = 24;
+const FRONT_MATTER_TITLE_RENDER_BATCH = 4;
 const MAX_SEARCH_INDEX_BYTES = 256 * 1024;
 const SEARCH_INDEX_CONCURRENCY = 1;
 const SEARCH_INDEX_START_DELAY_MS = 1200;
@@ -848,11 +850,20 @@ async function refreshRepositoryData({ keepBusy = false, preserveSelection = fal
     state.selectedPath = "";
     state.selectedDir = "";
     applyRepositoryTree(tree);
+    scheduleFrontMatterTitleScan();
     state.lastSave = loadLastSave(state.owner, state.repo, state.branch);
-    await Promise.allSettled([
+    const reviewRefresh = Promise.allSettled([
       refreshReviewData({ keepBusy: true }),
       refreshActions({ keepBusy: true, syncBranch: false }),
     ]);
+    if (keepBusy) {
+      await reviewRefresh;
+    } else {
+      void reviewRefresh.then(() => {
+        syncActionPollingWithStatus();
+        render();
+      });
+    }
 
     if (previousPath && state.files.some((file) => file.path === previousPath)) {
       await loadFile(previousPath, { keepBusy: true });
@@ -876,6 +887,7 @@ async function refreshRepositoryTree({ keepBusy = false, expectedHeadSha = "" } 
       return;
     }
     applyRepositoryTree(tree);
+    scheduleFrontMatterTitleScan();
     state.lastSave = loadLastSave(state.owner, state.repo, state.branch);
   };
 
@@ -1038,6 +1050,7 @@ async function syncRepositoryHead({ reloadSelection = true, notify = true } = {}
   const headChanged = Boolean(previousHeadSha) && tree.headSha !== previousHeadSha;
 
   applyRepositoryTree(tree);
+  scheduleFrontMatterTitleScan();
   state.lastSave = loadLastSave(state.owner, state.repo, state.branch);
 
   if (!headChanged) {
@@ -1078,7 +1091,6 @@ function applyRepositoryTree(tree) {
     .sort((a, b) => a.path.localeCompare(b.path));
   pruneBlobCaches();
   cancelSearchIndexScan();
-  scheduleFrontMatterTitleScan();
 }
 
 function cancelSearchIndexScan() {
@@ -3943,6 +3955,7 @@ function scheduleFrontMatterTitleScan() {
   const scanId = ++frontMatterTitleScanId;
   const candidates = state.files
     .filter((file) => isFrontMatterTitleScanCandidate(file))
+    .sort(compareFrontMatterTitleCandidates)
     .slice(0, MAX_FRONT_MATTER_TITLE_FILES);
   state.frontMatterTitleScanCount = candidates.length;
   state.frontMatterTitleScannedCount = 0;
@@ -3957,7 +3970,11 @@ function scheduleFrontMatterTitleScan() {
   state.frontMatterTitleScanning = true;
   state.frontMatterTitlesReady = false;
   render();
-  void scanFrontMatterTitles(candidates, scanId);
+  window.setTimeout(() => {
+    if (scanId === frontMatterTitleScanId) {
+      void scanFrontMatterTitles(candidates, scanId);
+    }
+  }, 0);
 }
 
 function isFrontMatterTitleScanCandidate(file) {
@@ -3970,6 +3987,42 @@ function isFrontMatterTitleScanCandidate(file) {
   return !normalizeFrontMatterTitle(state.frontMatterTitleBySha.get(file.sha) || "");
 }
 
+function compareFrontMatterTitleCandidates(a, b) {
+  const visibleDiff = frontMatterTitleBucket(a) - frontMatterTitleBucket(b);
+  if (visibleDiff) {
+    return visibleDiff;
+  }
+  const depthDiff = pathDepth(a.path) - pathDepth(b.path);
+  if (depthDiff) {
+    return depthDiff;
+  }
+  const sizeDiff = (a.size || 0) - (b.size || 0);
+  if (sizeDiff) {
+    return sizeDiff;
+  }
+  return a.path.localeCompare(b.path, undefined, { sensitivity: "base" });
+}
+
+function frontMatterTitleBucket(file) {
+  const dir = directoryOfPath(file.path);
+  if (!dir) {
+    return 0;
+  }
+  if (state.selectedPath && file.path === state.selectedPath) {
+    return 0;
+  }
+  if (state.selectedDir && dir === state.selectedDir) {
+    return 1;
+  }
+  if (state.expandedDirs.has(dir)) {
+    return 2;
+  }
+  if (pathDepth(file.path) <= 2) {
+    return 3;
+  }
+  return 4;
+}
+
 async function scanFrontMatterTitles(files, scanId) {
   let changed = false;
   let changedSinceRender = 0;
@@ -3980,18 +4033,8 @@ async function scanFrontMatterTitles(files, scanId) {
       const file = files[index];
       index += 1;
       try {
-        const blob = await state.client.getBlob(state.owner, state.repo, file.sha);
-        const text = base64ToText(blob.content || "");
-        const title = extractFrontMatterTitle(text);
-        state.frontMatterTitleBySha.set(file.sha, title);
-        state.frontMatterTitleAttemptedBySha.add(file.sha);
-        if (isSearchIndexablePath(file.path) && file.size <= MAX_SEARCH_INDEX_BYTES) {
-          state.searchTextBySha.set(file.sha, normalizeSearchText(text));
-          state.searchContentBySha.set(file.sha, text);
-        }
-        const changedBySha = applyFrontMatterTitleToFile(file.sha, title);
-        const changedByPath = applyFrontMatterTitleToPath(file.path, title);
-        if (changedBySha || changedByPath) {
+        const result = await loadFrontMatterTitleForFile(file);
+        if (result.changed) {
           changed = true;
         }
       } catch {
@@ -3999,7 +4042,11 @@ async function scanFrontMatterTitles(files, scanId) {
       }
       state.frontMatterTitleScannedCount = Math.min(state.frontMatterTitleScanCount, state.frontMatterTitleScannedCount + 1);
       changedSinceRender += 1;
-      if (changedSinceRender >= 12 && scanId === frontMatterTitleScanId) {
+      const batchSize =
+        state.frontMatterTitleScannedCount <= FRONT_MATTER_TITLE_EAGER_RENDER_COUNT
+          ? 1
+          : FRONT_MATTER_TITLE_RENDER_BATCH;
+      if (changedSinceRender >= batchSize && scanId === frontMatterTitleScanId) {
         changedSinceRender = 0;
         render();
       }
@@ -4019,6 +4066,21 @@ async function scanFrontMatterTitles(files, scanId) {
   if (scanId === frontMatterTitleScanId) {
     scheduleSearchIndexScan();
   }
+}
+
+async function loadFrontMatterTitleForFile(file) {
+  const blob = await state.client.getBlob(state.owner, state.repo, file.sha);
+  const text = base64ToText(blob.content || "");
+  const title = extractFrontMatterTitle(text);
+  state.frontMatterTitleBySha.set(file.sha, title);
+  state.frontMatterTitleAttemptedBySha.add(file.sha);
+  if (isSearchIndexablePath(file.path) && file.size <= MAX_SEARCH_INDEX_BYTES) {
+    state.searchTextBySha.set(file.sha, normalizeSearchText(text));
+    state.searchContentBySha.set(file.sha, text);
+  }
+  const changedBySha = applyFrontMatterTitleToFile(file.sha, title);
+  const changedByPath = applyFrontMatterTitleToPath(file.path, title);
+  return { title, changed: changedBySha || changedByPath };
 }
 
 function applyFrontMatterTitleToFile(sha, title) {
