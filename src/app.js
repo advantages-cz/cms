@@ -3523,13 +3523,13 @@ function searchMatchForFile(file, query) {
 }
 
 function compareSearchResults(a, b) {
-  const rankDiff = a.rank - b.rank;
-  if (rankDiff) {
-    return rankDiff;
-  }
   const depthDiff = pathDepth(a.file.path) - pathDepth(b.file.path);
   if (depthDiff) {
     return depthDiff;
+  }
+  const rankDiff = a.rank - b.rank;
+  if (rankDiff) {
+    return rankDiff;
   }
   return a.file.path.localeCompare(b.file.path, undefined, { sensitivity: "base" });
 }
