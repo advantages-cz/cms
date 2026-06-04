@@ -1992,6 +1992,40 @@ function searchBarStatus() {
   return null;
 }
 
+function refreshSearchIndexUi() {
+  if (state.pathFilter.trim()) {
+    render();
+    return;
+  }
+  updateGlobalSearchStatus();
+}
+
+function updateGlobalSearchStatus() {
+  const search = app.querySelector(".global-search");
+  if (!search) {
+    return;
+  }
+
+  const existing = search.querySelector(".global-search-status");
+  const status = searchBarStatus();
+  if (!status) {
+    existing?.remove();
+    return;
+  }
+
+  if (existing) {
+    existing.textContent = status.label;
+    existing.setAttribute("title", status.title);
+    return;
+  }
+
+  const node = document.createElement("span");
+  node.className = "global-search-status";
+  node.textContent = status.label;
+  node.setAttribute("title", status.title);
+  search.append(node);
+}
+
 function renderThemeSelect(location = "") {
   const id = `theme-select${location ? `-${location}` : ""}`;
   return `
@@ -3905,13 +3939,13 @@ function startSearchIndexScan(scanId) {
   }
 
   state.searchIndexing = true;
-  render();
+  refreshSearchIndexUi();
   void scanSearchIndex(candidates, scanId);
 }
 
 async function scanSearchIndex(files, scanId) {
   let index = 0;
-  let indexedSinceRender = 0;
+  let indexedSinceUiUpdate = 0;
 
   async function worker() {
     while (index < files.length && scanId === searchIndexScanId) {
@@ -3936,10 +3970,10 @@ async function scanSearchIndex(files, scanId) {
         state.searchTextBySha.set(file.sha, "");
       }
       state.searchIndexedCount = Math.min(state.searchIndexableCount, state.searchIndexedCount + 1);
-      indexedSinceRender += 1;
-      if (indexedSinceRender >= 12) {
-        indexedSinceRender = 0;
-        render();
+      indexedSinceUiUpdate += 1;
+      if (indexedSinceUiUpdate >= 12) {
+        indexedSinceUiUpdate = 0;
+        refreshSearchIndexUi();
       }
     }
   }
@@ -3947,7 +3981,7 @@ async function scanSearchIndex(files, scanId) {
   await Promise.allSettled(Array.from({ length: SEARCH_INDEX_CONCURRENCY }, worker));
   if (scanId === searchIndexScanId) {
     state.searchIndexing = false;
-    render();
+    refreshSearchIndexUi();
   }
 }
 
