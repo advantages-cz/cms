@@ -411,6 +411,8 @@ Decision: The top toolbar includes one search box for folder path, file name, fr
 
 Reasoning: Editors need one predictable place to search navigation and content, and content matches need enough context to decide which result to open. Keeping the index client-side and capped preserves the static GitHub API architecture while avoiding eager downloads of large assets.
 
+Follow-up: Front matter title scanning is prioritized over fulltext indexing. The title scan runs with higher concurrency and reuses fetched Markdown blobs for search cache, while the slower fulltext scan starts after a short delay and runs with low concurrency.
+
 ### 2026-06-04: Move Locale And Theme Controls Into User Menu
 
 Decision: Language and theme selectors live inside the signed-in user menu, whose trigger now includes a visible caret and expanded state.

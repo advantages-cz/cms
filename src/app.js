@@ -51,7 +51,8 @@ const MAX_FRONT_MATTER_TITLE_FILES = 200;
 const MAX_FRONT_MATTER_TITLE_BYTES = 256 * 1024;
 const FRONT_MATTER_TITLE_CONCURRENCY = 4;
 const MAX_SEARCH_INDEX_BYTES = 256 * 1024;
-const SEARCH_INDEX_CONCURRENCY = 4;
+const SEARCH_INDEX_CONCURRENCY = 1;
+const SEARCH_INDEX_START_DELAY_MS = 1200;
 const THEME_MODES = ["auto", "light", "dark"];
 const systemDarkQuery = window.matchMedia?.("(prefers-color-scheme: dark)") || null;
 
@@ -124,6 +125,7 @@ let restoringBrowserNavigation = false;
 let treePaneResizeDrag = null;
 let frontMatterTitleScanId = 0;
 let searchIndexScanId = 0;
+let searchIndexTimer = null;
 
 function normalizeTab(tab) {
   return ["files", "changes", "commits", "actions"].includes(tab) ? tab : tab === "review" ? "changes" : "files";
@@ -3780,6 +3782,29 @@ function isSearchIndexablePath(path) {
 
 function scheduleSearchIndexScan() {
   const scanId = ++searchIndexScanId;
+  window.clearTimeout(searchIndexTimer);
+  state.searchIndexing = false;
+  state.searchIndexableCount = state.files.filter(
+    (file) => isSearchIndexablePath(file.path) && file.size <= MAX_SEARCH_INDEX_BYTES,
+  ).length;
+  state.searchIndexedCount = state.files.filter(
+    (file) => isSearchIndexablePath(file.path) && file.size <= MAX_SEARCH_INDEX_BYTES && state.searchTextBySha.has(file.sha),
+  ).length;
+
+  if (!state.client || !state.owner || !state.repo || state.searchIndexedCount >= state.searchIndexableCount) {
+    return;
+  }
+
+  searchIndexTimer = window.setTimeout(() => {
+    startSearchIndexScan(scanId);
+  }, SEARCH_INDEX_START_DELAY_MS);
+}
+
+function startSearchIndexScan(scanId) {
+  if (scanId !== searchIndexScanId) {
+    return;
+  }
+
   const candidates = state.files.filter(
     (file) => isSearchIndexablePath(file.path) && file.size <= MAX_SEARCH_INDEX_BYTES && !state.searchTextBySha.has(file.sha),
   );
@@ -3794,6 +3819,7 @@ function scheduleSearchIndexScan() {
   }
 
   state.searchIndexing = true;
+  render();
   void scanSearchIndex(candidates, scanId);
 }
 
@@ -3853,6 +3879,7 @@ function scheduleFrontMatterTitleScan() {
 
 async function scanFrontMatterTitles(files, scanId) {
   let changed = false;
+  let changedSinceRender = 0;
   let index = 0;
 
   async function worker() {
@@ -3870,6 +3897,11 @@ async function scanFrontMatterTitles(files, scanId) {
         }
         if (applyFrontMatterTitleToFile(file.sha, title)) {
           changed = true;
+          changedSinceRender += 1;
+          if (changedSinceRender >= 12 && scanId === frontMatterTitleScanId) {
+            changedSinceRender = 0;
+            render();
+          }
         }
       } catch {
         state.frontMatterTitleBySha.set(file.sha, "");
