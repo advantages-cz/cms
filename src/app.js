@@ -1073,7 +1073,6 @@ function applyRepositoryTree(tree) {
     .sort((a, b) => a.path.localeCompare(b.path));
   pruneBlobCaches();
   scheduleFrontMatterTitleScan();
-  scheduleSearchIndexScan();
 }
 
 function pruneBlobCaches() {
@@ -3507,24 +3506,29 @@ function searchMatchForFile(file, query) {
   const title = normalizeSearchText(file.frontMatterTitle || "");
   const dirs = directorySearchText(file.path);
   const content = state.searchTextBySha.get(file.sha) || "";
+  const exactRank = title === query || name === query ? 0 : 1;
 
   if (title.includes(query)) {
-    return { file, query, kind: "title", rank: 0 };
+    return { file, query, kind: "title", exactRank, rank: 0 };
   }
   if (name.includes(query)) {
-    return { file, query, kind: "file", rank: 1 };
+    return { file, query, kind: "file", exactRank, rank: 1 };
   }
   if (path.includes(query)) {
-    return { file, query, kind: dirs.includes(query) ? "folder" : "path", rank: dirs.includes(query) ? 2 : 3 };
+    return { file, query, kind: dirs.includes(query) ? "folder" : "path", exactRank, rank: dirs.includes(query) ? 2 : 3 };
   }
   if (content.includes(query)) {
-    return { file, query, kind: "content", rank: 4, snippet: searchSnippet(file, query) };
+    return { file, query, kind: "content", exactRank, rank: 4, snippet: searchSnippet(file, query) };
   }
 
   return null;
 }
 
 function compareSearchResults(a, b) {
+  const exactDiff = a.exactRank - b.exactRank;
+  if (exactDiff) {
+    return exactDiff;
+  }
   const depthDiff = pathDepth(a.file.path) - pathDepth(b.file.path);
   if (depthDiff) {
     return depthDiff;
@@ -3871,6 +3875,7 @@ function scheduleFrontMatterTitleScan() {
     .slice(0, MAX_FRONT_MATTER_TITLE_FILES);
 
   if (!state.client || !state.owner || !state.repo || !candidates.length) {
+    scheduleSearchIndexScan();
     return;
   }
 
@@ -3913,6 +3918,9 @@ async function scanFrontMatterTitles(files, scanId) {
 
   if (changed && scanId === frontMatterTitleScanId) {
     render();
+  }
+  if (scanId === frontMatterTitleScanId) {
+    scheduleSearchIndexScan();
   }
 }
 
