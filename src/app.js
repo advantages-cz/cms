@@ -2359,6 +2359,7 @@ function renderSelectedFileHeading() {
 }
 
 function renderFileList() {
+  syncFrontMatterTitlesFromCache();
   if (state.pathFilter.trim()) {
     return renderSearchResults();
   }
@@ -2377,6 +2378,24 @@ function renderFileList() {
       ${renderTreeNodes(tree, 0, filtering, changedStatuses)}
     </div>
   `;
+}
+
+function syncFrontMatterTitlesFromCache() {
+  let changed = false;
+  const files = state.files.map((file) => {
+    if (!isMarkdownPath(file.path) || state.frontMatterTitleDraftByPath.has(file.path)) {
+      return file;
+    }
+    const cached = state.frontMatterTitleBySha.get(file.sha);
+    if (cached === undefined || file.frontMatterTitle === cached) {
+      return file;
+    }
+    changed = true;
+    return { ...file, frontMatterTitle: cached };
+  });
+  if (changed) {
+    state.files = files;
+  }
 }
 
 function renderSearchResults() {
@@ -3970,9 +3989,10 @@ async function scanFrontMatterTitles(files, scanId) {
           state.searchTextBySha.set(file.sha, normalizeSearchText(text));
           state.searchContentBySha.set(file.sha, text);
         }
-        if (applyFrontMatterTitleToFile(file.sha, title)) {
+        const changedBySha = applyFrontMatterTitleToFile(file.sha, title);
+        const changedByPath = applyFrontMatterTitleToPath(file.path, title);
+        if (changedBySha || changedByPath) {
           changed = true;
-          changedSinceRender += 1;
         }
       } catch {
         // Leave failed title reads uncached so a future refresh can retry them.
