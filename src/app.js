@@ -75,6 +75,7 @@ const state = {
   frontMatterTitleBySha: new Map(),
   frontMatterTitleDraftByPath: new Map(),
   searchTextBySha: new Map(),
+  searchContentBySha: new Map(),
   searchIndexing: false,
   searchIndexedCount: 0,
   searchIndexableCount: 0,
@@ -1077,6 +1078,7 @@ function pruneBlobCaches() {
   const activeShas = new Set(state.files.map((file) => file.sha).filter(Boolean));
   pruneMapKeys(state.frontMatterTitleBySha, activeShas);
   pruneMapKeys(state.searchTextBySha, activeShas);
+  pruneMapKeys(state.searchContentBySha, activeShas);
 }
 
 function pruneMapKeys(map, activeKeys) {
@@ -1180,6 +1182,7 @@ async function loadFile(path, { keepBusy = false, syncLatest = false, navigation
       state.editor.baseContent = state.editor.content;
       if (isSearchIndexablePath(path) && entry.size <= MAX_SEARCH_INDEX_BYTES) {
         state.searchTextBySha.set(entry.sha, normalizeSearchText(state.editor.content));
+        state.searchContentBySha.set(entry.sha, state.editor.content);
       }
       if (isMarkdownPath(path)) {
         const title = extractFrontMatterTitle(state.editor.content);
@@ -1443,6 +1446,7 @@ async function loadFileFromContents(path, { ref = state.branch } = {}) {
   }
   if (isSearchIndexablePath(path) && entry.size <= MAX_SEARCH_INDEX_BYTES) {
     state.searchTextBySha.set(entry.sha, normalizeSearchText(textContent));
+    state.searchContentBySha.set(entry.sha, textContent);
   }
 
   await buildPreview(entry, textContent);
@@ -1891,6 +1895,7 @@ function render({ treeScrollTop = null } = {}) {
   restoreTreeScroll();
   revealSelectedTreeRow();
   restoreFocusSnapshot(focusSnapshot);
+  highlightSearchMatches();
 }
 
 function renderTopbar() {
@@ -2308,6 +2313,10 @@ function renderSelectedFileHeading() {
 }
 
 function renderFileList() {
+  if (state.pathFilter.trim()) {
+    return renderSearchResults();
+  }
+
   const files = filteredFiles();
   if (!files.length) {
     return `<div class="empty">${t("files.noMatches")}</div>`;
@@ -2321,6 +2330,44 @@ function renderFileList() {
     <div class="file-list tree-browser" role="tree" aria-label="${t("files.repositoryFiles")}">
       ${renderTreeNodes(tree, 0, filtering, changedStatuses)}
     </div>
+  `;
+}
+
+function renderSearchResults() {
+  const results = searchResults();
+  if (!results.length) {
+    return `<div class="empty">${t("search.noMatches")}</div>`;
+  }
+
+  return `
+    <div class="search-results file-list" role="list" aria-label="${t("search.results")}">
+      <div class="search-results-summary">
+        <span>${t("search.resultCount", { count: results.length })}</span>
+        ${state.searchIndexing ? `<span>${t("search.indexingTitle", { done: state.searchIndexedCount, total: state.searchIndexableCount })}</span>` : ""}
+      </div>
+      ${results.map(renderSearchResult).join("")}
+    </div>
+  `;
+}
+
+function renderSearchResult(result) {
+  const file = result.file;
+  const displayName = treeFileDisplayName(file);
+  const iconClass = fileIconClass(file.path);
+  const activeClass = state.selectedPath === file.path ? " active" : "";
+  return `
+    <button class="search-result${activeClass}" type="button" data-action="select-file" data-path="${escapeHtml(file.path)}" title="${escapeHtml(file.path)}">
+      <span class="tree-icon tree-icon-lucide tree-icon-file ${escapeHtml(iconClass)}" aria-hidden="true">${treeIconSvg(iconClass)}</span>
+      <span class="search-result-main">
+        <span class="search-result-title">
+          <span>${highlightText(displayName.title, result.query)}</span>
+          ${displayName.filename ? `<span class="tree-file-name-muted">(${highlightText(displayName.filename, result.query)})</span>` : ""}
+        </span>
+        <span class="search-result-path">${highlightText(file.path, result.query)}</span>
+        ${result.snippet ? `<span class="search-result-snippet">${result.snippet}</span>` : ""}
+      </span>
+      <span class="tag search-result-kind">${escapeHtml(t(`search.match.${result.kind}`))}</span>
+    </button>
   `;
 }
 
@@ -3437,13 +3484,166 @@ function fileMatchesSearch(file, query) {
     return true;
   }
 
-  return (
-    normalizeSearchText(file.path).includes(query) ||
-    normalizeSearchText(file.name || "").includes(query) ||
-    normalizeSearchText(file.frontMatterTitle || "").includes(query) ||
-    directorySearchText(file.path).includes(query) ||
-    Boolean(state.searchTextBySha.get(file.sha)?.includes(query))
-  );
+  return Boolean(searchMatchForFile(file, query));
+}
+
+function searchResults() {
+  const query = normalizeSearchText(state.pathFilter);
+  if (!query) {
+    return [];
+  }
+
+  return state.files
+    .map((file) => searchMatchForFile(file, query))
+    .filter(Boolean)
+    .sort(compareSearchResults);
+}
+
+function searchMatchForFile(file, query) {
+  const path = normalizeSearchText(file.path);
+  const name = normalizeSearchText(file.name || "");
+  const title = normalizeSearchText(file.frontMatterTitle || "");
+  const dirs = directorySearchText(file.path);
+  const content = state.searchTextBySha.get(file.sha) || "";
+
+  if (title.includes(query)) {
+    return { file, query, kind: "title", rank: 0 };
+  }
+  if (name.includes(query)) {
+    return { file, query, kind: "file", rank: 1 };
+  }
+  if (path.includes(query)) {
+    return { file, query, kind: dirs.includes(query) ? "folder" : "path", rank: dirs.includes(query) ? 2 : 3 };
+  }
+  if (content.includes(query)) {
+    return { file, query, kind: "content", rank: 4, snippet: searchSnippet(file, query) };
+  }
+
+  return null;
+}
+
+function compareSearchResults(a, b) {
+  const rankDiff = a.rank - b.rank;
+  if (rankDiff) {
+    return rankDiff;
+  }
+  return a.file.path.localeCompare(b.file.path, undefined, { sensitivity: "base" });
+}
+
+function searchSnippet(file, query) {
+  const raw = state.searchContentBySha.get(file.sha) || "";
+  if (!raw) {
+    return "";
+  }
+  const normalized = normalizeSearchText(raw);
+  const index = normalized.indexOf(query);
+  if (index < 0) {
+    return "";
+  }
+  const start = Math.max(0, index - 72);
+  const end = Math.min(raw.length, index + query.length + 96);
+  const prefix = start > 0 ? "..." : "";
+  const suffix = end < raw.length ? "..." : "";
+  return `${prefix}${highlightText(raw.slice(start, end).replace(/\s+/g, " ").trim(), query)}${suffix}`;
+}
+
+function highlightText(value, normalizedQuery) {
+  const text = String(value || "");
+  if (!normalizedQuery) {
+    return escapeHtml(text);
+  }
+  const normalized = normalizeSearchText(text);
+  let index = normalized.indexOf(normalizedQuery);
+  if (index < 0) {
+    return escapeHtml(text);
+  }
+
+  let html = "";
+  let cursor = 0;
+  while (index >= 0) {
+    html += escapeHtml(text.slice(cursor, index));
+    const end = index + normalizedQuery.length;
+    html += `<mark>${escapeHtml(text.slice(index, end))}</mark>`;
+    cursor = end;
+    index = normalized.indexOf(normalizedQuery, cursor);
+  }
+  html += escapeHtml(text.slice(cursor));
+  return html;
+}
+
+function searchHighlightQuery() {
+  const query = normalizeSearchText(state.pathFilter);
+  if (!query || !state.selectedPath) {
+    return "";
+  }
+  const file = state.files.find((item) => item.path === state.selectedPath);
+  if (!file || !state.searchTextBySha.get(file.sha)?.includes(query)) {
+    return "";
+  }
+  return query;
+}
+
+function highlightSearchMatches() {
+  const query = searchHighlightQuery();
+  if (!query) {
+    return;
+  }
+  window.requestAnimationFrame(() => {
+    const container = document.querySelector(".markdown-preview, .preview-code");
+    if (!(container instanceof HTMLElement)) {
+      return;
+    }
+    wrapTextMatches(container, query);
+    container.querySelector(".search-highlight")?.scrollIntoView({ block: "center", behavior: "smooth" });
+  });
+}
+
+function wrapTextMatches(root, normalizedQuery) {
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
+    acceptNode(node) {
+      const parent = node.parentElement;
+      if (!parent || ["SCRIPT", "STYLE", "TEXTAREA", "MARK"].includes(parent.tagName)) {
+        return NodeFilter.FILTER_REJECT;
+      }
+      return normalizeSearchText(node.nodeValue || "").includes(normalizedQuery)
+        ? NodeFilter.FILTER_ACCEPT
+        : NodeFilter.FILTER_REJECT;
+    },
+  });
+  const matches = [];
+  while (matches.length < 80) {
+    const node = walker.nextNode();
+    if (!node) {
+      break;
+    }
+    matches.push(node);
+  }
+  for (const node of matches) {
+    replaceTextNodeWithHighlights(node, normalizedQuery);
+  }
+}
+
+function replaceTextNodeWithHighlights(node, normalizedQuery) {
+  const text = node.nodeValue || "";
+  const normalized = normalizeSearchText(text);
+  let index = normalized.indexOf(normalizedQuery);
+  if (index < 0) {
+    return;
+  }
+  const fragment = document.createDocumentFragment();
+  let cursor = 0;
+  while (index >= 0) {
+    fragment.append(document.createTextNode(text.slice(cursor, index)));
+    const mark = document.createElement("mark");
+    mark.className = "search-highlight";
+    const end = index + normalizedQuery.length;
+    mark.textContent = text.slice(index, end);
+    fragment.append(mark);
+    cursor = end;
+    index = normalized.indexOf(normalizedQuery, cursor);
+  }
+  fragment.append(document.createTextNode(text.slice(cursor)));
+  node.parentNode?.replaceChild(fragment, node);
 }
 
 function directorySearchText(path) {
@@ -3605,6 +3805,7 @@ async function scanSearchIndex(files, scanId) {
         const blob = await state.client.getBlob(state.owner, state.repo, file.sha);
         const text = base64ToText(blob.content || "");
         state.searchTextBySha.set(file.sha, normalizeSearchText(text));
+        state.searchContentBySha.set(file.sha, text);
         if (isMarkdownPath(file.path) && !state.frontMatterTitleBySha.has(file.sha)) {
           const title = extractFrontMatterTitle(text);
           state.frontMatterTitleBySha.set(file.sha, title);
@@ -3657,6 +3858,7 @@ async function scanFrontMatterTitles(files, scanId) {
         state.frontMatterTitleBySha.set(file.sha, title);
         if (isSearchIndexablePath(file.path) && file.size <= MAX_SEARCH_INDEX_BYTES) {
           state.searchTextBySha.set(file.sha, normalizeSearchText(text));
+          state.searchContentBySha.set(file.sha, text);
         }
         if (applyFrontMatterTitleToFile(file.sha, title)) {
           changed = true;

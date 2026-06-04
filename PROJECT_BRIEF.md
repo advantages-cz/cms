@@ -407,9 +407,9 @@ Reasoning: Czech and Slovak headings can include diacritics while generated head
 
 ### 2026-06-04: Add Unified Header Search
 
-Decision: The top toolbar includes one search box that filters the repository tree by folder path, file name, front matter title, and indexed Markdown/HTML content. Markdown and HTML blobs up to a capped size are indexed in memory on a background scan keyed by blob SHA; binary files are not indexed.
+Decision: The top toolbar includes one search box for folder path, file name, front matter title, and indexed Markdown/HTML content. Without a query the left pane shows the repository tree; with a query it switches to ranked search results with match type labels and content snippets where available. Opening a content match highlights the term in Markdown/text previews. Markdown and HTML blobs up to a capped size are indexed in memory on a background scan keyed by blob SHA; binary files are not indexed.
 
-Reasoning: Editors need one predictable place to search navigation and content. Keeping the index client-side and capped preserves the static GitHub API architecture while avoiding eager downloads of large assets.
+Reasoning: Editors need one predictable place to search navigation and content, and content matches need enough context to decide which result to open. Keeping the index client-side and capped preserves the static GitHub API architecture while avoiding eager downloads of large assets.
 
 ### 2026-06-04: Move Locale And Theme Controls Into User Menu
 

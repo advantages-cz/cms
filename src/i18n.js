@@ -35,6 +35,16 @@ export const resources = {
       label: "Search files, folders, and content",
       placeholder: "Search files, folders, content...",
       indexingTitle: "Indexing Markdown and HTML content: {done}/{total}",
+      results: "Search results",
+      resultCount: "{count} results",
+      noMatches: "No search results yet. Content matches appear as Markdown and HTML files are indexed.",
+      match: {
+        title: "title",
+        file: "file",
+        folder: "folder",
+        path: "path",
+        content: "content",
+      },
     },
     auth: {
       login: "Sign in",
@@ -351,6 +361,16 @@ export const resources = {
       label: "Hledat v souborech, složkách a obsahu",
       placeholder: "Hledat soubory, složky, obsah...",
       indexingTitle: "Indexuji Markdown a HTML obsah: {done}/{total}",
+      results: "Výsledky hledání",
+      resultCount: "{count} výsledků",
+      noMatches: "Zatím žádné výsledky. Shody v obsahu se objeví po doindexování Markdown a HTML souborů.",
+      match: {
+        title: "titulek",
+        file: "soubor",
+        folder: "složka",
+        path: "cesta",
+        content: "obsah",
+      },
     },
     auth: {
       login: "Přihlásit",
