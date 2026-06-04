@@ -1201,12 +1201,13 @@ body.is-resizing-tree-pane {
   grid-template-columns: 18px minmax(0, 1fr) auto;
   align-items: start;
   gap: 8px;
-  min-height: 0;
+  min-height: 68px;
   width: 100%;
   border-color: transparent;
   padding: 8px 7px;
   background: transparent;
   text-align: left;
+  overflow: hidden;
 }
 
 .search-result:hover,
@@ -1219,6 +1220,7 @@ body.is-resizing-tree-pane {
   display: grid;
   gap: 3px;
   min-width: 0;
+  min-height: 0;
 }
 
 .search-result-title,
@@ -1230,26 +1232,29 @@ body.is-resizing-tree-pane {
 }
 
 .search-result-title {
+  display: block;
   color: var(--text);
   font-size: 13px;
   font-weight: 720;
+  line-height: 1.2;
   white-space: nowrap;
 }
 
 .search-result-path {
+  display: block;
   color: var(--muted);
   font-family: var(--mono);
   font-size: 10px;
+  line-height: 1.2;
   white-space: nowrap;
 }
 
 .search-result-snippet {
-  display: -webkit-box;
+  display: block;
+  max-height: 34px;
   color: var(--muted);
   font-size: 12px;
   line-height: 1.35;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
 }
 
 .search-result-kind {

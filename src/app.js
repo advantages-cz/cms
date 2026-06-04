@@ -3540,8 +3540,8 @@ function searchSnippet(file, query) {
   if (index < 0) {
     return "";
   }
-  const start = Math.max(0, index - 72);
-  const end = Math.min(raw.length, index + query.length + 96);
+  const start = Math.max(0, index - 48);
+  const end = Math.min(raw.length, index + query.length + 64);
   const prefix = start > 0 ? "..." : "";
   const suffix = end < raw.length ? "..." : "";
   return `${prefix}${highlightText(raw.slice(start, end).replace(/\s+/g, " ").trim(), query)}${suffix}`;
