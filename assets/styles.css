@@ -1148,8 +1148,6 @@ body.is-resizing-tree-pane {
   min-height: 0;
   height: auto;
   overflow: auto;
-  border: 1px solid var(--line);
-  border-radius: var(--radius-sm);
   background: var(--surface-preview);
 }
 
