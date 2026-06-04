@@ -1365,7 +1365,7 @@ mark,
   top: 0;
   bottom: 0;
   width: 1px;
-  background: rgba(174, 187, 193, 0.48);
+  background: transparent;
   transform: translateX(-9px);
 }
 

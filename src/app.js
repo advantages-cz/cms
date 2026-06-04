@@ -77,6 +77,9 @@ const state = {
   frontMatterTitleDraftByPath: new Map(),
   searchTextBySha: new Map(),
   searchContentBySha: new Map(),
+  frontMatterTitleScanning: false,
+  frontMatterTitleScannedCount: 0,
+  frontMatterTitleScanCount: 0,
   searchIndexing: false,
   searchIndexedCount: 0,
   searchIndexableCount: 0,
@@ -1072,7 +1075,15 @@ function applyRepositoryTree(tree) {
     }))
     .sort((a, b) => a.path.localeCompare(b.path));
   pruneBlobCaches();
+  cancelSearchIndexScan();
   scheduleFrontMatterTitleScan();
+}
+
+function cancelSearchIndexScan() {
+  searchIndexScanId += 1;
+  window.clearTimeout(searchIndexTimer);
+  searchIndexTimer = null;
+  state.searchIndexing = false;
 }
 
 function pruneBlobCaches() {
@@ -1924,15 +1935,35 @@ function renderGlobalSearch() {
   if (!state.token || !state.owner || !state.repo || !state.headSha) {
     return "";
   }
+  const status = searchBarStatus();
 
   return `
     <label class="global-search">
       <span class="sr-only">${t("search.label")}</span>
       <span class="global-search-icon" aria-hidden="true">${treeIconSvg("search")}</span>
       <input id="global-search" value="${escapeHtml(state.pathFilter)}" aria-label="${t("search.label")}" placeholder="${t("search.placeholder")}" autocomplete="off" />
-      ${state.searchIndexing ? `<span class="global-search-status" title="${t("search.indexingTitle", { done: state.searchIndexedCount, total: state.searchIndexableCount })}">${escapeHtml(`${state.searchIndexedCount}/${state.searchIndexableCount}`)}</span>` : ""}
+      ${status ? `<span class="global-search-status" title="${escapeHtml(status.title)}">${escapeHtml(status.label)}</span>` : ""}
     </label>
   `;
+}
+
+function searchBarStatus() {
+  if (state.frontMatterTitleScanning) {
+    return {
+      label: `${state.frontMatterTitleScannedCount}/${state.frontMatterTitleScanCount}`,
+      title: t("search.titlesIndexingTitle", {
+        done: state.frontMatterTitleScannedCount,
+        total: state.frontMatterTitleScanCount,
+      }),
+    };
+  }
+  if (state.searchIndexing) {
+    return {
+      label: `${state.searchIndexedCount}/${state.searchIndexableCount}`,
+      title: t("search.indexingTitle", { done: state.searchIndexedCount, total: state.searchIndexableCount }),
+    };
+  }
+  return null;
 }
 
 function renderThemeSelect(location = "") {
@@ -3873,12 +3904,17 @@ function scheduleFrontMatterTitleScan() {
   const candidates = state.files
     .filter((file) => isMarkdownPath(file.path) && file.size <= MAX_FRONT_MATTER_TITLE_BYTES && !state.frontMatterTitleBySha.has(file.sha))
     .slice(0, MAX_FRONT_MATTER_TITLE_FILES);
+  state.frontMatterTitleScanCount = candidates.length;
+  state.frontMatterTitleScannedCount = 0;
 
   if (!state.client || !state.owner || !state.repo || !candidates.length) {
+    state.frontMatterTitleScanning = false;
     scheduleSearchIndexScan();
     return;
   }
 
+  state.frontMatterTitleScanning = true;
+  render();
   void scanFrontMatterTitles(candidates, scanId);
 }
 
@@ -3911,10 +3947,15 @@ async function scanFrontMatterTitles(files, scanId) {
       } catch {
         state.frontMatterTitleBySha.set(file.sha, "");
       }
+      state.frontMatterTitleScannedCount = Math.min(state.frontMatterTitleScanCount, state.frontMatterTitleScannedCount + 1);
     }
   }
 
   await Promise.all(Array.from({ length: Math.min(FRONT_MATTER_TITLE_CONCURRENCY, files.length) }, worker));
+
+  if (scanId === frontMatterTitleScanId) {
+    state.frontMatterTitleScanning = false;
+  }
 
   if (changed && scanId === frontMatterTitleScanId) {
     render();

@@ -34,6 +34,7 @@ export const resources = {
     search: {
       label: "Search files, folders, and content",
       placeholder: "Search files, folders, content...",
+      titlesIndexingTitle: "Loading Markdown titles: {done}/{total}",
       indexingTitle: "Indexing Markdown and HTML content: {done}/{total}",
       results: "Search results",
       resultCount: "{count} results",
@@ -360,6 +361,7 @@ export const resources = {
     search: {
       label: "Hledat v souborech, složkách a obsahu",
       placeholder: "Hledat soubory, složky, obsah...",
+      titlesIndexingTitle: "Načítám Markdown titulky: {done}/{total}",
       indexingTitle: "Indexuji Markdown a HTML obsah: {done}/{total}",
       results: "Výsledky hledání",
       resultCount: "{count} výsledků",
