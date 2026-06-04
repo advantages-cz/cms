@@ -80,6 +80,7 @@ const state = {
   frontMatterTitleScanning: false,
   frontMatterTitleScannedCount: 0,
   frontMatterTitleScanCount: 0,
+  frontMatterTitlesReady: false,
   searchIndexing: false,
   searchIndexedCount: 0,
   searchIndexableCount: 0,
@@ -1084,6 +1085,7 @@ function cancelSearchIndexScan() {
   window.clearTimeout(searchIndexTimer);
   searchIndexTimer = null;
   state.searchIndexing = false;
+  state.frontMatterTitlesReady = false;
 }
 
 function pruneBlobCaches() {
@@ -3826,7 +3828,13 @@ function scheduleSearchIndexScan() {
     (file) => isSearchIndexablePath(file.path) && file.size <= MAX_SEARCH_INDEX_BYTES && state.searchTextBySha.has(file.sha),
   ).length;
 
-  if (!state.client || !state.owner || !state.repo || state.searchIndexedCount >= state.searchIndexableCount) {
+  if (
+    !state.frontMatterTitlesReady ||
+    !state.client ||
+    !state.owner ||
+    !state.repo ||
+    state.searchIndexedCount >= state.searchIndexableCount
+  ) {
     return;
   }
 
@@ -3909,11 +3917,13 @@ function scheduleFrontMatterTitleScan() {
 
   if (!state.client || !state.owner || !state.repo || !candidates.length) {
     state.frontMatterTitleScanning = false;
+    state.frontMatterTitlesReady = true;
     scheduleSearchIndexScan();
     return;
   }
 
   state.frontMatterTitleScanning = true;
+  state.frontMatterTitlesReady = false;
   render();
   void scanFrontMatterTitles(candidates, scanId);
 }
@@ -3939,15 +3949,16 @@ async function scanFrontMatterTitles(files, scanId) {
         if (applyFrontMatterTitleToFile(file.sha, title)) {
           changed = true;
           changedSinceRender += 1;
-          if (changedSinceRender >= 12 && scanId === frontMatterTitleScanId) {
-            changedSinceRender = 0;
-            render();
-          }
         }
       } catch {
-        state.frontMatterTitleBySha.set(file.sha, "");
+        // Leave failed title reads uncached so a future refresh can retry them.
       }
       state.frontMatterTitleScannedCount = Math.min(state.frontMatterTitleScanCount, state.frontMatterTitleScannedCount + 1);
+      changedSinceRender += 1;
+      if (changedSinceRender >= 12 && scanId === frontMatterTitleScanId) {
+        changedSinceRender = 0;
+        render();
+      }
     }
   }
 
@@ -3955,9 +3966,10 @@ async function scanFrontMatterTitles(files, scanId) {
 
   if (scanId === frontMatterTitleScanId) {
     state.frontMatterTitleScanning = false;
+    state.frontMatterTitlesReady = true;
   }
 
-  if (changed && scanId === frontMatterTitleScanId) {
+  if (scanId === frontMatterTitleScanId) {
     render();
   }
   if (scanId === frontMatterTitleScanId) {
