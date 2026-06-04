@@ -118,7 +118,9 @@ Implemented capabilities:
 - CMS-oriented tree sorting: root `README.md` opens by default; each level sorts `README.md` first, regular files, dotfiles, regular folders, then dot-prefixed folders.
 - Markdown front matter titles in the tree when available, with the filename shown in muted parentheses.
 - Front matter title loading is prioritized immediately after tree refresh and fulltext content indexing waits until the title scan completes.
+- Front matter title progress updates visible tree rows in place instead of re-rendering the whole file tree, so folders remain clickable during loading.
 - Fulltext indexing progress updates the search status without re-rendering the file tree unless an active search query needs refreshed results.
+- Background review and Actions refresh rendering is deferred while title or fulltext indexing is active, preserving tree interactivity during load.
 - Live front matter title updates while editing Markdown, reflected in the tree and changed-file metadata before the commit finishes.
 - Collapsed tree by default, except when opening a URL or link that targets a deeper file or directory.
 - Browse-first approval workflow.

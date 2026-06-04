@@ -133,6 +133,9 @@ let treePaneResizeDrag = null;
 let frontMatterTitleScanId = 0;
 let searchIndexScanId = 0;
 let searchIndexTimer = null;
+let backgroundIdleRenderTimer = null;
+let deferBackgroundRenderUntilIndexingComplete = false;
+let backgroundRenderPending = false;
 
 function normalizeTab(tab) {
   return ["files", "changes", "commits", "actions"].includes(tab) ? tab : tab === "review" ? "changes" : "files";
@@ -850,8 +853,8 @@ async function refreshRepositoryData({ keepBusy = false, preserveSelection = fal
     state.selectedPath = "";
     state.selectedDir = "";
     applyRepositoryTree(tree);
-    scheduleFrontMatterTitleScan();
     state.lastSave = loadLastSave(state.owner, state.repo, state.branch);
+    deferBackgroundRenderUntilIndexingComplete = true;
     const reviewRefresh = Promise.allSettled([
       refreshReviewData({ keepBusy: true }),
       refreshActions({ keepBusy: true, syncBranch: false }),
@@ -861,7 +864,8 @@ async function refreshRepositoryData({ keepBusy = false, preserveSelection = fal
     } else {
       void reviewRefresh.then(() => {
         syncActionPollingWithStatus();
-        render();
+        backgroundRenderPending = true;
+        renderWhenBackgroundLoadingIdle();
       });
     }
 
@@ -876,6 +880,11 @@ async function refreshRepositoryData({ keepBusy = false, preserveSelection = fal
     await run();
   } else {
     await withBusy(t("repo.loadingBranch"), run);
+  }
+  if (state.files.length && state.client && state.owner && state.repo) {
+    scheduleFrontMatterTitleScan();
+  } else {
+    completeBackgroundIndexingCycle();
   }
 }
 
@@ -2000,6 +2009,24 @@ function refreshSearchIndexUi() {
   updateGlobalSearchStatus();
 }
 
+function renderWhenBackgroundLoadingIdle() {
+  window.clearTimeout(backgroundIdleRenderTimer);
+  if (deferBackgroundRenderUntilIndexingComplete || state.frontMatterTitleScanning || state.searchIndexing || searchIndexTimer) {
+    backgroundIdleRenderTimer = window.setTimeout(renderWhenBackgroundLoadingIdle, 250);
+    return;
+  }
+  if (!backgroundRenderPending) {
+    return;
+  }
+  backgroundRenderPending = false;
+  render();
+}
+
+function completeBackgroundIndexingCycle() {
+  deferBackgroundRenderUntilIndexingComplete = false;
+  renderWhenBackgroundLoadingIdle();
+}
+
 function updateGlobalSearchStatus() {
   const search = app.querySelector(".global-search");
   if (!search) {
@@ -2024,6 +2051,39 @@ function updateGlobalSearchStatus() {
   node.textContent = status.label;
   node.setAttribute("title", status.title);
   search.append(node);
+}
+
+function refreshFrontMatterTitleUi(paths = []) {
+  if (state.pathFilter.trim()) {
+    render();
+    return;
+  }
+  updateGlobalSearchStatus();
+  for (const path of paths) {
+    updateTreeFileTitle(path);
+  }
+}
+
+function updateTreeFileTitle(path) {
+  const file = state.files.find((item) => item.path === path);
+  if (!file) {
+    return;
+  }
+
+  const row = Array.from(app.querySelectorAll(".tree-file[data-path]")).find((item) => item.dataset.path === path);
+  const label = row?.querySelector(".tree-label .path");
+  if (!(label instanceof HTMLElement)) {
+    return;
+  }
+
+  const displayName = treeFileDisplayName(file);
+  label.textContent = displayName.title;
+  if (displayName.filename) {
+    const filename = document.createElement("span");
+    filename.className = "tree-file-name-muted";
+    filename.textContent = `(${displayName.filename})`;
+    label.append(" ", filename);
+  }
 }
 
 function renderThemeSelect(location = "") {
@@ -3912,10 +3972,14 @@ function scheduleSearchIndexScan() {
     !state.repo ||
     state.searchIndexedCount >= state.searchIndexableCount
   ) {
+    if (state.frontMatterTitlesReady) {
+      completeBackgroundIndexingCycle();
+    }
     return;
   }
 
   searchIndexTimer = window.setTimeout(() => {
+    searchIndexTimer = null;
     startSearchIndexScan(scanId);
   }, SEARCH_INDEX_START_DELAY_MS);
 }
@@ -3935,6 +3999,7 @@ function startSearchIndexScan(scanId) {
 
   if (!state.client || !state.owner || !state.repo || !candidates.length) {
     state.searchIndexing = false;
+    completeBackgroundIndexingCycle();
     return;
   }
 
@@ -3982,6 +4047,7 @@ async function scanSearchIndex(files, scanId) {
   if (scanId === searchIndexScanId) {
     state.searchIndexing = false;
     refreshSearchIndexUi();
+    completeBackgroundIndexingCycle();
   }
 }
 
@@ -4058,8 +4124,8 @@ function frontMatterTitleBucket(file) {
 }
 
 async function scanFrontMatterTitles(files, scanId) {
-  let changed = false;
-  let changedSinceRender = 0;
+  let changedSinceUiUpdate = 0;
+  const changedPathsSinceUiUpdate = new Set();
   let index = 0;
 
   async function worker() {
@@ -4069,20 +4135,22 @@ async function scanFrontMatterTitles(files, scanId) {
       try {
         const result = await loadFrontMatterTitleForFile(file);
         if (result.changed) {
-          changed = true;
+          changedPathsSinceUiUpdate.add(result.path);
         }
       } catch {
         // Leave failed title reads uncached so a future refresh can retry them.
       }
       state.frontMatterTitleScannedCount = Math.min(state.frontMatterTitleScanCount, state.frontMatterTitleScannedCount + 1);
-      changedSinceRender += 1;
+      changedSinceUiUpdate += 1;
       const batchSize =
         state.frontMatterTitleScannedCount <= FRONT_MATTER_TITLE_EAGER_RENDER_COUNT
           ? 1
           : FRONT_MATTER_TITLE_RENDER_BATCH;
-      if (changedSinceRender >= batchSize && scanId === frontMatterTitleScanId) {
-        changedSinceRender = 0;
-        render();
+      if (changedSinceUiUpdate >= batchSize && scanId === frontMatterTitleScanId) {
+        const changedPaths = [...changedPathsSinceUiUpdate];
+        changedPathsSinceUiUpdate.clear();
+        changedSinceUiUpdate = 0;
+        refreshFrontMatterTitleUi(changedPaths);
       }
     }
   }
@@ -4095,7 +4163,7 @@ async function scanFrontMatterTitles(files, scanId) {
   }
 
   if (scanId === frontMatterTitleScanId) {
-    render();
+    refreshFrontMatterTitleUi([...changedPathsSinceUiUpdate]);
   }
   if (scanId === frontMatterTitleScanId) {
     scheduleSearchIndexScan();
@@ -4114,7 +4182,7 @@ async function loadFrontMatterTitleForFile(file) {
   }
   const changedBySha = applyFrontMatterTitleToFile(file.sha, title);
   const changedByPath = applyFrontMatterTitleToPath(file.path, title);
-  return { title, changed: changedBySha || changedByPath };
+  return { path: file.path, title, changed: changedBySha || changedByPath };
 }
 
 function applyFrontMatterTitleToFile(sha, title) {
