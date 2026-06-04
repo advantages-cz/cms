@@ -148,6 +148,7 @@ Implemented capabilities:
 - Consolidated top workflow toolbar for branch, mode, edit, pull request, and refresh actions.
 - User menu in the top toolbar for changing sign-in and logging out.
 - English/Czech localization with English as the default language, UI copy centralized in `src/i18n.js`, and language selectors in both the top toolbar and GitHub sign-in modal.
+- Light, dark, and automatic appearance modes in the top toolbar. Automatic mode follows `prefers-color-scheme`, and the selected preference is stored with other browser-local CMS settings.
 - CMS design-system pass based on Adaptivio brand rules: role-based CSS tokens, approved black Adaptivio symbol in the toolbar, compact product toolbar, explicit branch/mode status patterns, restrained brand treatment, quieter panels, denser tree rows, and document-like previews.
 - Refined toolbar action model: edit/browse state lives in the primary workflow button, refresh is icon-only with a local Lucide-style SVG and an accessible label, PR creation is hidden until the branch has changes, and the signed-in user control looks like an account menu.
 - Review workspace split into separate `Změny` and `Commity` tabs with badge counts. PR creation/opening lives in the toolbar, while the tabs focus on changed-file and commit lists and refresh after commit operations.
@@ -331,6 +332,12 @@ Reasoning: Review lists should behave like lists first. Removing duplicate actio
 Decision: Move UI copy into `src/i18n.js`, ship English and Czech resources, default the app to English, and expose language selection in the toolbar and sign-in modal.
 
 Reasoning: The CMS is used by both Czech and English-speaking maintainers. Centralized resources keep translations auditable and prevent future UI copy from being scattered through workflow and render code.
+
+### 2026-06-04: Add User-Selectable Appearance Modes
+
+Decision: Add light, dark, and automatic appearance modes. Automatic mode follows the browser or operating-system `prefers-color-scheme` setting, while explicit light/dark choices override it. The preference is saved in the same local CMS settings object as language, branch, tab, and tree width.
+
+Reasoning: Editors may use the CMS for long review sessions across different environments. A theme preference improves comfort without changing the GitHub workflow or adding dependencies, and keeping the default as automatic respects the user's device setting.
 
 ### 2026-06-02: Move Login Into A Modal
 

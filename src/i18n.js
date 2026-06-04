@@ -24,6 +24,12 @@ export const resources = {
       headTitle: "Current branch head commit",
       closeError: "Close error",
       closeNotification: "Close notification",
+      theme: "Theme",
+    },
+    theme: {
+      auto: "Auto",
+      light: "Light",
+      dark: "Dark",
     },
     auth: {
       login: "Sign in",
@@ -329,6 +335,12 @@ export const resources = {
       headTitle: "Head commit aktuální větve",
       closeError: "Zavřít chybu",
       closeNotification: "Zavřít oznámení",
+      theme: "Vzhled",
+    },
+    theme: {
+      auto: "Automaticky",
+      light: "Světlý",
+      dark: "Tmavý",
     },
     auth: {
       login: "Přihlásit",

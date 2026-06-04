@@ -50,6 +50,8 @@ const MIN_PREVIEW_PANE_WIDTH = 360;
 const MAX_FRONT_MATTER_TITLE_FILES = 200;
 const MAX_FRONT_MATTER_TITLE_BYTES = 256 * 1024;
 const FRONT_MATTER_TITLE_CONCURRENCY = 4;
+const THEME_MODES = ["auto", "light", "dark"];
+const systemDarkQuery = window.matchMedia?.("(prefers-color-scheme: dark)") || null;
 
 const state = {
   publicConfig: {},
@@ -57,6 +59,7 @@ const state = {
   token: tokenInfo.token,
   tokenPersistence: tokenInfo.persistence,
   language: normalizeLanguage(settings.language || DEFAULT_LANGUAGE),
+  theme: normalizeTheme(settings.theme),
   user: null,
   userMenuOpen: false,
   owner: "",
@@ -121,6 +124,7 @@ function normalizeTab(tab) {
 const scheduleFilterRender = debounce(() => render(), 160);
 const scheduleEditorMetadataRender = debounce(() => render(), 160);
 
+applyTheme();
 void init();
 
 function t(key, params = {}) {
@@ -192,6 +196,12 @@ window.addEventListener("pointercancel", () => {
 
 window.addEventListener("popstate", () => {
   void restoreSelectionFromLocation();
+});
+
+systemDarkQuery?.addEventListener("change", () => {
+  if (state.theme === "auto") {
+    applyTheme();
+  }
 });
 
 async function init() {
@@ -514,6 +524,13 @@ async function handleChange(target) {
 
   if (target.dataset.setting === "language" && target instanceof HTMLSelectElement) {
     state.language = normalizeLanguage(target.value);
+    persistSettings();
+    render();
+  }
+
+  if (target.dataset.setting === "theme" && target instanceof HTMLSelectElement) {
+    state.theme = normalizeTheme(target.value);
+    applyTheme();
     persistSettings();
     render();
   }
@@ -1861,10 +1878,23 @@ function renderTopbar() {
       </div>
       <div class="top-actions">
         ${renderLanguageSelect("toolbar")}
+        ${renderThemeSelect("toolbar")}
         ${renderTopbarWorkflowControls()}
         ${renderUserMenu()}
       </div>
     </header>
+  `;
+}
+
+function renderThemeSelect(location = "") {
+  const id = `theme-select${location ? `-${location}` : ""}`;
+  return `
+    <label class="theme-control ${location ? `theme-control-${escapeHtml(location)}` : ""}">
+      <span class="sr-only">${t("common.theme")}</span>
+      <select id="${escapeHtml(id)}" data-setting="theme" aria-label="${t("common.theme")}">
+        ${THEME_MODES.map((theme) => `<option value="${escapeHtml(theme)}" ${theme === state.theme ? "selected" : ""}>${escapeHtml(t(`theme.${theme}`))}</option>`).join("")}
+      </select>
+    </label>
   `;
 }
 
@@ -3973,7 +4003,19 @@ function persistSettings() {
     expandedDirs: [...state.expandedDirs],
     allowDefaultBranchEdits: state.allowDefaultBranchEdits,
     language: state.language,
+    theme: state.theme,
   });
+}
+
+function normalizeTheme(value) {
+  return THEME_MODES.includes(value) ? value : "auto";
+}
+
+function applyTheme() {
+  const resolved = state.theme === "dark" || (state.theme === "auto" && systemDarkQuery?.matches) ? "dark" : "light";
+  document.documentElement.dataset.theme = resolved;
+  document.documentElement.dataset.themeMode = state.theme;
+  document.documentElement.style.colorScheme = resolved;
 }
 
 function normalizeTreePaneWidth(value) {
