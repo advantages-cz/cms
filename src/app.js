@@ -74,6 +74,7 @@ const state = {
   branches: [],
   files: [],
   frontMatterTitleBySha: new Map(),
+  frontMatterTitleAttemptedBySha: new Set(),
   frontMatterTitleDraftByPath: new Map(),
   searchTextBySha: new Map(),
   searchContentBySha: new Map(),
@@ -1091,6 +1092,7 @@ function cancelSearchIndexScan() {
 function pruneBlobCaches() {
   const activeShas = new Set(state.files.map((file) => file.sha).filter(Boolean));
   pruneMapKeys(state.frontMatterTitleBySha, activeShas);
+  pruneSetValues(state.frontMatterTitleAttemptedBySha, activeShas);
   pruneMapKeys(state.searchTextBySha, activeShas);
   pruneMapKeys(state.searchContentBySha, activeShas);
 }
@@ -1099,6 +1101,14 @@ function pruneMapKeys(map, activeKeys) {
   for (const key of map.keys()) {
     if (!activeKeys.has(key)) {
       map.delete(key);
+    }
+  }
+}
+
+function pruneSetValues(set, activeValues) {
+  for (const value of set.values()) {
+    if (!activeValues.has(value)) {
+      set.delete(value);
     }
   }
 }
@@ -1201,6 +1211,7 @@ async function loadFile(path, { keepBusy = false, syncLatest = false, navigation
       if (isMarkdownPath(path)) {
         const title = extractFrontMatterTitle(state.editor.content);
         state.frontMatterTitleBySha.set(entry.sha, title);
+        state.frontMatterTitleAttemptedBySha.add(entry.sha);
         state.frontMatterTitleDraftByPath.delete(path);
         applyFrontMatterTitleToPath(path, title);
       }
@@ -1455,6 +1466,7 @@ async function loadFileFromContents(path, { ref = state.branch } = {}) {
   if (isMarkdownPath(path)) {
     const title = extractFrontMatterTitle(textContent);
     state.frontMatterTitleBySha.set(entry.sha, title);
+    state.frontMatterTitleAttemptedBySha.add(entry.sha);
     state.frontMatterTitleDraftByPath.delete(path);
     applyFrontMatterTitleToPath(path, title);
   }
@@ -3886,6 +3898,7 @@ async function scanSearchIndex(files, scanId) {
         if (isMarkdownPath(file.path) && !state.frontMatterTitleBySha.has(file.sha)) {
           const title = extractFrontMatterTitle(text);
           state.frontMatterTitleBySha.set(file.sha, title);
+          state.frontMatterTitleAttemptedBySha.add(file.sha);
           applyFrontMatterTitleToFile(file.sha, title);
         }
       } catch {
@@ -3910,7 +3923,7 @@ async function scanSearchIndex(files, scanId) {
 function scheduleFrontMatterTitleScan() {
   const scanId = ++frontMatterTitleScanId;
   const candidates = state.files
-    .filter((file) => isMarkdownPath(file.path) && file.size <= MAX_FRONT_MATTER_TITLE_BYTES && !state.frontMatterTitleBySha.has(file.sha))
+    .filter((file) => isFrontMatterTitleScanCandidate(file))
     .slice(0, MAX_FRONT_MATTER_TITLE_FILES);
   state.frontMatterTitleScanCount = candidates.length;
   state.frontMatterTitleScannedCount = 0;
@@ -3928,6 +3941,16 @@ function scheduleFrontMatterTitleScan() {
   void scanFrontMatterTitles(candidates, scanId);
 }
 
+function isFrontMatterTitleScanCandidate(file) {
+  if (!isMarkdownPath(file.path) || file.size > MAX_FRONT_MATTER_TITLE_BYTES) {
+    return false;
+  }
+  if (state.frontMatterTitleAttemptedBySha.has(file.sha)) {
+    return false;
+  }
+  return !normalizeFrontMatterTitle(state.frontMatterTitleBySha.get(file.sha) || "");
+}
+
 async function scanFrontMatterTitles(files, scanId) {
   let changed = false;
   let changedSinceRender = 0;
@@ -3942,6 +3965,7 @@ async function scanFrontMatterTitles(files, scanId) {
         const text = base64ToText(blob.content || "");
         const title = extractFrontMatterTitle(text);
         state.frontMatterTitleBySha.set(file.sha, title);
+        state.frontMatterTitleAttemptedBySha.add(file.sha);
         if (isSearchIndexablePath(file.path) && file.size <= MAX_SEARCH_INDEX_BYTES) {
           state.searchTextBySha.set(file.sha, normalizeSearchText(text));
           state.searchContentBySha.set(file.sha, text);
