@@ -50,6 +50,8 @@ const MIN_PREVIEW_PANE_WIDTH = 360;
 const MAX_FRONT_MATTER_TITLE_FILES = 200;
 const MAX_FRONT_MATTER_TITLE_BYTES = 256 * 1024;
 const FRONT_MATTER_TITLE_CONCURRENCY = 4;
+const MAX_SEARCH_INDEX_BYTES = 256 * 1024;
+const SEARCH_INDEX_CONCURRENCY = 4;
 const THEME_MODES = ["auto", "light", "dark"];
 const systemDarkQuery = window.matchMedia?.("(prefers-color-scheme: dark)") || null;
 
@@ -72,6 +74,10 @@ const state = {
   files: [],
   frontMatterTitleBySha: new Map(),
   frontMatterTitleDraftByPath: new Map(),
+  searchTextBySha: new Map(),
+  searchIndexing: false,
+  searchIndexedCount: 0,
+  searchIndexableCount: 0,
   treeTruncated: false,
   headSha: "",
   tab: normalizeTab(settings.tab),
@@ -116,6 +122,7 @@ let actionPollInFlight = false;
 let restoringBrowserNavigation = false;
 let treePaneResizeDrag = null;
 let frontMatterTitleScanId = 0;
+let searchIndexScanId = 0;
 
 function normalizeTab(tab) {
   return ["files", "changes", "commits", "actions"].includes(tab) ? tab : tab === "review" ? "changes" : "files";
@@ -537,7 +544,7 @@ async function handleChange(target) {
 }
 
 function handleInput(target) {
-  if (target.id === "path-filter" && target instanceof HTMLInputElement) {
+  if (target.id === "global-search" && target instanceof HTMLInputElement) {
     state.pathFilter = target.value;
     scheduleFilterRender();
     return;
@@ -1061,7 +1068,23 @@ function applyRepositoryTree(tree) {
       frontMatterTitle: frontMatterTitleForEntry(entry),
     }))
     .sort((a, b) => a.path.localeCompare(b.path));
+  pruneBlobCaches();
   scheduleFrontMatterTitleScan();
+  scheduleSearchIndexScan();
+}
+
+function pruneBlobCaches() {
+  const activeShas = new Set(state.files.map((file) => file.sha).filter(Boolean));
+  pruneMapKeys(state.frontMatterTitleBySha, activeShas);
+  pruneMapKeys(state.searchTextBySha, activeShas);
+}
+
+function pruneMapKeys(map, activeKeys) {
+  for (const key of map.keys()) {
+    if (!activeKeys.has(key)) {
+      map.delete(key);
+    }
+  }
 }
 
 function frontMatterTitleForEntry(entry) {
@@ -1155,6 +1178,9 @@ async function loadFile(path, { keepBusy = false, syncLatest = false, navigation
       const blob = await state.client.getBlob(state.owner, state.repo, entry.sha);
       state.editor.content = base64ToText(blob.content || "");
       state.editor.baseContent = state.editor.content;
+      if (isSearchIndexablePath(path) && entry.size <= MAX_SEARCH_INDEX_BYTES) {
+        state.searchTextBySha.set(entry.sha, normalizeSearchText(state.editor.content));
+      }
       if (isMarkdownPath(path)) {
         const title = extractFrontMatterTitle(state.editor.content);
         state.frontMatterTitleBySha.set(entry.sha, title);
@@ -1414,6 +1440,9 @@ async function loadFileFromContents(path, { ref = state.branch } = {}) {
     state.frontMatterTitleBySha.set(entry.sha, title);
     state.frontMatterTitleDraftByPath.delete(path);
     applyFrontMatterTitleToPath(path, title);
+  }
+  if (isSearchIndexablePath(path) && entry.size <= MAX_SEARCH_INDEX_BYTES) {
+    state.searchTextBySha.set(entry.sha, normalizeSearchText(textContent));
   }
 
   await buildPreview(entry, textContent);
@@ -1877,12 +1906,26 @@ function renderTopbar() {
         </div>
       </div>
       <div class="top-actions">
-        ${renderLanguageSelect("toolbar")}
-        ${renderThemeSelect("toolbar")}
+        ${renderGlobalSearch()}
         ${renderTopbarWorkflowControls()}
         ${renderUserMenu()}
       </div>
     </header>
+  `;
+}
+
+function renderGlobalSearch() {
+  if (!state.token || !state.owner || !state.repo || !state.headSha) {
+    return "";
+  }
+
+  return `
+    <label class="global-search">
+      <span class="sr-only">${t("search.label")}</span>
+      <span class="global-search-icon" aria-hidden="true">${treeIconSvg("search")}</span>
+      <input id="global-search" value="${escapeHtml(state.pathFilter)}" aria-label="${t("search.label")}" placeholder="${t("search.placeholder")}" autocomplete="off" />
+      ${state.searchIndexing ? `<span class="global-search-status" title="${t("search.indexingTitle", { done: state.searchIndexedCount, total: state.searchIndexableCount })}">${escapeHtml(`${state.searchIndexedCount}/${state.searchIndexableCount}`)}</span>` : ""}
+    </label>
   `;
 }
 
@@ -1918,16 +1961,20 @@ function renderUserMenu() {
   const label = state.user?.login || t("auth.tokenSavedLabel");
   return `
     <div class="user-menu-wrap">
-      <button class="account-button user-menu-trigger" type="button" data-action="toggle-user-menu" aria-expanded="${state.userMenuOpen ? "true" : "false"}" aria-haspopup="menu">
+      <button class="account-button user-menu-trigger" type="button" data-action="toggle-user-menu" aria-expanded="${state.userMenuOpen ? "true" : "false"}" aria-haspopup="true">
         <span class="account-dot" aria-hidden="true"></span>
         <span>${escapeHtml(label)}</span>
         <span class="menu-caret" aria-hidden="true"></span>
       </button>
       ${
         state.userMenuOpen
-          ? `<div class="user-menu" role="menu">
-              <button type="button" data-action="login" role="menuitem">${t("auth.changeToken")}</button>
-              <button type="button" data-action="clear-token" role="menuitem">${t("auth.logout")}</button>
+          ? `<div class="user-menu">
+              <div class="user-menu-section">
+                ${renderLanguageSelect("menu")}
+                ${renderThemeSelect("menu")}
+              </div>
+              <button type="button" data-action="login">${t("auth.changeToken")}</button>
+              <button type="button" data-action="clear-token">${t("auth.logout")}</button>
             </div>`
           : ""
       }
@@ -2211,9 +2258,6 @@ function renderFilesTab() {
     <div class="workbench files-workbench ${state.treePaneResizing ? "is-resizing" : ""}" style="--tree-pane-width: ${state.treePaneWidth}px;">
       <section class="panel tree-panel">
         <div class="panel-body">
-          <div class="field">
-            <input id="path-filter" value="${escapeHtml(state.pathFilter)}" aria-label="${t("files.pathFilter")}" placeholder="${t("files.pathFilterPlaceholder")}" />
-          </div>
           ${
             state.editMode
               ? `<div class="tree-actions">
@@ -2388,6 +2432,7 @@ function treeIconSvg(iconClass) {
     "tree-icon-code": `${fileBase}<path d="m10 13-2 2 2 2"></path><path d="m14 13 2 2-2 2"></path>`,
     "tree-icon-image": `${fileBase}<circle cx="10" cy="13" r="1"></circle><path d="m8 18 2.4-2.4a1 1 0 0 1 1.4 0L14 17l1-1a1 1 0 0 1 1.4 0L18 18"></path>`,
     refresh: '<path d="M21 12a9 9 0 0 1-15.6 6.1L3 16"></path><path d="M3 21v-5h5"></path><path d="M3 12A9 9 0 0 1 18.6 5.9L21 8"></path><path d="M21 3v5h-5"></path>',
+    search: '<path d="m21 21-4.34-4.34"></path><circle cx="11" cy="11" r="8"></circle>',
     file: fileBase,
   };
   return `<svg ${attrs}>${icons[iconClass] || icons.file}</svg>`;
@@ -3371,20 +3416,50 @@ function shouldKeepWaitingForActionStatus() {
 }
 
 function filteredFiles() {
-  const rawFilter = state.pathFilter.trim().toLowerCase();
+  const rawFilter = normalizeSearchText(state.pathFilter);
   const hints = [...(state.publicConfig.editablePathHints || []), ...(state.publicConfig.previewPathHints || [])]
     .filter(Boolean)
     .map((hint) => String(hint).toLowerCase());
 
   let files = state.files;
   if (rawFilter) {
-    files = files.filter((file) => file.path.toLowerCase().includes(rawFilter));
+    files = files.filter((file) => fileMatchesSearch(file, rawFilter));
   } else if (hints.length) {
     const hinted = files.filter((file) => hints.some((hint) => file.path.toLowerCase().startsWith(hint)));
     files = hinted.length ? hinted : files;
   }
 
   return files;
+}
+
+function fileMatchesSearch(file, query) {
+  if (!query) {
+    return true;
+  }
+
+  return (
+    normalizeSearchText(file.path).includes(query) ||
+    normalizeSearchText(file.name || "").includes(query) ||
+    normalizeSearchText(file.frontMatterTitle || "").includes(query) ||
+    directorySearchText(file.path).includes(query) ||
+    Boolean(state.searchTextBySha.get(file.sha)?.includes(query))
+  );
+}
+
+function directorySearchText(path) {
+  return normalizeSearchText(
+    String(path || "")
+      .split("/")
+      .slice(0, -1)
+      .join(" "),
+  );
+}
+
+function normalizeSearchText(value) {
+  return String(value || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase();
 }
 
 function buildFileTree(files) {
@@ -3490,6 +3565,70 @@ function isReadmePath(path) {
   return /^readme\.md$/i.test(name);
 }
 
+function isSearchIndexablePath(path) {
+  const ext = extensionOf(path);
+  return ["md", "mdx", "html", "htm"].includes(ext);
+}
+
+function scheduleSearchIndexScan() {
+  const scanId = ++searchIndexScanId;
+  const candidates = state.files.filter(
+    (file) => isSearchIndexablePath(file.path) && file.size <= MAX_SEARCH_INDEX_BYTES && !state.searchTextBySha.has(file.sha),
+  );
+  state.searchIndexableCount = state.files.filter(
+    (file) => isSearchIndexablePath(file.path) && file.size <= MAX_SEARCH_INDEX_BYTES,
+  ).length;
+  state.searchIndexedCount = Math.max(0, state.searchIndexableCount - candidates.length);
+
+  if (!state.client || !state.owner || !state.repo || !candidates.length) {
+    state.searchIndexing = false;
+    return;
+  }
+
+  state.searchIndexing = true;
+  void scanSearchIndex(candidates, scanId);
+}
+
+async function scanSearchIndex(files, scanId) {
+  let index = 0;
+  let indexedSinceRender = 0;
+
+  async function worker() {
+    while (index < files.length && scanId === searchIndexScanId) {
+      const file = files[index];
+      index += 1;
+      if (state.searchTextBySha.has(file.sha)) {
+        state.searchIndexedCount = Math.min(state.searchIndexableCount, state.searchIndexedCount + 1);
+        continue;
+      }
+      try {
+        const blob = await state.client.getBlob(state.owner, state.repo, file.sha);
+        const text = base64ToText(blob.content || "");
+        state.searchTextBySha.set(file.sha, normalizeSearchText(text));
+        if (isMarkdownPath(file.path) && !state.frontMatterTitleBySha.has(file.sha)) {
+          const title = extractFrontMatterTitle(text);
+          state.frontMatterTitleBySha.set(file.sha, title);
+          applyFrontMatterTitleToFile(file.sha, title);
+        }
+      } catch {
+        state.searchTextBySha.set(file.sha, "");
+      }
+      state.searchIndexedCount = Math.min(state.searchIndexableCount, state.searchIndexedCount + 1);
+      indexedSinceRender += 1;
+      if (indexedSinceRender >= 12) {
+        indexedSinceRender = 0;
+        render();
+      }
+    }
+  }
+
+  await Promise.allSettled(Array.from({ length: SEARCH_INDEX_CONCURRENCY }, worker));
+  if (scanId === searchIndexScanId) {
+    state.searchIndexing = false;
+    render();
+  }
+}
+
 function scheduleFrontMatterTitleScan() {
   const scanId = ++frontMatterTitleScanId;
   const candidates = state.files
@@ -3513,8 +3652,12 @@ async function scanFrontMatterTitles(files, scanId) {
       index += 1;
       try {
         const blob = await state.client.getBlob(state.owner, state.repo, file.sha);
-        const title = extractFrontMatterTitle(base64ToText(blob.content || ""));
+        const text = base64ToText(blob.content || "");
+        const title = extractFrontMatterTitle(text);
         state.frontMatterTitleBySha.set(file.sha, title);
+        if (isSearchIndexablePath(file.path) && file.size <= MAX_SEARCH_INDEX_BYTES) {
+          state.searchTextBySha.set(file.sha, normalizeSearchText(text));
+        }
         if (applyFrontMatterTitleToFile(file.sha, title)) {
           changed = true;
         }

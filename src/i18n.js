@@ -31,6 +31,11 @@ export const resources = {
       light: "Light",
       dark: "Dark",
     },
+    search: {
+      label: "Search files, folders, and content",
+      placeholder: "Search files, folders, content...",
+      indexingTitle: "Indexing Markdown and HTML content: {done}/{total}",
+    },
     auth: {
       login: "Sign in",
       loginWithToken: "Sign in with GitHub",
@@ -341,6 +346,11 @@ export const resources = {
       auto: "Automaticky",
       light: "Světlý",
       dark: "Tmavý",
+    },
+    search: {
+      label: "Hledat v souborech, složkách a obsahu",
+      placeholder: "Hledat soubory, složky, obsah...",
+      indexingTitle: "Indexuji Markdown a HTML obsah: {done}/{total}",
     },
     auth: {
       login: "Přihlásit",

@@ -405,6 +405,18 @@ Decision: Rendered internal Markdown links normalize hash anchors with the same 
 
 Reasoning: Czech and Slovak headings can include diacritics while generated heading IDs do not. Using one normalization path keeps links such as `#expertíza` aligned with headings rendered as `id="expertiza"`.
 
+### 2026-06-04: Add Unified Header Search
+
+Decision: The top toolbar includes one search box that filters the repository tree by folder path, file name, front matter title, and indexed Markdown/HTML content. Markdown and HTML blobs up to a capped size are indexed in memory on a background scan keyed by blob SHA; binary files are not indexed.
+
+Reasoning: Editors need one predictable place to search navigation and content. Keeping the index client-side and capped preserves the static GitHub API architecture while avoiding eager downloads of large assets.
+
+### 2026-06-04: Move Locale And Theme Controls Into User Menu
+
+Decision: Language and theme selectors live inside the signed-in user menu, whose trigger now includes a visible caret and expanded state.
+
+Reasoning: Locale and visual theme are account/session preferences, not primary content workflow actions. Moving them into the menu leaves toolbar space for repository search and branch actions.
+
 ## Update Protocol
 
 When the project changes, update this document in the same commit as the related code or configuration change.

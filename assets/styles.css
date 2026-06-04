@@ -224,6 +224,55 @@ a:hover {
   min-width: 0;
 }
 
+.global-search {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  min-width: 220px;
+  width: min(360px, 30vw);
+}
+
+.global-search input {
+  width: 100%;
+  min-height: 32px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  padding: 0 72px 0 32px;
+  background: var(--surface);
+  color: var(--text);
+}
+
+.global-search input:focus {
+  border-color: var(--accent);
+  outline: 2px solid color-mix(in srgb, var(--accent) 22%, transparent);
+  outline-offset: 0;
+}
+
+.global-search-icon {
+  position: absolute;
+  left: 10px;
+  display: inline-flex;
+  color: var(--muted);
+  pointer-events: none;
+}
+
+.global-search-icon svg {
+  width: 15px;
+  height: 15px;
+}
+
+.global-search-status {
+  position: absolute;
+  right: 8px;
+  max-width: 54px;
+  overflow: hidden;
+  color: var(--muted);
+  font-family: var(--mono);
+  font-size: 10px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .top-actions button,
 .top-actions select {
   min-height: 32px;
@@ -358,6 +407,11 @@ a:hover {
   border-right: 4px solid transparent;
   border-left: 4px solid transparent;
   opacity: 0.72;
+  transition: transform 120ms ease;
+}
+
+.user-menu-trigger[aria-expanded="true"] .menu-caret {
+  transform: rotate(180deg);
 }
 
 .user-menu-trigger {
@@ -376,6 +430,37 @@ a:hover {
   padding: 6px;
   background: var(--surface);
   box-shadow: 0 16px 36px rgba(17, 17, 17, 0.16);
+}
+
+.user-menu-section {
+  display: grid;
+  gap: 6px;
+  margin-bottom: 6px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--line);
+}
+
+.user-menu .language-control,
+.user-menu .theme-control {
+  display: grid;
+  gap: 4px;
+}
+
+.user-menu .language-control .sr-only,
+.user-menu .theme-control .sr-only {
+  position: static;
+  width: auto;
+  height: auto;
+  overflow: visible;
+  clip: auto;
+  color: var(--muted);
+  font-size: 11px;
+  white-space: normal;
+}
+
+.user-menu select {
+  width: 100%;
+  min-height: 32px;
 }
 
 .user-menu button {
@@ -2115,6 +2200,7 @@ body.is-resizing-tree-pane {
   }
 
   .brand,
+  .global-search,
   .top-actions,
   .branch-control,
   .toolbar-left,
@@ -2131,6 +2217,10 @@ body.is-resizing-tree-pane {
 
   .top-branch-select {
     width: 100%;
+  }
+
+  .global-search {
+    min-width: 0;
   }
 
   .user-menu-wrap {
