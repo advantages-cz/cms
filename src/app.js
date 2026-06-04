@@ -3527,7 +3527,15 @@ function compareSearchResults(a, b) {
   if (rankDiff) {
     return rankDiff;
   }
+  const depthDiff = pathDepth(a.file.path) - pathDepth(b.file.path);
+  if (depthDiff) {
+    return depthDiff;
+  }
   return a.file.path.localeCompare(b.file.path, undefined, { sensitivity: "base" });
+}
+
+function pathDepth(path) {
+  return String(path || "").split("/").filter(Boolean).length;
 }
 
 function searchSnippet(file, query) {
