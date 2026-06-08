@@ -1,19 +1,53 @@
-const CACHE_NAME = "adaptivio-cms-shell-v1";
+const CACHE_NAME = "adaptivio-cms-shell-v2";
 const SHELL_ASSETS = [
   "./",
   "./index.html",
   "./manifest.webmanifest",
-  "./assets/styles.css?v=20260608-220730",
-  "./assets/favicon.svg?v=20260608-220730",
-  "./src/app.js?v=20260608-220730",
-  "./src/editorWorkflow.js?v=20260608-220730",
-  "./src/github.js?v=20260608-220730",
-  "./src/i18n.js?v=20260608-220730",
-  "./src/repoCache.js?v=20260608-220730",
-  "./src/storage.js?v=20260608-220730",
-  "./src/utils.js?v=20260608-220730",
+  "./assets/styles.css?v=20260608-234500",
+  "./assets/favicon.svg?v=20260608-234500",
+  "./src/app.js?v=20260608-234500",
+  "./src/editorWorkflow.js?v=20260608-234500",
+  "./src/github.js?v=20260608-234500",
+  "./src/i18n.js?v=20260608-234500",
+  "./src/repoCache.js?v=20260608-234500",
+  "./src/storage.js?v=20260608-234500",
+  "./src/utils.js?v=20260608-234500",
   "./cms.config.json",
 ];
+
+function isAppShellRequest(requestUrl) {
+  const pathname = requestUrl.pathname;
+  return (
+    pathname.endsWith("/index.html") ||
+    pathname.endsWith("/manifest.webmanifest") ||
+    pathname.endsWith("/assets/styles.css") ||
+    pathname.endsWith("/assets/favicon.svg") ||
+    pathname.endsWith("/src/app.js") ||
+    pathname.endsWith("/src/editorWorkflow.js") ||
+    pathname.endsWith("/src/github.js") ||
+    pathname.endsWith("/src/i18n.js") ||
+    pathname.endsWith("/src/repoCache.js") ||
+    pathname.endsWith("/src/storage.js") ||
+    pathname.endsWith("/src/utils.js")
+  );
+}
+
+async function networkFirst(request, fallbackKey = request) {
+  try {
+    const networkResponse = await fetch(request, { cache: "no-store" });
+    if (networkResponse && networkResponse.status === 200 && networkResponse.type === "basic") {
+      const responseClone = networkResponse.clone();
+      void caches.open(CACHE_NAME).then((cache) => cache.put(fallbackKey, responseClone));
+    }
+    return networkResponse;
+  } catch {
+    const cachedResponse = await caches.match(fallbackKey);
+    if (cachedResponse) {
+      return cachedResponse;
+    }
+    throw new Error("Network unavailable and no cached shell response.");
+  }
+}
 
 self.addEventListener("install", (event) => {
   event.waitUntil(
@@ -50,7 +84,12 @@ self.addEventListener("fetch", (event) => {
   }
 
   if (request.mode === "navigate") {
-    event.respondWith(fetch(request).catch(() => caches.match("./index.html")));
+    event.respondWith(networkFirst(request, "./index.html"));
+    return;
+  }
+
+  if (isAppShellRequest(url)) {
+    event.respondWith(networkFirst(request));
     return;
   }
 

@@ -6,16 +6,16 @@ import {
   prepareEditorForSave,
   readSaveFileFormData,
   upsertFileMetadata as upsertFileMetadataState,
-} from "./editorWorkflow.js?v=20260608-220730";
-import { GitHubClient, GitHubError } from "./github.js?v=20260608-220730";
-import { DEFAULT_LANGUAGE, LANGUAGES, normalizeLanguage, translate } from "./i18n.js?v=20260608-220730";
+} from "./editorWorkflow.js?v=20260608-234500";
+import { GitHubClient, GitHubError } from "./github.js?v=20260608-234500";
+import { DEFAULT_LANGUAGE, LANGUAGES, normalizeLanguage, translate } from "./i18n.js?v=20260608-234500";
 import {
   loadCachedContents,
   loadRepositoryCache,
   saveCachedContent,
   saveRepositoryCache,
-} from "./repoCache.js?v=20260608-220730";
-import { clearToken, loadLastSave, loadSettings, loadToken, saveLastSave, saveSettings, saveToken } from "./storage.js?v=20260608-220730";
+} from "./repoCache.js?v=20260608-234500";
+import { clearToken, loadLastSave, loadSettings, loadToken, saveLastSave, saveSettings, saveToken } from "./storage.js?v=20260608-234500";
 import {
   blobFromBase64,
   classifyConclusion,
@@ -33,7 +33,7 @@ import {
   mimeForPath,
   shortSha,
   textToBase64,
-} from "./utils.js?v=20260608-220730";
+} from "./utils.js?v=20260608-234500";
 
 const app = document.querySelector("#app");
 const settings = loadSettings();
@@ -151,7 +151,7 @@ function registerServiceWorker() {
   }
 
   window.addEventListener("load", () => {
-    void navigator.serviceWorker.register("./sw.js");
+    void navigator.serviceWorker.register("./sw.js", { updateViaCache: "none" });
   });
 }
 
