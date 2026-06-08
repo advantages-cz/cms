@@ -4043,11 +4043,24 @@ function discussionQuoteBlock() {
 
 function serializeSelectionFragment(fragment) {
   const blocks = [];
+  let inlineBuffer = "";
   for (const node of fragment.childNodes) {
-    const value = serializeSelectionNode(node, { mode: "block" });
+    const isBlockNode = node.nodeType === Node.ELEMENT_NODE && isSelectionBlockElement(node);
+    const value = serializeSelectionNode(node, { mode: isBlockNode ? "block" : "inline" });
     if (value) {
-      blocks.push(value);
+      if (isBlockNode) {
+        if (inlineBuffer) {
+          blocks.push(normalizeInlineMarkdown(inlineBuffer));
+          inlineBuffer = "";
+        }
+        blocks.push(value);
+      } else {
+        inlineBuffer += value;
+      }
     }
+  }
+  if (inlineBuffer) {
+    blocks.push(normalizeInlineMarkdown(inlineBuffer));
   }
   return blocks.join("\n\n");
 }
