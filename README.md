@@ -15,6 +15,7 @@ Adaptivio also needs GitHub Actions status, failing check annotations, detection
 
 - Connects to a private repo with a manually entered fine-grained GitHub token.
 - The target repo is fixed in the app to `advantages-cz/avds`, default branch `master`.
+- Installable as a PWA from Chromium browsers, so the CMS can run in its own app window from the Dock.
 - Browse repository content as a tree.
 - Browser back/forward works for file and folder navigation inside the CMS.
 - Read-only browsing workflow with file previews.
@@ -108,6 +109,8 @@ python3 -m http.server 4173
 ```
 
 Then open `http://localhost:4173`.
+
+For PWA install testing, use a Chromium browser and install the site from the address bar menu after serving it over HTTP or HTTPS. Desktop link-capturing behavior depends on the browser and operating system; on macOS this works best when the installed app opens same-origin links from Chrome.
 
 ## Test
 

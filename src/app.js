@@ -133,10 +133,26 @@ const scheduleFilterRender = debounce(() => {
 const scheduleEditorMetadataRender = debounce(() => render(), 160);
 
 applyTheme();
+registerServiceWorker();
 void init();
 
 function t(key, params = {}) {
   return translate(state.language, key, params);
+}
+
+function registerServiceWorker() {
+  const isSecureContext =
+    window.location.protocol === "https:" ||
+    window.location.hostname === "localhost" ||
+    window.location.hostname === "127.0.0.1";
+
+  if (!("serviceWorker" in navigator) || !isSecureContext) {
+    return;
+  }
+
+  window.addEventListener("load", () => {
+    void navigator.serviceWorker.register("./sw.js");
+  });
 }
 
 app.addEventListener("submit", (event) => {

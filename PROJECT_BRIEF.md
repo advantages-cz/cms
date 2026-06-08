@@ -17,6 +17,7 @@ The product should stay small, auditable, and easy to deploy.
 ## Core Goals
 
 - Run as a public static application on GitHub Pages.
+- Be installable as a PWA so maintainers can pin the CMS as a desktop-like app from the browser.
 - Connect to a private GitHub repository using a manually entered fine-grained GitHub token.
 - Target `advantages-cz/avds` with `master` as the fixed default branch.
 - Avoid storing secrets on a server.
@@ -159,6 +160,7 @@ Implemented capabilities:
 - Light, dark, and automatic appearance modes in the top toolbar. Automatic mode follows `prefers-color-scheme`, and the selected preference is stored with other browser-local CMS settings.
 - CMS design-system pass based on Adaptivio brand rules: role-based CSS tokens, approved black Adaptivio symbol in the toolbar, compact product toolbar, explicit branch/mode status patterns, restrained brand treatment, quieter panels, denser tree rows, and document-like previews.
 - The application shell includes a branded SVG favicon derived from the approved Adaptivio symbol so the CMS is recognizable in browser tabs and pinned tab lists.
+- The application shell now also exposes a web app manifest and service worker so Chromium browsers can install the CMS as a standalone desktop PWA.
 - Refined toolbar action model: edit/browse state lives in the primary workflow button, refresh is icon-only with a local Lucide-style SVG and an accessible label, PR creation is hidden until the branch has changes, and the signed-in user control looks like an account menu.
 - Review workspace split into separate `Změny` and `Commity` tabs with badge counts. PR creation/opening lives in the toolbar, while the tabs focus on changed-file and commit lists and refresh after commit operations.
 - Post-commit Actions feedback shows concrete files changed after the last CMS commit as clickable CMS links instead of a generic completed-workflow banner.
@@ -253,6 +255,12 @@ Reasoning: The deployment does not have a backend secret or OAuth proxy, so a to
 Decision: Saved GitHub tokens now persist in browser `localStorage` by default instead of being limited to the current session.
 
 Reasoning: The CMS is used as a repeat-visit internal tool, and losing the token on every browser restart added unnecessary friction. Persistent browser-only storage keeps the app fully static while restoring the expected "stay signed in on this browser" behavior.
+
+### 2026-06-08: Ship The CMS As A PWA
+
+Decision: The static shell now includes a web app manifest plus a small service worker so the CMS can be installed from Chromium browsers as a standalone app window.
+
+Reasoning: The intended usage is repeat-visit editorial work, and PWA installability makes the CMS behave more like a dedicated desktop tool without introducing a backend or packaging step.
 
 ### 2026-06-02: Keep Merge In GitHub
 
