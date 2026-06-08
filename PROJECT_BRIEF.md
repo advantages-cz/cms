@@ -442,12 +442,6 @@ Decision: Give `rozcestnik.md` a dedicated signpost-style icon in the file tree 
 
 Reasoning: The file acts as a navigation hub, so a distinct icon makes its role visible without changing editing, preview, or routing behavior.
 
-### 2026-06-09: Use Orange Accent For README And Rozcestnik Icons
-
-Decision: Render the dedicated `README.md` home icon and `rozcestnik.md` signpost icon with the shared Adaptivio orange accent instead of the previous mixed accent colors.
-
-Reasoning: Both files act as navigation entry points in the CMS, so matching orange treatment makes them easier to spot and keeps tree icon semantics aligned with the product brand color.
-
 ### 2026-06-08: Pin `rozcestnik.md` Near `README.md`
 
 Decision: In each folder, sort `README.md` first and `rozcestnik.md` second before applying the existing file ordering rules for everything else.

@@ -1818,11 +1818,11 @@ mark,
   top: 9px;
   width: 12px;
   height: 9px;
-  border: 1px solid var(--cms-color-brand-orange);
+  border: 1px solid var(--warn);
   border-top: 0;
   border-radius: 1px 1px 2px 2px;
   background: var(--surface);
-  box-shadow: inset 0 -3px 0 rgba(255, 101, 18, 0.2);
+  box-shadow: inset 0 -3px 0 rgba(245, 158, 11, 0.22);
 }
 
 .tree-icon-home::after {
@@ -1832,15 +1832,15 @@ mark,
   top: 4px;
   width: 11px;
   height: 11px;
-  border-top: 1px solid var(--cms-color-brand-orange);
-  border-left: 1px solid var(--cms-color-brand-orange);
+  border-top: 1px solid var(--warn);
+  border-left: 1px solid var(--warn);
   background: var(--surface);
   transform: rotate(45deg);
 }
 
 .tree-icon-rozcestnik::before {
-  border-color: var(--cms-color-brand-orange);
-  box-shadow: inset 0 -3px 0 rgba(255, 101, 18, 0.2);
+  border-color: var(--warn);
+  box-shadow: inset 0 -3px 0 rgba(245, 158, 11, 0.22);
 }
 
 .tree-icon-rozcestnik::after {
@@ -1850,12 +1850,12 @@ mark,
   top: 4px;
   width: 2px;
   height: 14px;
-  background: var(--cms-color-brand-orange);
+  background: var(--warn);
   border-radius: 999px;
   box-shadow:
-    -5px 4px 0 0 var(--cms-color-brand-orange),
-    4px 8px 0 0 var(--cms-color-brand-orange),
-    -4px 12px 0 0 var(--cms-color-brand-orange);
+    -5px 4px 0 0 var(--warn),
+    4px 8px 0 0 var(--warn),
+    -4px 12px 0 0 var(--warn);
 }
 
 .tree-icon-data::before {
@@ -1952,7 +1952,7 @@ mark,
 .tree-icon-home,
 .tree-icon-data,
 .tree-icon-rozcestnik {
-  color: var(--cms-color-brand-orange);
+  color: var(--accent-strong);
 }
 
 .tree-icon-html,
