@@ -392,7 +392,7 @@ export const resources = {
       login: "Přihlásit",
       loginWithToken: "Přihlásit tokenem",
       changeToken: "Změnit přihlášení",
-      logout: "Logout",
+      logout: "Odhlásit",
       tokenSavedLabel: "token uložen",
       title: "Přihlášení tokenem",
       fixedRepo: "Repozitář je nastavený napevno na {repo}, defaultní větev {branch}.",
