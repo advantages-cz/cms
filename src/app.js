@@ -368,7 +368,7 @@ async function handleAction(button) {
     state.pathFilter = "";
     globalSearchTyping = false;
     window.clearTimeout(globalSearchTypingTimer);
-    scheduleFilterRender();
+    render();
     return;
   }
 
@@ -2083,12 +2083,12 @@ function renderGlobalSearch() {
   }
 
   return `
-    <label class="global-search">
-      <span class="sr-only">${t("search.label")}</span>
+    <div class="global-search" role="search">
+      <span class="sr-only" id="global-search-label">${t("search.label")}</span>
       <span class="global-search-icon" aria-hidden="true">${treeIconSvg("search")}</span>
-      <input id="global-search" value="${escapeHtml(state.pathFilter)}" aria-label="${t("search.label")}" placeholder="${t("search.placeholder")}" autocomplete="off" />
-      ${state.pathFilter ? `<button class="global-search-clear" type="button" data-action="clear-global-search" aria-label="${t("search.clear")}">×</button>` : ""}
-    </label>
+      <input id="global-search" value="${escapeHtml(state.pathFilter)}" aria-labelledby="global-search-label" placeholder="${t("search.placeholder")}" autocomplete="off" />
+      ${state.pathFilter ? `<button class="global-search-clear" type="button" data-action="clear-global-search" aria-label="${t("search.clear")}"><span aria-hidden="true">×</span></button>` : ""}
+    </div>
   `;
 }
 

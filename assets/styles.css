@@ -237,7 +237,7 @@ a:hover {
   min-height: 32px;
   border: 1px solid var(--line);
   border-radius: var(--radius-sm);
-  padding: 0 74px 0 32px;
+  padding: 0 40px 0 32px;
   background: var(--surface);
   color: var(--text);
 }
@@ -275,10 +275,10 @@ a:hover {
 
 .global-search-clear {
   position: absolute;
-  right: 6px;
-  top: 50%;
-  width: 20px;
-  height: 20px;
+  top: 2px;
+  right: 4px;
+  bottom: 2px;
+  width: 28px;
   min-height: 0;
   padding: 0;
   border: none;
@@ -292,14 +292,30 @@ a:hover {
   align-items: center;
   justify-content: center;
   flex: 0 0 20px;
-  overflow: hidden;
   font-size: 14px;
   line-height: 1;
-  transform: translateY(-50%);
+  cursor: pointer;
+  z-index: 1;
 }
 
 .global-search-clear:hover,
-.global-search-clear:focus-visible {
+.global-search-clear:focus-visible,
+.global-search-clear:hover:not(:disabled) {
+  border-color: transparent;
+  background: transparent;
+}
+
+.global-search-clear span {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 4px;
+}
+
+.global-search-clear:hover span,
+.global-search-clear:focus-visible span {
   background: var(--surface-alt);
   color: var(--text);
 }
