@@ -5,7 +5,7 @@ Adaptivio CMS is a public static application that can read and write a private G
 ## Token handling
 
 - Tokens are accepted and stored in the browser UI only.
-- Token storage is `sessionStorage`.
+- Token storage is `localStorage` so the user stays signed in between visits until they explicitly clear the token.
 - Tokens are sent only to `https://api.github.com`.
 - No token is committed to this repository and no backend secret exists.
 - Repository tree metadata and hydrated `.md`, `.mdx`, `.html`, and `.htm` contents are cached in browser IndexedDB by repository, branch, commit SHA, and blob SHA. This cache is local to the user's browser and is invalidated by the app cache schema version.

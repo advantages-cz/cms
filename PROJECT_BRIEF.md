@@ -245,6 +245,12 @@ Decision: The sign-in screen now focuses on a single token input and no longer e
 
 Reasoning: The deployment does not have a backend secret or OAuth proxy, so a token-only login keeps the entry point honest, reduces UI complexity, and makes the required GitHub permissions explicit up front.
 
+### 2026-06-08: Persist Saved Tokens Across Visits
+
+Decision: Saved GitHub tokens now persist in browser `localStorage` by default instead of being limited to the current session.
+
+Reasoning: The CMS is used as a repeat-visit internal tool, and losing the token on every browser restart added unnecessary friction. Persistent browser-only storage keeps the app fully static while restoring the expected "stay signed in on this browser" behavior.
+
 ### 2026-06-02: Keep Merge In GitHub
 
 Decision: The CMS creates pull requests but does not merge them.

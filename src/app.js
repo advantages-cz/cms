@@ -249,7 +249,7 @@ async function handleForm(form) {
 
   if (formName === "auth") {
     const token = String(data.get("token") || "").trim();
-    const persistence = "session";
+    const persistence = "local";
     let shouldCheckToken = Boolean(state.token && state.client);
     state.tokenPersistence = persistence;
     if (token) {
@@ -4846,10 +4846,10 @@ function captureTokenFromAuthForm() {
     return;
   }
   state.token = token;
-  state.tokenPersistence = "session";
+  state.tokenPersistence = "local";
   state.client = new GitHubClient(token);
   resetChecksApiState();
-  saveToken(token, "session");
+  saveToken(token, "local");
 }
 
 function resetChecksApiState() {

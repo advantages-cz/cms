@@ -48,7 +48,7 @@ The recommended OAuth scope is `repo` so the CMS can read and write the private 
 
 Optionally allow `Actions: write` if the CMS should rerun workflow runs.
 
-Token sign-in stores the token in `sessionStorage`. Direct commits to the default branch are disabled.
+Token sign-in stores the token in `localStorage` so it persists across browser restarts. Direct commits to the default branch are disabled.
 
 HTML previews are sandboxed without `allow-scripts` and without `allow-same-origin`. The app never injects file content as HTML into its own DOM.
 
