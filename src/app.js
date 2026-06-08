@@ -2317,19 +2317,21 @@ function renderLoginScreen(message) {
   return `
     <section class="login-screen">
       <form class="login-card" data-form="auth">
-        <div class="login-card-header">
-          <h1>${t("auth.title")}</h1>
-          <p>${escapeHtml(message)}</p>
-        </div>
-        <div class="field">
-          <label for="token">${t("auth.tokenLabel")}</label>
-          <input id="token" name="token" type="password" autocomplete="off" placeholder="${escapeHtml(t("auth.tokenHint"))}" autofocus />
-        </div>
-        <div class="login-help">
-          <p>${t("auth.fixedRepo", { repo: `<span class="path">${escapeHtml(FIXED_REPOSITORY)}</span>`, branch: `<span class="path">${escapeHtml(FIXED_DEFAULT_BRANCH)}</span>` })}</p>
-          <p>${t("auth.minimumPermissions")}</p>
-          <p>${t("auth.tokenRepoScope")}</p>
-          <p><a href="https://github.com/settings/personal-access-tokens" target="_blank" rel="noopener noreferrer">${t("auth.openTokenSettings")}</a></p>
+        <div class="login-card-main">
+          <div class="login-card-header">
+            <h1>${t("auth.title")}</h1>
+            <p>${escapeHtml(message)}</p>
+          </div>
+          <div class="field">
+            <label for="token">${t("auth.tokenLabel")}</label>
+            <input id="token" name="token" type="password" autocomplete="off" placeholder="${escapeHtml(t("auth.tokenHint"))}" autofocus />
+          </div>
+          <div class="login-help">
+            <p>${t("auth.fixedRepo", { repo: `<span class="path">${escapeHtml(FIXED_REPOSITORY)}</span>`, branch: `<span class="path">${escapeHtml(FIXED_DEFAULT_BRANCH)}</span>` })}</p>
+            <p>${t("auth.minimumPermissions")}</p>
+            <p>${t("auth.tokenRepoScope")}</p>
+            <p><a href="https://github.com/settings/personal-access-tokens" target="_blank" rel="noopener noreferrer">${t("auth.openTokenSettings")}</a></p>
+          </div>
         </div>
         <figure class="login-permissions-example">
           <figcaption>
