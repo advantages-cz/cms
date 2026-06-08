@@ -2763,6 +2763,9 @@ function treeIconSvg(iconClass) {
 }
 
 function isLowEmphasisTreeFile(path) {
+  if (String(path || "").toLowerCase() === "agents.md") {
+    return true;
+  }
   const ext = extensionOf(path);
   return !["md", "mdx", "html", "htm", "svg", "pdf", "png", "jpg", "jpeg", "gif", "webp", "avif"].includes(ext);
 }
@@ -3944,6 +3947,10 @@ function sortTree(node) {
 }
 
 function compareTreeFiles(a, b) {
+  const specialRankDiff = treeSpecialFileRank(a) - treeSpecialFileRank(b);
+  if (specialRankDiff) {
+    return specialRankDiff;
+  }
   const rankDiff = treeFileRank(a) - treeFileRank(b);
   if (rankDiff) {
     return rankDiff;
@@ -3977,9 +3984,19 @@ function treeFileRank(file) {
   if (isReadmePath(file.path)) {
     return 0;
   }
-  const lowEmphasisRank = isLowEmphasisTreeFile(file.path) ? 2 : 0;
+  const lowEmphasisRank = isLowEmphasisTreeFile(file.path) ? 1 : 0;
   const hiddenRank = file.name.startsWith(".") ? 1 : 0;
   return 1 + lowEmphasisRank + hiddenRank;
+}
+
+function treeSpecialFileRank(file) {
+  if (isReadmePath(file.path)) {
+    return 0;
+  }
+  if (isRozcestnikPath(file.path)) {
+    return 1;
+  }
+  return 2;
 }
 
 function treeDirRank(dir) {

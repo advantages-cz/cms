@@ -113,8 +113,9 @@ Implemented capabilities:
 - Repository content refresh shows an animated busy status with loaded/total/remaining file counts while startup text contents are being hydrated.
 - After a saved token or login starts repository connection, the welcome/workflow page is replaced by a focused connection status screen; token or repository errors remain visible with retry and change-token actions.
 - Tree browser for repository contents.
-- CMS-oriented tree sorting: root `README.md` opens by default; each level sorts `README.md` first, regular files, dotfiles, regular folders, then dot-prefixed folders.
+- CMS-oriented tree sorting: root `README.md` opens by default; each level sorts `README.md` first, `rozcestnik.md` second, then regular files, dotfiles, regular folders, and dot-prefixed folders.
 - Root-level muted technical folders and files are hidden from the tree instead of being rendered in a dimmed state.
+- `AGENTS.md` is rendered as a muted technical file in the tree.
 - Markdown front matter titles in the tree when available, with the filename shown in muted parentheses.
 - Front matter titles and fulltext search are populated from hydrated startup content instead of separate background Git blob reads.
 - Search input rendering is debounced so fast typing is not interrupted by immediate result re-renders.
@@ -362,7 +363,7 @@ Reasoning: Repository trees and previews need different amounts of space dependi
 
 ### 2026-06-02: Sort Tree For CMS Browsing
 
-Decision: If no URL selection is present, the CMS opens root `README.md` by default. Each tree level shows `README.md` first, then regular files, dotfiles, regular folders, and dot-prefixed folders such as `.github`. `README.md` uses a home-style icon.
+Decision: If no URL selection is present, the CMS opens root `README.md` by default. Each tree level shows `README.md` first, `rozcestnik.md` second, then regular files, dotfiles, regular folders, and dot-prefixed folders such as `.github`. `README.md` uses a home-style icon.
 
 Reasoning: Content editors usually need the local landing page or index before implementation folders. This keeps CMS-oriented content near the top without changing repository structure.
 
@@ -371,6 +372,10 @@ Reasoning: Content editors usually need the local landing page or index before i
 Decision: Root-level muted technical folders and files are removed from the tree render instead of being shown in a low-emphasis style.
 
 Reasoning: The muted root items were still adding visual noise even though they were intentionally de-emphasized. Hiding them makes the default repository tree cleaner while keeping deeper non-root files available for browsing.
+
+Decision: `AGENTS.md` is treated as a muted technical file in the tree.
+
+Reasoning: The agent guidance file is useful for the workspace but should not visually compete with the main content pages.
 
 ### 2026-06-02: Show Front Matter Titles In Tree
 
@@ -407,6 +412,12 @@ Reasoning: GitHub API rate limits are tight during token verification and branch
 Decision: Give `rozcestnik.md` a dedicated signpost-style icon in the file tree and changed-file lists instead of the default Markdown icon.
 
 Reasoning: The file acts as a navigation hub, so a distinct icon makes its role visible without changing editing, preview, or routing behavior.
+
+### 2026-06-08: Pin `rozcestnik.md` Near `README.md`
+
+Decision: In each folder, sort `README.md` first and `rozcestnik.md` second before applying the existing file ordering rules for everything else.
+
+Reasoning: The two CMS navigation pages should stay at the top of every folder listing so editors can find the primary entry points quickly without changing the rest of the tree order.
 
 ### 2026-06-03: Capture Editor Submit Content From Form Data
 
