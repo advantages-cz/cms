@@ -119,6 +119,7 @@ let treePaneResizeDrag = null;
 let backgroundRenderPending = false;
 let globalSearchTypingTimer = null;
 let globalSearchTyping = false;
+let focusRestoreToken = 0;
 
 function normalizeTab(tab) {
   return ["files", "changes", "commits", "actions"].includes(tab) ? tab : tab === "review" ? "changes" : "files";
@@ -4724,6 +4725,7 @@ function captureFocusSnapshot() {
 
   return {
     id: active.id,
+    value: "value" in active ? active.value : "",
     selectionStart: "selectionStart" in active ? active.selectionStart : null,
     selectionEnd: "selectionEnd" in active ? active.selectionEnd : null,
   };
@@ -4734,7 +4736,13 @@ function restoreFocusSnapshot(snapshot) {
     return;
   }
 
+  focusRestoreToken += 1;
+  const token = focusRestoreToken;
   window.requestAnimationFrame(() => {
+    if (token !== focusRestoreToken) {
+      return;
+    }
+
     const target = document.getElementById(snapshot.id);
     if (!(target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement || target instanceof HTMLSelectElement)) {
       return;
@@ -4743,6 +4751,7 @@ function restoreFocusSnapshot(snapshot) {
     target.focus({ preventScroll: true });
     if (
       (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement) &&
+      target.value === snapshot.value &&
       snapshot.selectionStart !== null &&
       snapshot.selectionEnd !== null
     ) {

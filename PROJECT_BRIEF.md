@@ -487,6 +487,12 @@ Decision: The optional Discourse discussion workflow is available for any select
 
 Reasoning: Review conversations often belong to generated artifacts or binary deliverables rather than only source Markdown. Using the CMS file URL as the common lookup key keeps the MVP static and credential-free while preserving Markdown-specific conveniences where they exist.
 
+### 2026-06-08: Stabilize Search Input During Re-Renders
+
+Decision: The global search input now ignores stale deferred focus restores from older renders and only reapplies the saved caret position when the freshly rendered field still has the same value.
+
+Reasoning: Search updates intentionally re-render the files pane while the user types. Without guarding the delayed focus restoration, an older render can move the caret backward after a newer keystroke, which makes fast typing appear to drop or reorder characters.
+
 ### 2026-06-08: Keep File Actions In The File Header
 
 Decision: The selected-file header owns file-specific actions such as `Upravit`, back-to-preview, and Discourse discussion links. The top toolbar keeps branch switching, PR, and refresh workflow controls only.
