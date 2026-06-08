@@ -26,6 +26,7 @@ export const resources = {
       closeError: "Close error",
       closeNotification: "Close notification",
       theme: "Theme",
+      clear: "Clear",
     },
     theme: {
       auto: "Auto",
@@ -38,6 +39,7 @@ export const resources = {
       results: "Search results",
       resultCount: "{count} results",
       noMatches: "No matching files or content found. Try a different search.",
+      clear: "Clear search",
       match: {
         title: "title",
         file: "file",
@@ -357,6 +359,7 @@ export const resources = {
       closeError: "Zavřít chybu",
       closeNotification: "Zavřít oznámení",
       theme: "Vzhled",
+      clear: "Vymazat",
     },
     theme: {
       auto: "Automaticky",
@@ -369,6 +372,7 @@ export const resources = {
       results: "Výsledky hledání",
       resultCount: "{count} výsledků",
       noMatches: "Nenalezeny žádné odpovídající soubory ani obsah. Zkuste jiný dotaz.",
+      clear: "Vymazat hledání",
       match: {
         title: "titulek",
         file: "soubor",
