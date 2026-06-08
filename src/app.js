@@ -3959,14 +3959,13 @@ function discussionTopicBody(context = selectedDiscussionContext()) {
   const quoteBlock = discussionQuoteBlock();
   const githubUrl = githubFileUrlForSelection();
   const githubLine = quoteBlock ? `GitHub Location: ${githubUrl}` : githubUrl;
-  const cmsLine = `This discussion is based on [this document](${cmsDocumentUrlForSelection()}) in Adaptivio CMS.`;
-  const lookupLine = `Adaptivio CMS lookup key: ${discussionLookupKeyForSelection()}`;
+  const cmsLine = `This discussion is based on [this document](${cmsDocumentUrlForSelection()}) in Adaptivio CMS (${discussionLookupKeyForSelection()}).`;
 
   if (quoteBlock) {
-    return `${quoteBlock}\n\n${githubLine}\n${cmsLine}\n${lookupLine}`;
+    return `${quoteBlock}\n\n${githubLine}\n${cmsLine}`;
   }
 
-  return `${githubLine}\n${cmsLine}\n${lookupLine}`;
+  return `${githubLine}\n${cmsLine}`;
 }
 
 function githubFileUrlForSelection() {

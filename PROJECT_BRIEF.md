@@ -522,6 +522,12 @@ Decision: The Discourse search link no longer searches by raw CMS document URL a
 
 Reasoning: Discourse tokenizes URLs and broad domain matches made the previous URL-only search return many unrelated topics. A stable lookup token preserves the static no-auth workflow while making newly created discussion topics discoverable by exact file identity.
 
+### 2026-06-09: Inline Discourse Lookup Key In The Document Reference Sentence
+
+Decision: The pre-filled Discourse topic body now renders the CMS document reference as a single sentence with the deterministic lookup key inline in parentheses, for example `This discussion is based on this document in Adaptivio CMS (avdsref...).`, instead of placing the key on a separate line.
+
+Reasoning: Keeping the reference and lookup token in one sentence makes the topic body easier to scan while preserving exact-key discovery for `Open discussion`.
+
 ## Update Protocol
 
 When the project changes, update this document in the same commit as the related code or configuration change.

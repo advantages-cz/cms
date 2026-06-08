@@ -82,7 +82,7 @@ For the discussion MVP:
 
 - `discourseUrl` points to the self-hosted Discourse base URL.
 - `discourseCategoryId` and `discourseTags` optionally prefill topic creation.
-- `Open discussion` uses Discourse search for a deterministic lookup key derived from the exact current CMS file URL, while `Create topic` writes the same key into the pre-filled topic body and opens `/new-topic` with title, body, category, and tags as described in the official Discourse guide.
+- `Open discussion` uses Discourse search for a deterministic lookup key derived from the exact current CMS file URL, while `Create topic` writes that key inline in the pre-filled document reference sentence as `This discussion is based on this document in Adaptivio CMS (avdsref...).` and opens `/new-topic` with title, body, category, and tags as described in the official Discourse guide.
 - Markdown files keep the richer discussion prefill behavior: selected quote snippets, front matter discussion titles, and owner-derived category hints.
 
 ## Localization
