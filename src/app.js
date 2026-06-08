@@ -3731,7 +3731,6 @@ function selectedDiscussionContext() {
   const context = {
     supported: false,
     title,
-    canonicalUrl: "",
     discourseUrl,
     message: "",
     topicTitle: "",
@@ -3751,66 +3750,12 @@ function selectedDiscussionContext() {
     return context;
   }
 
-  context.canonicalUrl = discussionCanonicalUrlForSelection();
-  if (!context.canonicalUrl) {
-    context.message = t("discussion.needsCanonical");
-    return context;
-  }
-
   context.topicTitle = discussionTopicTitleForSelection();
   context.composerUrl = discourseComposerUrl(context);
   context.searchUrl = discourseSearchUrl(context);
 
   context.supported = true;
   return context;
-}
-
-function discussionCanonicalUrlForSelection() {
-  if (!state.selectedPath) {
-    return "";
-  }
-
-  const explicit = extractFrontMatterValue(state.editor?.content || "", ["canonical_url", "canonicalUrl", "canonical", "url"]);
-  if (explicit && /^https?:\/\//i.test(explicit)) {
-    return explicit;
-  }
-
-  const baseUrl = String(state.publicConfig.discourseCanonicalBaseUrl || state.publicConfig.discussion?.canonicalBaseUrl || "").trim();
-  if (!baseUrl) {
-    return "";
-  }
-
-  const normalizedBase = baseUrl.replace(/\/+$/g, "");
-  const path = canonicalPathForDocument(state.selectedPath);
-  return path ? `${normalizedBase}/${path}` : normalizedBase;
-}
-
-function canonicalPathForDocument(path) {
-  const strips = [
-    ...(Array.isArray(state.publicConfig.discourseCanonicalPathStrip) ? state.publicConfig.discourseCanonicalPathStrip : []),
-    ...(Array.isArray(state.publicConfig.discussion?.canonicalPathStrip) ? state.publicConfig.discussion.canonicalPathStrip : []),
-  ]
-    .map((item) => normalizePath(String(item || "")))
-    .filter(Boolean);
-  let normalized = normalizePath(path).replace(/^\/+/, "");
-
-  for (const prefix of strips) {
-    if (normalized === prefix) {
-      normalized = "";
-      break;
-    }
-    if (normalized.startsWith(`${prefix}/`)) {
-      normalized = normalized.slice(prefix.length + 1);
-      break;
-    }
-  }
-
-  return normalized
-    .replace(/\/README\.mdx?$/i, "/")
-    .replace(/\/index\.mdx?$/i, "/")
-    .replace(/\.mdx?$/i, "")
-    .replace(/\/+/g, "/")
-    .replace(/^\/+|\/+$/g, "");
 }
 
 function discussionTopicTitleForSelection() {
@@ -3824,7 +3769,7 @@ function discussionTopicTitleForSelection() {
 }
 
 function discourseComposerUrl(context = selectedDiscussionContext()) {
-  if (!context.discourseUrl || !context.canonicalUrl) {
+  if (!context.discourseUrl) {
     return "";
   }
 
@@ -4013,11 +3958,24 @@ function serializeChildrenInline(element) {
 
 function serializeChildrenBlock(element) {
   const parts = [];
+  let inlineBuffer = "";
   for (const child of element.childNodes) {
-    const value = serializeSelectionNode(child, { mode: "block" });
+    const isBlockChild = child.nodeType === Node.ELEMENT_NODE && isSelectionBlockElement(child);
+    const value = serializeSelectionNode(child, { mode: isBlockChild ? "block" : "inline" });
     if (value) {
-      parts.push(value);
+      if (isBlockChild) {
+        if (inlineBuffer) {
+          parts.push(normalizeInlineMarkdown(inlineBuffer));
+          inlineBuffer = "";
+        }
+        parts.push(value);
+      } else {
+        inlineBuffer += value;
+      }
     }
+  }
+  if (inlineBuffer) {
+    parts.push(normalizeInlineMarkdown(inlineBuffer));
   }
   return parts.join("\n\n");
 }
@@ -4027,9 +3985,13 @@ function hasBlockSelectionChild(element) {
     if (child.nodeType !== Node.ELEMENT_NODE) {
       return false;
     }
-    const tag = child.tagName.toLowerCase();
-    return ["p", "div", "ul", "ol", "li", "pre", "blockquote", "table", "hr"].includes(tag);
+    return isSelectionBlockElement(child);
   });
+}
+
+function isSelectionBlockElement(element) {
+  const tag = element.tagName.toLowerCase();
+  return ["p", "div", "ul", "ol", "li", "pre", "blockquote", "table", "hr"].includes(tag);
 }
 
 function absoluteSelectionHref(element) {
@@ -4104,7 +4066,7 @@ function normalizeDiscussionCategoryName(value) {
 function openDiscourseComposer() {
   const context = selectedDiscussionContext();
   if (!context.composerUrl) {
-    toast(t("discussion.needsCanonical"), "warn");
+    toast(t("discussion.needsDiscourseUrl"), "warn");
     return;
   }
   window.open(context.composerUrl, "_blank", "noopener,noreferrer");
@@ -4122,7 +4084,7 @@ function discourseSearchUrl(context = selectedDiscussionContext()) {
 function openDiscourseSearch() {
   const context = selectedDiscussionContext();
   if (!context.searchUrl) {
-    toast(t("discussion.needsCanonical"), "warn");
+    toast(t("discussion.needsDiscourseUrl"), "warn");
     return;
   }
   window.open(context.searchUrl, "_blank", "noopener,noreferrer");

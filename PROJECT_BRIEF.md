@@ -142,7 +142,7 @@ Implemented capabilities:
 - Rendered Markdown preview in browse mode.
 - Front matter-aware Markdown rendering.
 - Collapsed front matter display in rendered Markdown preview.
-- Optional Discourse discussion side panel for Markdown documents. The panel opens from the file header and supports a no-auth MVP for private Discourse instances by opening Discourse search for the document canonical URL and a pre-filled `new-topic` composer built from the current document metadata.
+- Optional Discourse discussion side panel for Markdown documents. The panel opens from the file header and supports a no-auth MVP for private Discourse instances by opening Discourse search for the current CMS document URL and a pre-filled `new-topic` composer built from the current document metadata.
 - Internal Markdown links resolved through the CMS tree instead of navigating the browser frame; links to existing directories select and expand the matching tree folder.
 - Markdown heading anchors normalize diacritics consistently between generated heading IDs and rendered internal links.
 - Markdown preview hides HTML comments and supports angle-bracket link destinations with spaces, such as `[PDF](<vystupy/test pozvanky/file.pdf>)`.
@@ -216,7 +216,7 @@ Implemented capabilities:
 - Document OAuth App setup with screenshots or exact GitHub settings.
 - Add dependency policy before introducing external packages.
 - Review sandbox settings before enabling any richer preview mode.
-- Keep Discourse embed origins and canonical URL rules documented before using the discussion panel outside internal deployments.
+- Keep Discourse embed origins documented before using the discussion panel outside internal deployments.
 
 ### Deployment
 
@@ -474,6 +474,12 @@ Follow-up: The earlier background title and fulltext scans were removed after st
 Decision: Language and theme selectors live inside the signed-in user menu, whose trigger now includes a visible caret and expanded state.
 
 Reasoning: Locale and visual theme are account/session preferences, not primary content workflow actions. Moving them into the menu leaves toolbar space for repository search and branch actions.
+
+### 2026-06-08: Remove Canonical URL Discussion Mapping
+
+Decision: The Discourse discussion workflow no longer reads or generates canonical document URLs. Both Discourse search and the prefilled topic body use the current CMS document URL instead, and the optional canonical-related config keys were removed.
+
+Reasoning: The canonical URL mapping was only used as an internal lookup string, not as a stable public route. Reusing the existing CMS URL removes extra configuration and front matter expectations without changing the static GitHub Pages architecture.
 
 ## Update Protocol
 

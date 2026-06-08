@@ -29,7 +29,7 @@ Adaptivio also needs GitHub Actions status, failing check annotations, detection
 - Shows workflow runs for the current branch.
 - Optionally loads check runs and check annotations for CI errors when the token/installation supports the Checks API.
 - Renders Markdown previews including front matter.
-- Opens a slide-over Discourse discussion panel for the selected Markdown document, using `canonical_url` front matter or a configured canonical base URL plus plain Discourse links for opening search and a pre-filled new-topic composer.
+- Opens a slide-over Discourse discussion panel for the selected Markdown document, using the current CMS document URL plus plain Discourse links for opening search and a pre-filled new-topic composer.
 - Previews HTML in a sandboxed iframe with relative image/SVG/CSS assets resolved when possible.
 - Previews PDF, SVG, images, and text.
 - Supports English and Czech UI through `src/i18n.js`; English is the default language.
@@ -62,8 +62,6 @@ An optional `cms.config.json` file can live next to `index.html`:
   "editablePathHints": ["content/", "docs/", "data/", "assets/"],
   "previewPathHints": ["dist/", "public/", "site/", "exports/"],
   "discourseUrl": "https://discourse.example.internal/",
-  "discourseCanonicalBaseUrl": "https://content.example.internal",
-  "discourseCanonicalPathStrip": ["content"],
   "discourseCategoryId": 12,
   "discourseTags": ["cms", "docs"]
 }
@@ -82,11 +80,8 @@ Authentication is token-only. The app does not use `githubOAuthClientId` for log
 For the discussion MVP:
 
 - `discourseUrl` points to the self-hosted Discourse base URL.
-- `discourseCanonicalBaseUrl` is used when a Markdown file does not define `canonical_url` in front matter.
-- `discourseCanonicalPathStrip` optionally removes leading repository path segments before the CMS builds a canonical URL from the selected Markdown path.
 - `discourseCategoryId` and `discourseTags` optionally prefill topic creation.
-- When `canonical_url` is present in front matter, it wins over the generated URL.
-- `Open discussion` uses Discourse search for the canonical URL, while `Create topic` opens `/new-topic` with a pre-filled title, body, category, and tags as described in the official Discourse guide.
+- `Open discussion` uses Discourse search for the current CMS document URL, while `Create topic` opens `/new-topic` with a pre-filled title, body, category, and tags as described in the official Discourse guide.
 
 ## Localization
 

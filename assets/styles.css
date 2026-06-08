@@ -507,14 +507,6 @@ a:hover {
   overflow: hidden;
 }
 
-.discussion-canonical-link {
-  overflow-wrap: anywhere;
-  color: var(--muted);
-  font-family: var(--mono);
-  font-size: 11px;
-  line-height: 1.4;
-}
-
 .discussion-topic-shell {
   display: grid;
   gap: 12px;
