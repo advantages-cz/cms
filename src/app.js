@@ -149,6 +149,13 @@ app.addEventListener("submit", (event) => {
 });
 
 app.addEventListener("click", (event) => {
+  if (event.target instanceof HTMLElement && event.target.classList.contains("modal-backdrop")) {
+    event.preventDefault();
+    state.modal = null;
+    render();
+    return;
+  }
+
   const button = event.target.closest("[data-action]");
   if (!button) {
     return;
@@ -204,6 +211,14 @@ window.addEventListener("pointercancel", () => {
 
 window.addEventListener("popstate", () => {
   void restoreSelectionFromLocation();
+});
+
+window.addEventListener("keydown", (event) => {
+  if (event.key !== "Escape" || !state.modal) {
+    return;
+  }
+  state.modal = null;
+  render();
 });
 
 systemDarkQuery?.addEventListener("change", () => {
@@ -473,7 +488,11 @@ async function handleAction(button) {
       toast(t("edit.startFirst"), "warn");
       return;
     }
-    state.modal = { type: button.dataset.modal };
+    state.modal = {
+      type: button.dataset.modal,
+      imageSrc: button.dataset.imageSrc || "",
+      imageAlt: button.dataset.imageAlt || "",
+    };
     state.userMenuOpen = false;
     render();
     return;
@@ -2311,6 +2330,24 @@ function renderLoginScreen(message) {
           <p>${t("auth.minimumPermissions")}</p>
           <p>${t("auth.tokenRepoScope")}</p>
         </div>
+        <figure class="login-permissions-example">
+          <figcaption>
+            <strong>${t("auth.permissionsExampleTitle")}</strong>
+            <span>${t("auth.permissionsExampleBody")}</span>
+          </figcaption>
+          <button
+            class="login-permissions-trigger"
+            type="button"
+            data-action="open-modal"
+            data-modal="image-preview"
+            data-image-src="assets/permissions-example.svg"
+            data-image-alt="${escapeHtml(t("auth.permissionsExampleBody"))}"
+            aria-label="${escapeHtml(t("auth.permissionsZoom"))}"
+          >
+            <img src="assets/permissions-example.svg" alt="${escapeHtml(t("auth.permissionsExampleBody"))}" loading="lazy" />
+            <span class="login-permissions-zoom">${t("auth.permissionsZoom")}</span>
+          </button>
+        </figure>
         <button class="primary" type="submit">${t("auth.saveToken")}</button>
       </form>
     </section>
@@ -2910,7 +2947,21 @@ function renderPreviewPane(mode = "") {
   }
 
   if (state.preview.kind === "image") {
-    return `<img class="preview-image${fullClass}" alt="Preview ${escapeHtml(state.preview.path)}" src="${escapeHtml(state.preview.url)}" />`;
+    const alt = `Preview ${state.preview.path}`;
+    return `
+      <button
+        class="preview-image-trigger${fullClass}"
+        type="button"
+        data-action="open-modal"
+        data-modal="image-preview"
+        data-image-src="${escapeHtml(state.preview.url)}"
+        data-image-alt="${escapeHtml(alt)}"
+        aria-label="${escapeHtml(t("files.zoomImage"))}"
+      >
+        <img class="preview-image${fullClass}" alt="${escapeHtml(alt)}" src="${escapeHtml(state.preview.url)}" />
+        <span class="preview-image-zoom">${t("files.zoomImage")}</span>
+      </button>
+    `;
   }
 
   if (state.preview.kind === "pdf") {
@@ -3594,6 +3645,7 @@ function renderModal() {
     "create-text-file": renderCreateTextFileModal,
     "create-folder": renderCreateFolderModal,
     "create-pr": renderCreatePrModal,
+    "image-preview": renderImagePreviewModal,
   }[state.modal.type]?.();
 
   if (!body) {
@@ -3625,6 +3677,26 @@ function renderAuthModal() {
         <button class="primary" type="submit">${t("auth.saveToken")}</button>
       </div>
     </form>
+  `;
+}
+
+function renderImagePreviewModal() {
+  if (!state.modal?.imageSrc) {
+    return "";
+  }
+
+  return `
+    <div class="modal modal-image-preview" role="dialog" aria-modal="true" aria-label="${escapeHtml(t("auth.permissionsExampleTitle"))}">
+      <div class="modal-header">
+        <h2>${t("auth.permissionsExampleTitle")}</h2>
+      </div>
+      <div class="modal-body image-preview-body">
+        <img src="${escapeHtml(state.modal.imageSrc)}" alt="${escapeHtml(state.modal.imageAlt || t("auth.permissionsExampleBody"))}" />
+      </div>
+      <div class="modal-footer">
+        <button type="button" data-action="close-modal">${t("common.close")}</button>
+      </div>
+    </div>
   `;
 }
 

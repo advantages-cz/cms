@@ -795,6 +795,65 @@ textarea:focus {
   gap: 6px;
 }
 
+.login-permissions-example {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: linear-gradient(180deg, rgba(18, 23, 31, 0.96), rgba(14, 18, 25, 0.96));
+}
+
+.login-permissions-example figcaption {
+  display: grid;
+  gap: 4px;
+}
+
+.login-permissions-example strong {
+  font-size: 13px;
+}
+
+.login-permissions-example span {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.login-permissions-example img {
+  display: block;
+  width: 100%;
+  height: auto;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 10px;
+  background: #11151c;
+}
+
+.login-permissions-trigger {
+  display: grid;
+  gap: 10px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  text-align: left;
+  cursor: zoom-in;
+}
+
+.login-permissions-trigger img {
+  transition: transform 160ms ease, box-shadow 160ms ease;
+}
+
+.login-permissions-trigger:hover img,
+.login-permissions-trigger:focus-visible img {
+  transform: scale(1.01);
+  box-shadow: 0 14px 28px rgba(0, 0, 0, 0.18);
+}
+
+.login-permissions-zoom {
+  color: var(--muted);
+  font-size: 12px;
+}
+
 .login-card .primary {
   width: 100%;
 }
@@ -2136,6 +2195,27 @@ mark,
   background: #ffffff;
 }
 
+.preview-image-trigger {
+  display: grid;
+  gap: 10px;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  text-align: left;
+  cursor: zoom-in;
+}
+
+.preview-image-trigger.preview-full {
+  height: 100%;
+  min-height: 0;
+}
+
+.preview-image-trigger:hover .preview-image,
+.preview-image-trigger:focus-visible .preview-image {
+  box-shadow: 0 16px 32px rgba(0, 0, 0, 0.12);
+}
+
 .preview-full {
   height: 100%;
   min-height: 0;
@@ -2143,6 +2223,11 @@ mark,
 
 .preview-image.preview-full {
   max-height: 100%;
+}
+
+.preview-image-zoom {
+  color: var(--muted);
+  font-size: 12px;
 }
 
 .preview-code {
@@ -2538,6 +2623,25 @@ mark,
   justify-content: flex-end;
   gap: 8px;
   border-top: 1px solid var(--line);
+}
+
+.modal-image-preview {
+  width: min(1180px, 100%);
+}
+
+.image-preview-body {
+  padding-top: 16px;
+}
+
+.image-preview-body img {
+  display: block;
+  width: 100%;
+  height: auto;
+  max-height: calc(100vh - 210px);
+  object-fit: contain;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: #11151c;
 }
 
 .noscript {
