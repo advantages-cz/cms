@@ -14,5 +14,15 @@
     "site/",
     "exports/"
   ],
+  "discourseUrl": "https://discourse.example.internal/",
+  "discourseCanonicalBaseUrl": "https://content.example.internal",
+  "discourseCanonicalPathStrip": [
+    "content"
+  ],
+  "discourseCategoryId": 12,
+  "discourseTags": [
+    "cms",
+    "docs"
+  ],
   "githubOAuthClientId": ""
 }

@@ -507,6 +507,43 @@ a:hover {
   overflow: hidden;
 }
 
+.discussion-canonical-link {
+  overflow-wrap: anywhere;
+  color: var(--muted);
+  font-family: var(--mono);
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.discussion-topic-shell {
+  display: grid;
+  gap: 12px;
+}
+
+.discussion-topic-details {
+  display: grid;
+  gap: 10px;
+}
+
+.discussion-topic-card {
+  display: grid;
+  gap: 8px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  padding: 12px;
+  background: var(--surface-preview);
+}
+
+.discussion-embed-placeholder,
+.discussion-panel-empty {
+  display: grid;
+  place-items: center;
+  gap: 10px;
+  min-height: 220px;
+  padding: 16px;
+  text-align: center;
+}
+
 .content {
   display: flex;
   flex-direction: column;
@@ -2508,6 +2545,7 @@ mark,
   .top-branch-select {
     width: min(280px, 42vw);
   }
+
 }
 
 @media (max-width: 700px) {

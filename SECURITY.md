@@ -16,6 +16,7 @@ For the token, use a fine-grained token scoped to the target repository. Prefer 
 - Repository HTML is previewed in an iframe with an empty `sandbox` attribute.
 - Text content is rendered as escaped text.
 - Binary previews are loaded on demand from authenticated GitHub blob responses into object URLs.
+- The optional Discourse discussion panel MVP uses plain links into the private Discourse instance and does not store a separate Discourse API credential in the browser.
 
 Do not add dependencies that render Markdown or HTML unless they include an explicit sanitizer strategy and are reviewed for XSS behavior.
 

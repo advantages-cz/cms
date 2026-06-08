@@ -142,6 +142,7 @@ Implemented capabilities:
 - Rendered Markdown preview in browse mode.
 - Front matter-aware Markdown rendering.
 - Collapsed front matter display in rendered Markdown preview.
+- Optional Discourse discussion side panel for Markdown documents. The panel opens from the file header and supports a no-auth MVP for private Discourse instances by opening Discourse search for the document canonical URL and a pre-filled `new-topic` composer built from the current document metadata.
 - Internal Markdown links resolved through the CMS tree instead of navigating the browser frame; links to existing directories select and expand the matching tree folder.
 - Markdown heading anchors normalize diacritics consistently between generated heading IDs and rendered internal links.
 - Markdown preview hides HTML comments and supports angle-bracket link destinations with spaces, such as `[PDF](<vystupy/test pozvanky/file.pdf>)`.
@@ -215,6 +216,7 @@ Implemented capabilities:
 - Document OAuth App setup with screenshots or exact GitHub settings.
 - Add dependency policy before introducing external packages.
 - Review sandbox settings before enabling any richer preview mode.
+- Keep Discourse embed origins and canonical URL rules documented before using the discussion panel outside internal deployments.
 
 ### Deployment
 

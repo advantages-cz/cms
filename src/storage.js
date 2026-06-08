@@ -1,6 +1,7 @@
 const SETTINGS_KEY = "adaptivio.cms.settings.v1";
 const SESSION_TOKEN_KEY = "adaptivio.cms.token.session.v1";
 const LOCAL_TOKEN_KEY = "adaptivio.cms.token.local.v1";
+const SESSION_DISCOURSE_AUTH_KEY = "adaptivio.cms.discourse-auth.session.v1";
 const LAST_SAVE_PREFIX = "adaptivio.cms.last-save.v1";
 
 export function loadSettings() {
@@ -45,6 +46,31 @@ export function clearToken() {
   localStorage.removeItem(LOCAL_TOKEN_KEY);
 }
 
+export function loadDiscourseAuth() {
+  return readJson(sessionStorage.getItem(SESSION_DISCOURSE_AUTH_KEY), {
+    apiKey: "",
+    apiUsername: "",
+  });
+}
+
+export function saveDiscourseAuth(auth) {
+  const payload = {
+    apiKey: String(auth?.apiKey || "").trim(),
+    apiUsername: String(auth?.apiUsername || "").trim(),
+  };
+
+  if (!payload.apiKey && !payload.apiUsername) {
+    sessionStorage.removeItem(SESSION_DISCOURSE_AUTH_KEY);
+    return;
+  }
+
+  sessionStorage.setItem(SESSION_DISCOURSE_AUTH_KEY, JSON.stringify(payload));
+}
+
+export function clearDiscourseAuth() {
+  sessionStorage.removeItem(SESSION_DISCOURSE_AUTH_KEY);
+}
+
 export function loadLastSave(owner, repo, branch) {
   return readJson(localStorage.getItem(lastSaveKey(owner, repo, branch)), null);
 }
@@ -68,4 +94,3 @@ function readJson(value, fallback) {
     return fallback;
   }
 }
-

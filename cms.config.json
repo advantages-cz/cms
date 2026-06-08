@@ -1,4 +1,6 @@
 {
   "branchPrefix": "cms/",
-  "githubOAuthClientId": "Ov23li34Vu7c8ehr3s0r"
+  "githubOAuthClientId": "Ov23li34Vu7c8ehr3s0r",
+  "discourseUrl": "https://support.advantages.cz",
+  "discourseCanonicalBaseUrl": "https://avds.adaptivio.com"
 }

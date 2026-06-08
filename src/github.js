@@ -11,6 +11,16 @@ export class GitHubError extends Error {
   }
 }
 
+export class DiscourseError extends Error {
+  constructor(message, response, payload, meta = {}) {
+    super(message);
+    this.name = "DiscourseError";
+    this.status = response?.status;
+    this.payload = payload;
+    this.meta = meta;
+  }
+}
+
 export class GitHubClient {
   constructor(token) {
     this.token = token;
@@ -278,6 +288,73 @@ export class GitHubClient {
       },
       body,
     }).then(readOAuthResponse);
+  }
+}
+
+export class DiscourseClient {
+  constructor({ baseUrl, apiKey, apiUsername }) {
+    this.baseUrl = String(baseUrl || "").replace(/\/+$/g, "");
+    this.apiKey = apiKey;
+    this.apiUsername = apiUsername;
+  }
+
+  async request(path, options = {}) {
+    const { payload } = await this.requestWithMeta(path, options);
+    return payload;
+  }
+
+  async requestWithMeta(path, options = {}) {
+    const url = path.startsWith("http") ? path : `${this.baseUrl}${path}`;
+    const method = options.method || "GET";
+    const headers = {
+      Accept: "application/json",
+      ...(options.headers || {}),
+    };
+
+    if (this.apiKey) {
+      headers["Api-Key"] = this.apiKey;
+    }
+    if (this.apiUsername) {
+      headers["Api-Username"] = this.apiUsername;
+    }
+    if (options.body && !headers["Content-Type"]) {
+      headers["Content-Type"] = "application/json";
+    }
+
+    const response = await fetch(url, {
+      cache: "no-store",
+      ...options,
+      headers,
+    });
+
+    const text = await response.text();
+    const payload = parseJson(text);
+    const meta = readResponseMeta(response, { method, path, url });
+
+    if (!response.ok) {
+      const message = payload?.message || payload?.errors?.join?.(", ") || response.statusText || "Discourse API request failed";
+      throw new DiscourseError(message, response, payload, meta);
+    }
+
+    return { payload, meta };
+  }
+
+  async getTopicByExternalId(externalId) {
+    return this.request(`/t/external_id/${encodeURIComponent(externalId)}.json`);
+  }
+
+  async createTopic({ title, raw, category, tags = [], embedUrl, externalId }) {
+    return this.request("/posts.json", {
+      method: "POST",
+      body: JSON.stringify({
+        title,
+        raw,
+        category,
+        tags,
+        embed_url: embedUrl,
+        external_id: externalId,
+      }),
+    });
   }
 }
 

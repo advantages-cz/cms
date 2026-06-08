@@ -6,24 +6,16 @@ import {
   prepareEditorForSave,
   readSaveFileFormData,
   upsertFileMetadata as upsertFileMetadataState,
-} from "./editorWorkflow.js?v=20260608-shared-cache-bust";
-import { GitHubClient, GitHubError } from "./github.js?v=20260608-shared-cache-bust";
-import { DEFAULT_LANGUAGE, LANGUAGES, normalizeLanguage, translate } from "./i18n.js?v=20260608-shared-cache-bust";
+} from "./editorWorkflow.js?v=20260608-discussion-links-mvp";
+import { GitHubClient, GitHubError } from "./github.js?v=20260608-discussion-links-mvp";
+import { DEFAULT_LANGUAGE, LANGUAGES, normalizeLanguage, translate } from "./i18n.js?v=20260608-discussion-links-mvp";
 import {
   loadCachedContents,
   loadRepositoryCache,
   saveCachedContent,
   saveRepositoryCache,
-} from "./repoCache.js?v=20260608-shared-cache-bust";
-import {
-  clearToken,
-  loadLastSave,
-  loadSettings,
-  loadToken,
-  saveLastSave,
-  saveSettings,
-  saveToken,
-} from "./storage.js?v=20260608-shared-cache-bust";
+} from "./repoCache.js?v=20260608-discussion-links-mvp";
+import { clearToken, loadLastSave, loadSettings, loadToken, saveLastSave, saveSettings, saveToken } from "./storage.js?v=20260608-discussion-links-mvp";
 import {
   blobFromBase64,
   classifyConclusion,
@@ -41,7 +33,7 @@ import {
   mimeForPath,
   shortSha,
   textToBase64,
-} from "./utils.js?v=20260608-shared-cache-bust";
+} from "./utils.js?v=20260608-discussion-links-mvp";
 
 const app = document.querySelector("#app");
 const settings = loadSettings();
@@ -273,6 +265,7 @@ async function handleForm(form) {
       toast(t("auth.tokenStorageChanged"), "ok");
       shouldCheckToken = true;
     }
+
     if (shouldCheckToken && state.owner && state.repo) {
       state.modal = null;
       await connectRepository();
@@ -357,6 +350,16 @@ async function handleAction(button) {
 
   if (action === "refresh") {
     await refreshRepositoryData({ preserveSelection: true });
+    return;
+  }
+
+  if (action === "open-discourse-topic") {
+    openDiscourseSearch();
+    return;
+  }
+
+  if (action === "open-discourse-composer") {
+    openDiscourseComposer();
     return;
   }
 
@@ -2014,6 +2017,7 @@ function render({ treeScrollTop = null } = {}) {
   revealSelectedTreeRow();
   restoreFocusSnapshot(focusSnapshot);
   highlightSearchMatches();
+  syncDiscussionEmbed();
 }
 
 function renderBusyOverlay() {
@@ -2508,6 +2512,7 @@ function renderFilesTab() {
         <div class="panel-header">
           ${renderSelectedFileHeading()}
           <div class="button-row panel-actions">
+            ${renderDiscussionHeaderActions()}
             ${state.editor?.dirty ? `<span class="tag warn">${t("files.unsaved")}</span>` : ""}
             ${
               state.editMode && state.selectedPath
@@ -2530,6 +2535,17 @@ function renderSelectedFileHeading() {
       <h2>${escapeHtml(label)}</h2>
       ${selectedStatus ? `<span class="tag status-${escapeHtml(selectedStatus)}">${escapeHtml(formatFileStatusLabel(selectedStatus))}</span>` : ""}
     </div>
+  `;
+}
+
+function renderDiscussionHeaderActions(context = selectedDiscussionContext()) {
+  if (!context.supported || state.editMode || !state.selectedPath || !isMarkdownPath(state.selectedPath)) {
+    return "";
+  }
+
+  return `
+    <button type="button" data-action="open-discourse-topic">${t("discussion.openTopic")}</button>
+    <button class="primary" type="button" data-action="open-discourse-composer">${t("discussion.createTopic")}</button>
   `;
 }
 
@@ -2753,6 +2769,7 @@ function treeIconSvg(iconClass) {
     "tree-icon-data": `${fileBase}<path d="M10 13H9a1 1 0 0 0-1 1v1a1 1 0 0 1-1 1 1 1 0 0 1 1 1v1a1 1 0 0 0 1 1h1"></path><path d="M14 13h1a1 1 0 0 1 1 1v1a1 1 0 0 0 1 1 1 1 0 0 0-1 1v1a1 1 0 0 1-1 1h-1"></path>`,
     "tree-icon-code": `${fileBase}<path d="m10 13-2 2 2 2"></path><path d="m14 13 2 2-2 2"></path>`,
     "tree-icon-image": `${fileBase}<circle cx="10" cy="13" r="1"></circle><path d="m8 18 2.4-2.4a1 1 0 0 1 1.4 0L14 17l1-1a1 1 0 0 1 1.4 0L18 18"></path>`,
+    discussion: '<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2Z"></path><path d="M8 9h8"></path><path d="M8 13h5"></path>',
     refresh: '<path d="M21 12a9 9 0 0 1-15.6 6.1L3 16"></path><path d="M3 21v-5h5"></path><path d="M3 12A9 9 0 0 1 18.6 5.9L21 8"></path><path d="M21 3v5h-5"></path>',
     search: '<path d="m21 21-4.34-4.34"></path><circle cx="11" cy="11" r="8"></circle>',
     file: fileBase,
@@ -3708,6 +3725,409 @@ function fileMatchesSearch(file, query) {
   return Boolean(searchMatchForFile(file, query));
 }
 
+function selectedDiscussionContext() {
+  const title = state.selectedPath || t("discussion.title");
+  const discourseUrl = normalizeDiscourseUrl(state.publicConfig.discourseUrl || state.publicConfig.discussion?.discourseUrl || "");
+  const context = {
+    supported: false,
+    title,
+    canonicalUrl: "",
+    discourseUrl,
+    message: "",
+    topicTitle: "",
+    composerUrl: "",
+    searchUrl: "",
+  };
+
+  if (!state.selectedPath || !state.editor || !isMarkdownPath(state.selectedPath)) {
+    context.message = t("discussion.selectMarkdown");
+    return context;
+  }
+
+  context.title = markdownDisplayTitle(state.files.find((file) => file.path === state.selectedPath)) || state.selectedPath;
+
+  if (!discourseUrl) {
+    context.message = t("discussion.needsDiscourseUrl");
+    return context;
+  }
+
+  context.canonicalUrl = discussionCanonicalUrlForSelection();
+  if (!context.canonicalUrl) {
+    context.message = t("discussion.needsCanonical");
+    return context;
+  }
+
+  context.topicTitle = discussionTopicTitleForSelection();
+  context.composerUrl = discourseComposerUrl(context);
+  context.searchUrl = discourseSearchUrl(context);
+
+  context.supported = true;
+  return context;
+}
+
+function discussionCanonicalUrlForSelection() {
+  if (!state.selectedPath) {
+    return "";
+  }
+
+  const explicit = extractFrontMatterValue(state.editor?.content || "", ["canonical_url", "canonicalUrl", "canonical", "url"]);
+  if (explicit && /^https?:\/\//i.test(explicit)) {
+    return explicit;
+  }
+
+  const baseUrl = String(state.publicConfig.discourseCanonicalBaseUrl || state.publicConfig.discussion?.canonicalBaseUrl || "").trim();
+  if (!baseUrl) {
+    return "";
+  }
+
+  const normalizedBase = baseUrl.replace(/\/+$/g, "");
+  const path = canonicalPathForDocument(state.selectedPath);
+  return path ? `${normalizedBase}/${path}` : normalizedBase;
+}
+
+function canonicalPathForDocument(path) {
+  const strips = [
+    ...(Array.isArray(state.publicConfig.discourseCanonicalPathStrip) ? state.publicConfig.discourseCanonicalPathStrip : []),
+    ...(Array.isArray(state.publicConfig.discussion?.canonicalPathStrip) ? state.publicConfig.discussion.canonicalPathStrip : []),
+  ]
+    .map((item) => normalizePath(String(item || "")))
+    .filter(Boolean);
+  let normalized = normalizePath(path).replace(/^\/+/, "");
+
+  for (const prefix of strips) {
+    if (normalized === prefix) {
+      normalized = "";
+      break;
+    }
+    if (normalized.startsWith(`${prefix}/`)) {
+      normalized = normalized.slice(prefix.length + 1);
+      break;
+    }
+  }
+
+  return normalized
+    .replace(/\/README\.mdx?$/i, "/")
+    .replace(/\/index\.mdx?$/i, "/")
+    .replace(/\.mdx?$/i, "")
+    .replace(/\/+/g, "/")
+    .replace(/^\/+|\/+$/g, "");
+}
+
+function discussionTopicTitleForSelection() {
+  const explicit = extractFrontMatterValue(state.editor?.content || "", ["discussion_title", "discussionTitle"]);
+  if (explicit) {
+    return explicit;
+  }
+  const file = state.files.find((item) => item.path === state.selectedPath);
+  const displayTitle = markdownDisplayTitle(file);
+  return displayTitle ? `Diskuse: ${displayTitle}` : `Diskuse: ${state.selectedPath}`;
+}
+
+function discourseComposerUrl(context = selectedDiscussionContext()) {
+  if (!context.discourseUrl || !context.canonicalUrl) {
+    return "";
+  }
+
+  const url = new URL("/new-topic", context.discourseUrl);
+  const category = discussionCategoryForSelection();
+  const tags = state.publicConfig.discourseTags || state.publicConfig.discussion?.tags || [];
+  url.searchParams.set("title", context.topicTitle);
+  url.searchParams.set("body", discussionTopicBody(context));
+  if (category) {
+    url.searchParams.set("category", String(category));
+  }
+  if (Array.isArray(tags) && tags.length) {
+    url.searchParams.set("tags", tags.join(","));
+  }
+  return url.toString();
+}
+
+function discussionTopicBody(context = selectedDiscussionContext()) {
+  const quoteBlock = discussionQuoteBlock();
+  const githubUrl = githubFileUrlForSelection();
+  const githubLine = quoteBlock ? `GitHub Location: ${githubUrl}` : githubUrl;
+  const cmsLine = `This discussion is based on [this document](${cmsDocumentUrlForSelection()}) in Adaptivio CMS.`;
+
+  if (quoteBlock) {
+    return `${quoteBlock}\n\n${githubLine}\n${cmsLine}`;
+  }
+
+  return `${githubLine}\n${cmsLine}`;
+}
+
+function githubFileUrlForSelection() {
+  if (!state.owner || !state.repo || !state.selectedPath) {
+    return "";
+  }
+  const branch = encodeURIComponent(state.branch || state.defaultBranch || "master");
+  const path = state.selectedPath
+    .split("/")
+    .map((part) => encodeURIComponent(part))
+    .join("/");
+  return `https://github.com/${encodeURIComponent(state.owner)}/${encodeURIComponent(state.repo)}/blob/${branch}/${path}`;
+}
+
+function cmsDocumentUrlForSelection() {
+  const url = new URL(window.location.href);
+  if (state.branch) {
+    url.searchParams.set("branch", state.branch);
+  }
+  if (state.selectedPath) {
+    url.searchParams.set("path", state.selectedPath);
+    url.searchParams.delete("dir");
+  }
+  url.hash = "";
+  return `${url.origin}${url.pathname}${url.search}`;
+}
+
+function discussionQuoteBlock() {
+  const selection = window.getSelection?.();
+  if (!selection || selection.rangeCount === 0 || selection.isCollapsed) {
+    return "";
+  }
+
+  const preview = document.querySelector(".markdown-preview");
+  if (!(preview instanceof HTMLElement)) {
+    return "";
+  }
+
+  const range = selection.getRangeAt(0);
+  const common = range.commonAncestorContainer;
+  const container = common instanceof Element ? common : common.parentElement;
+  if (!container || !preview.contains(container)) {
+    return "";
+  }
+
+  const fragment = range.cloneContents();
+  const markdown = normalizeQuotedMarkdown(serializeSelectionFragment(fragment));
+  if (!markdown) {
+    return "";
+  }
+
+  return markdown
+    .split("\n")
+    .map((line) => `> ${line}`)
+    .join("\n");
+}
+
+function serializeSelectionFragment(fragment) {
+  const blocks = [];
+  for (const node of fragment.childNodes) {
+    const value = serializeSelectionNode(node, { mode: "block" });
+    if (value) {
+      blocks.push(value);
+    }
+  }
+  return blocks.join("\n\n");
+}
+
+function serializeSelectionNode(node, context = { mode: "inline" }) {
+  if (node.nodeType === Node.TEXT_NODE) {
+    return normalizeSelectionWhitespace(node.nodeValue || "", context.mode);
+  }
+
+  if (node.nodeType !== Node.ELEMENT_NODE) {
+    return "";
+  }
+
+  const element = /** @type {HTMLElement} */ (node);
+  const tag = element.tagName.toLowerCase();
+
+  if (tag === "br") {
+    return "\n";
+  }
+
+  if (tag === "strong" || tag === "b") {
+    const content = serializeChildrenInline(element);
+    return content ? `**${content}**` : "";
+  }
+
+  if (tag === "em" || tag === "i") {
+    const content = serializeChildrenInline(element);
+    return content ? `*${content}*` : "";
+  }
+
+  if (tag === "code" && element.parentElement?.tagName.toLowerCase() !== "pre") {
+    const content = serializeChildrenInline(element).replace(/`/g, "\\`");
+    return content ? `\`${content}\`` : "";
+  }
+
+  if (tag === "a") {
+    const content = serializeChildrenInline(element) || element.getAttribute("href") || "";
+    const href = absoluteSelectionHref(element);
+    return href ? `[${content}](${href})` : content;
+  }
+
+  if (tag === "pre") {
+    const text = element.textContent?.replace(/\r\n/g, "\n").trim() || "";
+    return text ? `\`\`\`\n${text}\n\`\`\`` : "";
+  }
+
+  if (tag === "blockquote") {
+    const content = normalizeQuotedMarkdown(serializeChildrenBlock(element));
+    return content
+      .split("\n")
+      .filter(Boolean)
+      .map((line) => `> ${line}`)
+      .join("\n");
+  }
+
+  if (tag === "ul") {
+    return serializeList(element, false);
+  }
+
+  if (tag === "ol") {
+    return serializeList(element, true);
+  }
+
+  if (tag === "li") {
+    return hasBlockSelectionChild(element)
+      ? normalizeQuotedMarkdown(serializeChildrenBlock(element))
+      : normalizeQuotedMarkdown(serializeChildrenInline(element));
+  }
+
+  if (["p", "div"].includes(tag)) {
+    return hasBlockSelectionChild(element)
+      ? normalizeQuotedMarkdown(serializeChildrenBlock(element))
+      : normalizeQuotedMarkdown(serializeChildrenInline(element));
+  }
+
+  if (/^h[1-6]$/.test(tag)) {
+    const level = Number(tag.slice(1));
+    const content = normalizeQuotedMarkdown(serializeChildrenInline(element));
+    return content ? `${"#".repeat(level)} ${content}` : "";
+  }
+
+  return context.mode === "block"
+    ? normalizeQuotedMarkdown(serializeChildrenBlock(element))
+    : serializeChildrenInline(element);
+}
+
+function serializeChildrenInline(element) {
+  let output = "";
+  for (const child of element.childNodes) {
+    output += serializeSelectionNode(child, { mode: "inline" });
+  }
+  return normalizeInlineMarkdown(output);
+}
+
+function serializeChildrenBlock(element) {
+  const parts = [];
+  for (const child of element.childNodes) {
+    const value = serializeSelectionNode(child, { mode: "block" });
+    if (value) {
+      parts.push(value);
+    }
+  }
+  return parts.join("\n\n");
+}
+
+function hasBlockSelectionChild(element) {
+  return [...element.childNodes].some((child) => {
+    if (child.nodeType !== Node.ELEMENT_NODE) {
+      return false;
+    }
+    const tag = child.tagName.toLowerCase();
+    return ["p", "div", "ul", "ol", "li", "pre", "blockquote", "table", "hr"].includes(tag);
+  });
+}
+
+function absoluteSelectionHref(element) {
+  const rawHref = element.getAttribute("href") || "";
+  if (!rawHref) {
+    return "";
+  }
+
+  const resolvedHref = element.href || rawHref;
+  return normalizeMarkdownHref(resolvedHref) || rawHref;
+}
+
+function serializeList(element, ordered) {
+  const items = [...element.children]
+    .filter((child) => child.tagName.toLowerCase() === "li")
+    .map((item, index) => {
+      const content = normalizeQuotedMarkdown(serializeChildrenBlock(item));
+      if (!content) {
+        return "";
+      }
+      const lines = content.split("\n");
+      const marker = ordered ? `${index + 1}. ` : "- ";
+      return lines
+        .map((line, lineIndex) => (lineIndex === 0 ? `${marker}${line}` : `  ${line}`))
+        .join("\n");
+    })
+    .filter(Boolean);
+  return items.join("\n");
+}
+
+function normalizeSelectionWhitespace(value, mode) {
+  const text = String(value || "").replace(/\u00a0/g, " ");
+  if (mode === "block") {
+    return text.replace(/[ \t]+\n/g, "\n").trim();
+  }
+  return text.replace(/\s+/g, " ");
+}
+
+function normalizeInlineMarkdown(value) {
+  return String(value || "")
+    .replace(/[ \t]+\n/g, "\n")
+    .replace(/\n{2,}/g, "\n")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function normalizeQuotedMarkdown(value) {
+  return String(value || "")
+    .replace(/\r\n/g, "\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .split("\n")
+    .map((line) => line.replace(/[ \t]+$/g, ""))
+    .join("\n")
+    .trim();
+}
+
+function discussionCategoryForSelection() {
+  const frontMatterOwner = extractFrontMatterValue(state.editor?.content || "", ["owner"]);
+  const baseName = frontMatterOwner || "AVDS";
+  return `${normalizeDiscussionCategoryName(baseName)}-RUN`;
+}
+
+function normalizeDiscussionCategoryName(value) {
+  return String(value || "")
+    .trim()
+    .replace(/^['"]|['"]$/g, "")
+    .replace(/[^A-Za-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .toUpperCase() || "AVDS";
+}
+
+function openDiscourseComposer() {
+  const context = selectedDiscussionContext();
+  if (!context.composerUrl) {
+    toast(t("discussion.needsCanonical"), "warn");
+    return;
+  }
+  window.open(context.composerUrl, "_blank", "noopener,noreferrer");
+}
+
+function discourseSearchUrl(context = selectedDiscussionContext()) {
+  if (!context.discourseUrl) {
+    return "";
+  }
+  const url = new URL("/search", context.discourseUrl);
+  url.searchParams.set("q", `"${cmsDocumentUrlForSelection()}"`);
+  return url.toString();
+}
+
+function openDiscourseSearch() {
+  const context = selectedDiscussionContext();
+  if (!context.searchUrl) {
+    toast(t("discussion.needsCanonical"), "warn");
+    return;
+  }
+  window.open(context.searchUrl, "_blank", "noopener,noreferrer");
+}
+
 function searchResults() {
   const query = normalizeSearchText(state.pathFilter);
   if (!query) {
@@ -4055,7 +4475,12 @@ function syncEditorFrontMatterTitle() {
 }
 
 function extractFrontMatterTitle(markdown) {
-  const entry = splitFrontMatter(markdown).frontMatter.find((item) => item.key.toLowerCase() === "title");
+  return extractFrontMatterValue(markdown, ["title"]);
+}
+
+function extractFrontMatterValue(markdown, keys = []) {
+  const wanted = new Set(keys.map((key) => String(key).toLowerCase()));
+  const entry = splitFrontMatter(markdown).frontMatter.find((item) => wanted.has(String(item.key || "").toLowerCase()));
   return normalizeFrontMatterTitle(entry?.value || "");
 }
 
@@ -4064,6 +4489,18 @@ function normalizeFrontMatterTitle(value) {
     .trim()
     .replace(/^['"]|['"]$/g, "")
     .trim();
+}
+
+function normalizeDiscourseUrl(url) {
+  const value = String(url || "").trim();
+  if (!value) {
+    return "";
+  }
+  return value.endsWith("/") ? value : `${value}/`;
+}
+
+function syncDiscussionEmbed() {
+  // The MVP uses plain Discourse links only.
 }
 
 function navigationFromLocation() {
