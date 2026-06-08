@@ -1,4 +1,4 @@
-import { base64ToText } from "./utils.js";
+import { base64ToText } from "./utils.js?v=20260608-shared-cache-bust";
 
 export function readSaveFileFormData(data) {
   return {

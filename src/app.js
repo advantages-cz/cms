@@ -6,15 +6,15 @@ import {
   prepareEditorForSave,
   readSaveFileFormData,
   upsertFileMetadata as upsertFileMetadataState,
-} from "./editorWorkflow.js?v=20260603-post-save-ref";
-import { GitHubClient, GitHubError } from "./github.js";
-import { DEFAULT_LANGUAGE, LANGUAGES, normalizeLanguage, translate } from "./i18n.js?v=20260608-connection-status";
+} from "./editorWorkflow.js?v=20260608-shared-cache-bust";
+import { GitHubClient, GitHubError } from "./github.js?v=20260608-shared-cache-bust";
+import { DEFAULT_LANGUAGE, LANGUAGES, normalizeLanguage, translate } from "./i18n.js?v=20260608-shared-cache-bust";
 import {
   loadCachedContents,
   loadRepositoryCache,
   saveCachedContent,
   saveRepositoryCache,
-} from "./repoCache.js";
+} from "./repoCache.js?v=20260608-shared-cache-bust";
 import {
   clearToken,
   loadLastSave,
@@ -23,7 +23,7 @@ import {
   saveLastSave,
   saveSettings,
   saveToken,
-} from "./storage.js";
+} from "./storage.js?v=20260608-shared-cache-bust";
 import {
   blobFromBase64,
   classifyConclusion,
@@ -41,7 +41,7 @@ import {
   mimeForPath,
   shortSha,
   textToBase64,
-} from "./utils.js";
+} from "./utils.js?v=20260608-shared-cache-bust";
 
 const app = document.querySelector("#app");
 const settings = loadSettings();
