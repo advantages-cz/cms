@@ -143,7 +143,7 @@ Implemented capabilities:
 - Rendered Markdown preview in browse mode.
 - Front matter-aware Markdown rendering.
 - Collapsed front matter display in rendered Markdown preview.
-- Optional Discourse discussion side panel for any selected file. The panel opens from the file header and supports a no-auth MVP for private Discourse instances by opening Discourse search for the current CMS file URL and a pre-filled `new-topic` composer. Markdown documents additionally contribute selection quotes and front matter-based discussion metadata.
+- Optional Discourse discussion side panel for any selected file. The panel opens from the file header and supports a no-auth MVP for private Discourse instances by opening Discourse search for the current CMS file URL and a pre-filled `new-topic` composer. Markdown documents additionally contribute selection quotes, selected table ranges converted back to Markdown tables, and front matter-based discussion metadata.
 - Internal Markdown links resolved through the CMS tree instead of navigating the browser frame; links to existing directories select and expand the matching tree folder.
 - Markdown heading anchors normalize diacritics consistently between generated heading IDs and rendered internal links.
 - Markdown preview hides HTML comments and supports angle-bracket link destinations with spaces, such as `[PDF](<vystupy/test pozvanky/file.pdf>)`.
@@ -487,6 +487,12 @@ Reasoning: The canonical URL mapping was only used as an internal lookup string,
 Decision: The optional Discourse discussion workflow is available for any selected repository file, including images, PDFs, and generated outputs. Markdown files keep richer prefill behavior such as selected quote snippets, front matter discussion titles, and owner-derived category hints.
 
 Reasoning: Review conversations often belong to generated artifacts or binary deliverables rather than only source Markdown. Using the CMS file URL as the common lookup key keeps the MVP static and credential-free while preserving Markdown-specific conveniences where they exist.
+
+### 2026-06-08: Preserve Table Selections In Discourse Prefill
+
+Decision: When a user selects table content inside the rendered Markdown preview and opens the Discourse topic composer, the quote prefill serializes the selected table fragment back into a Markdown table, including partial selections that cover only some rows or cells.
+
+Reasoning: Discussion often targets structured status tables and generated tabular outputs. Preserving the table shape in the prefilled quote keeps the resulting topic readable and avoids collapsing selected cells into ambiguous plain text.
 
 ### 2026-06-08: Stabilize Search Input During Re-Renders
 

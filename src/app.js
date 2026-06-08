@@ -83,6 +83,7 @@ const state = {
   revealSelectedInTree: false,
   treePaneWidth: normalizeTreePaneWidth(settings.treePaneWidth),
   treePaneResizing: false,
+  frontMatterOpen: false,
   editor: null,
   preview: null,
   previewUrls: [],
@@ -409,6 +410,12 @@ async function handleAction(button) {
 
   if (action === "leave-edit-session") {
     leaveEditSession();
+    return;
+  }
+
+  if (action === "toggle-frontmatter") {
+    state.frontMatterOpen = !state.frontMatterOpen;
+    render();
     return;
   }
 
@@ -2507,16 +2514,19 @@ function renderFilesTab() {
       <div class="tree-splitter" role="separator" aria-orientation="vertical" aria-label="${t("files.resizeTree")}" aria-valuemin="${MIN_TREE_PANE_WIDTH}" aria-valuenow="${state.treePaneWidth}" tabindex="0" data-resize="tree-pane"></div>
       <section class="panel editor-panel">
         <div class="panel-header">
-          ${renderSelectedFileHeading()}
-          <div class="button-row panel-actions">
-            ${renderDiscussionHeaderActions()}
-            ${state.editor?.dirty ? `<span class="tag warn">${t("files.unsaved")}</span>` : ""}
-            ${
-              state.editMode && state.selectedPath
-                ? `<button class="danger" type="button" data-action="delete-file">${t("files.delete")}</button>`
-                : ""
-            }
+          <div class="panel-header-main">
+            ${renderSelectedFileHeading()}
+            <div class="button-row panel-actions">
+              ${renderDiscussionHeaderActions()}
+              ${state.editor?.dirty ? `<span class="tag warn">${t("files.unsaved")}</span>` : ""}
+              ${
+                state.editMode && state.selectedPath
+                  ? `<button class="danger" type="button" data-action="delete-file">${t("files.delete")}</button>`
+                  : ""
+              }
+            </div>
           </div>
+          ${renderSelectedFileMeta()}
         </div>
         <div class="panel-body">${renderEditor()}</div>
       </section>
@@ -2527,12 +2537,35 @@ function renderFilesTab() {
 function renderSelectedFileHeading() {
   const label = state.selectedPath ? state.selectedPath : t("files.editor");
   const selectedStatus = state.selectedPath ? changedFileStatusByPath().get(state.selectedPath) || "" : "";
+  const hasFrontMatter = selectedFrontMatterEntries().length > 0;
   return `
     <div class="selected-file-heading">
-      <h2>${escapeHtml(label)}</h2>
-      ${selectedStatus ? `<span class="tag status-${escapeHtml(selectedStatus)}">${escapeHtml(formatFileStatusLabel(selectedStatus))}</span>` : ""}
+      <div class="selected-file-heading-row">
+        ${
+          hasFrontMatter
+            ? `<button
+                class="icon-button button-quiet frontmatter-toggle"
+                type="button"
+                data-action="toggle-frontmatter"
+                title="${escapeHtml(t("common.frontMatter"))}"
+                aria-label="${escapeHtml(t("common.frontMatter"))}"
+                aria-expanded="${state.frontMatterOpen ? "true" : "false"}"
+              >${treeIconSvg("info")}</button>`
+            : ""
+        }
+        <h2>${escapeHtml(label)}</h2>
+        ${selectedStatus ? `<span class="tag status-${escapeHtml(selectedStatus)}">${escapeHtml(formatFileStatusLabel(selectedStatus))}</span>` : ""}
+      </div>
     </div>
   `;
+}
+
+function renderSelectedFileMeta() {
+  const frontMatter = selectedFrontMatterEntries();
+  if (!frontMatter.length || !state.frontMatterOpen) {
+    return "";
+  }
+  return `<div class="panel-header-meta">${renderFrontMatterPanel(frontMatter)}</div>`;
 }
 
 function renderDiscussionHeaderActions(context = selectedDiscussionContext()) {
@@ -2789,6 +2822,7 @@ function treeIconSvg(iconClass) {
     "tree-icon-image": `${fileBase}<circle cx="10" cy="13" r="1"></circle><path d="m8 18 2.4-2.4a1 1 0 0 1 1.4 0L14 17l1-1a1 1 0 0 1 1.4 0L18 18"></path>`,
     discussion: '<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2Z"></path><path d="M8 9h8"></path><path d="M8 13h5"></path>',
     edit: '<path d="M12 20h9"></path><path d="m16.5 3.5 4 4"></path><path d="M3 17.3V21h3.7L18.9 8.8a2.8 2.8 0 1 0-4-4Z"></path>',
+    info: '<circle cx="12" cy="12" r="9"></circle><path d="M12 10v6"></path><path d="M12 7.5h.01"></path>',
     preview: '<path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6-10-6-10-6Z"></path><circle cx="12" cy="12" r="3"></circle>',
     refresh: '<path d="M21 12a9 9 0 0 1-15.6 6.1L3 16"></path><path d="M3 21v-5h5"></path><path d="M3 12A9 9 0 0 1 18.6 5.9L21 8"></path><path d="M21 3v5h-5"></path>',
     search: '<path d="m21 21-4.34-4.34"></path><circle cx="11" cy="11" r="8"></circle>',
@@ -3023,7 +3057,7 @@ function renderMarkdown(markdown) {
     html.push(`<pre><code>${escapeHtml(codeLines.join("\n"))}</code></pre>`);
   }
 
-  return `${renderFrontMatter(parsed.frontMatter)}${html.join("")}`;
+  return html.join("");
 }
 
 function renderMarkdownInline(value) {
@@ -3233,20 +3267,26 @@ function parseFrontMatter(raw) {
   return entries;
 }
 
-function renderFrontMatter(entries) {
+function selectedFrontMatterEntries() {
+  if (!state.selectedPath || !state.editor || !isMarkdownPath(state.selectedPath)) {
+    return [];
+  }
+  return splitFrontMatter(state.editor.content || "").frontMatter;
+}
+
+function renderFrontMatterPanel(entries) {
   if (!entries.length) {
     return "";
   }
 
   return `
-    <details class="frontmatter-preview">
-      <summary>${t("common.frontMatter")}</summary>
+    <div class="frontmatter-panel">
       <dl>
         ${entries
           .map((entry) => `<div><dt>${escapeHtml(entry.key)}</dt><dd>${renderMarkdownInline(entry.value)}</dd></div>`)
           .join("")}
       </dl>
-    </details>
+    </div>
   `;
 }
 
@@ -3942,6 +3982,10 @@ function serializeSelectionNode(node, context = { mode: "inline" }) {
       .join("\n");
   }
 
+  if (tag === "table") {
+    return serializeTable(element);
+  }
+
   if (tag === "ul") {
     return serializeList(element, false);
   }
@@ -3966,6 +4010,14 @@ function serializeSelectionNode(node, context = { mode: "inline" }) {
     const level = Number(tag.slice(1));
     const content = normalizeQuotedMarkdown(serializeChildrenInline(element));
     return content ? `${"#".repeat(level)} ${content}` : "";
+  }
+
+  if (tag === "tr") {
+    return serializeTableRow(element);
+  }
+
+  if (tag === "th" || tag === "td") {
+    return serializeTableCell(element);
   }
 
   return context.mode === "block"
@@ -4045,6 +4097,91 @@ function serializeList(element, ordered) {
     })
     .filter(Boolean);
   return items.join("\n");
+}
+
+function serializeTable(element) {
+  const rows = collectTableRows(element);
+  if (!rows.length) {
+    return "";
+  }
+
+  const width = rows.reduce((max, row) => Math.max(max, row.length), 0);
+  if (!width) {
+    return "";
+  }
+
+  const normalizedRows = rows.map((row) => normalizeTableRowCells(row, width));
+  const head = normalizedRows[0];
+  const separator = new Array(width).fill("---");
+  const body = normalizedRows.slice(1);
+
+  return [formatMarkdownTableRow(head), formatMarkdownTableRow(separator), ...body.map(formatMarkdownTableRow)].join("\n");
+}
+
+function collectTableRows(element) {
+  if (element.tagName?.toLowerCase() === "tr") {
+    const row = collectTableRowCells(element);
+    return row.length ? [row] : [];
+  }
+
+  const rows = [];
+  for (const child of element.childNodes) {
+    if (child.nodeType !== Node.ELEMENT_NODE) {
+      continue;
+    }
+    const tag = child.tagName.toLowerCase();
+    if (tag === "tr") {
+      const row = collectTableRowCells(child);
+      if (row.length) {
+        rows.push(row);
+      }
+      continue;
+    }
+    if (["thead", "tbody", "tfoot"].includes(tag)) {
+      rows.push(...collectTableRows(child));
+    }
+  }
+  return rows;
+}
+
+function collectTableRowCells(element) {
+  const cells = [];
+  for (const child of element.childNodes) {
+    if (child.nodeType !== Node.ELEMENT_NODE) {
+      continue;
+    }
+    const tag = child.tagName.toLowerCase();
+    if (tag === "th" || tag === "td") {
+      const value = serializeTableCell(child);
+      if (value || value === "") {
+        cells.push(value);
+      }
+    }
+  }
+  return cells;
+}
+
+function serializeTableRow(element) {
+  const cells = collectTableRowCells(element);
+  return cells.length ? formatMarkdownTableRow(cells) : "";
+}
+
+function serializeTableCell(element) {
+  return escapeMarkdownTableCell(normalizeQuotedMarkdown(serializeChildrenBlock(element)));
+}
+
+function normalizeTableRowCells(row, width) {
+  return Array.from({ length: width }, (_, index) => row[index] || "");
+}
+
+function formatMarkdownTableRow(cells) {
+  return `| ${cells.join(" | ")} |`;
+}
+
+function escapeMarkdownTableCell(value) {
+  return String(value || "")
+    .replace(/\n+/g, "<br>")
+    .replace(/\|/g, "\\|");
 }
 
 function normalizeSelectionWhitespace(value, mode) {
@@ -4883,6 +5020,7 @@ function resetChecksApiState() {
 export const __testing = {
   state,
   saveCurrentFile,
+  serializeSelectionFragment,
 };
 
 function summarizeTokenProbeError(error) {
@@ -4987,9 +5125,13 @@ function normalizeTheme(value) {
 
 function applyTheme() {
   const resolved = state.theme === "dark" || (state.theme === "auto" && systemDarkQuery?.matches) ? "dark" : "light";
-  document.documentElement.dataset.theme = resolved;
-  document.documentElement.dataset.themeMode = state.theme;
-  document.documentElement.style.colorScheme = resolved;
+  const root = document.documentElement;
+  if (!root) {
+    return;
+  }
+  root.dataset.theme = resolved;
+  root.dataset.themeMode = state.theme;
+  root.style.colorScheme = resolved;
 }
 
 function normalizeTreePaneWidth(value) {

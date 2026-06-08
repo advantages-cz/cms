@@ -29,7 +29,7 @@ Adaptivio also needs GitHub Actions status, failing check annotations, detection
 - Shows workflow runs for the current branch.
 - Optionally loads check runs and check annotations for CI errors when the token/installation supports the Checks API.
 - Renders Markdown previews including front matter.
-- Opens a slide-over Discourse discussion panel for the selected file, using the current CMS file URL plus plain Discourse links for opening search and a pre-filled new-topic composer. Markdown files additionally prefill quote selections and front matter-based metadata.
+- Opens a slide-over Discourse discussion panel for the selected file, using the current CMS file URL plus plain Discourse links for opening search and a pre-filled new-topic composer. Markdown files additionally prefill quote selections, including selected table rows or partial cell ranges converted to Markdown tables, plus front matter-based metadata.
 - Previews HTML in a sandboxed iframe with relative image/SVG/CSS assets resolved when possible.
 - Previews PDF, SVG, images, and text.
 - Supports English and Czech UI through `src/i18n.js`; English is the default language.

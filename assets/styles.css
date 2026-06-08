@@ -1220,13 +1220,24 @@ body.is-resizing-tree-pane {
 }
 
 .panel-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
+  display: grid;
   gap: 10px;
   min-height: 40px;
   border-bottom: 1px solid var(--line);
   padding: 7px 10px;
+}
+
+.panel-header-main {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-width: 0;
+}
+
+.panel-header-meta {
+  display: flex;
+  min-width: 0;
 }
 
 .panel-header h2,
@@ -1240,6 +1251,10 @@ body.is-resizing-tree-pane {
 }
 
 .selected-file-heading {
+  min-width: 0;
+}
+
+.selected-file-heading-row {
   display: inline-flex;
   align-items: center;
   gap: 8px;
@@ -1248,6 +1263,29 @@ body.is-resizing-tree-pane {
 
 .selected-file-heading h2 {
   min-width: 0;
+}
+
+.frontmatter-toggle {
+  flex: 0 0 auto;
+  width: 28px;
+  min-height: 28px;
+  color: var(--muted);
+}
+
+.frontmatter-toggle svg {
+  width: 15px;
+  height: 15px;
+}
+
+.frontmatter-panel {
+  width: min(520px, 100%);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--surface-alt);
+}
+
+.panel-actions {
+  flex: 0 0 auto;
 }
 
 .panel-body {
@@ -2011,69 +2049,31 @@ mark,
   font-weight: 760;
 }
 
-.frontmatter-preview {
-  margin: 0 0 22px;
-  border: 1px solid var(--line);
-  border-radius: var(--radius-sm);
-  background: var(--surface-alt);
-}
-
-.frontmatter-preview summary {
-  cursor: pointer;
-  list-style: none;
-  margin: 0;
-  padding: 10px 12px;
-  color: var(--muted);
-  font-size: 13px;
-  font-weight: 760;
-  text-transform: uppercase;
-}
-
-.frontmatter-preview summary::-webkit-details-marker {
-  display: none;
-}
-
-.frontmatter-preview summary::before {
-  content: ">";
-  display: inline-block;
-  margin-right: 8px;
-  font-family: var(--mono);
-  transition: transform 120ms ease;
-}
-
-.frontmatter-preview[open] summary {
-  border-bottom: 1px solid var(--line);
-}
-
-.frontmatter-preview[open] summary::before {
-  transform: rotate(90deg);
-}
-
-.frontmatter-preview dl {
+.frontmatter-panel dl {
   display: grid;
   margin: 0;
 }
 
-.frontmatter-preview div {
+.frontmatter-panel div {
   display: grid;
   grid-template-columns: minmax(110px, 24%) minmax(0, 1fr);
   gap: 12px;
-  border-bottom: 1px solid var(--accent);
+  border-bottom: 1px solid var(--line);
   padding: 8px 12px;
 }
 
-.frontmatter-preview div:last-child {
+.frontmatter-panel div:last-child {
   border-bottom: 0;
 }
 
-.frontmatter-preview dt {
+.frontmatter-panel dt {
   color: var(--muted);
   font-family: var(--mono);
   font-size: 12px;
   font-weight: 760;
 }
 
-.frontmatter-preview dd {
+.frontmatter-panel dd {
   margin: 0;
   min-width: 0;
 }
