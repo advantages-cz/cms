@@ -1949,10 +1949,13 @@ mark,
 }
 
 .tree-icon-md,
-.tree-icon-home,
-.tree-icon-data,
-.tree-icon-rozcestnik {
+.tree-icon-data {
   color: var(--accent-strong);
+}
+
+.tree-icon-home,
+.tree-icon-rozcestnik {
+  color: var(--cms-color-brand-orange);
 }
 
 .tree-icon-html,
