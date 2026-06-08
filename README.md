@@ -13,7 +13,7 @@ Adaptivio also needs GitHub Actions status, failing check annotations, detection
 
 ## Features
 
-- Connects to a private repo with per-user GitHub OAuth device flow. A manual token remains available as a fallback.
+- Connects to a private repo with a manually entered fine-grained GitHub token.
 - The target repo is fixed in the app to `advantages-cz/avds`, default branch `master`.
 - Browse repository content as a tree.
 - Browser back/forward works for file and folder navigation inside the CMS.
@@ -47,7 +47,7 @@ The recommended OAuth scope is `repo` so the CMS can read and write the private 
 
 Optionally allow `Actions: write` if the CMS should rerun workflow runs.
 
-OAuth sign-in stores the token in `sessionStorage`. Manual fallback tokens can be persisted in `localStorage`, but should be used only on a trusted computer. Direct commits to the default branch are disabled.
+Token sign-in stores the token in `sessionStorage`. Direct commits to the default branch are disabled.
 
 HTML previews are sandboxed without `allow-scripts` and without `allow-same-origin`. The app never injects file content as HTML into its own DOM.
 
@@ -59,8 +59,7 @@ An optional `cms.config.json` file can live next to `index.html`:
 {
   "branchPrefix": "cms/",
   "editablePathHints": ["content/", "docs/", "data/", "assets/"],
-  "previewPathHints": ["dist/", "public/", "site/", "exports/"],
-  "githubOAuthClientId": "your_oauth_app_client_id"
+  "previewPathHints": ["dist/", "public/", "site/", "exports/"]
 }
 ```
 
@@ -72,7 +71,7 @@ The CMS stores the selected file or folder in the URL through `path` or `dir`, s
 https://example.github.io/adaptivio-cms/?branch=master&path=content/page.md
 ```
 
-`githubOAuthClientId` identifies the GitHub OAuth app. Device flow does not require a client secret, but GitHub's OAuth endpoints do not provide the CORS response needed for direct browser calls from a purely static app. Production OAuth therefore needs a small trusted OAuth proxy/serverless function, or the app must use the fine-grained PAT fallback. GitHub's standard web application OAuth redirect flow also requires a server-side token exchange with a client secret and is not implemented in this public static app.
+Authentication is token-only. The app does not use `githubOAuthClientId` for login, and the only required setup is a fine-grained PAT with access to the fixed repository.
 
 ## Localization
 
@@ -125,4 +124,3 @@ node --test
 - GitHub Checks API: https://docs.github.com/en/rest/checks/runs?apiVersion=2022-11-28
 - GitHub Actions workflow runs API: https://docs.github.com/en/rest/actions/workflow-runs?apiVersion=2022-11-28
 - GitHub compare commits API: https://docs.github.com/en/rest/commits/commits?apiVersion=2022-11-28
-- GitHub OAuth device flow: https://docs.github.com/en/apps/oauth-apps/building-oauth-apps/authorizing-oauth-apps#device-flow

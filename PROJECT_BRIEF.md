@@ -17,7 +17,7 @@ The product should stay small, auditable, and easy to deploy.
 ## Core Goals
 
 - Run as a public static application on GitHub Pages.
-- Connect to a private GitHub repository using per-user GitHub OAuth device flow, with a manual token fallback.
+- Connect to a private GitHub repository using a manually entered fine-grained GitHub token.
 - Target `advantages-cz/avds` with `master` as the fixed default branch.
 - Avoid storing secrets on a server.
 - Support a branch-first editing workflow.
@@ -45,7 +45,7 @@ The product should stay small, auditable, and easy to deploy.
 ## Expected Workflow
 
 1. The user opens the public CMS page.
-2. The user opens the login modal and signs in through GitHub OAuth device flow.
+2. The user opens the login modal and pastes a GitHub token.
 3. The CMS connects to `advantages-cz/avds` on the `master` default branch.
 4. The user browses files in read-only mode and inspects previews.
 5. The user presses Edit when they want to make changes.
@@ -61,11 +61,10 @@ The product should stay small, auditable, and easy to deploy.
 
 ## Security Principles
 
-- OAuth tokens stay in the browser.
-- Default OAuth token storage is session-only.
-- Persistent storage for manual fallback tokens must be an explicit user choice.
+- Tokens stay in the browser.
+- Token storage is session-only by default.
 - The application sends tokens only to GitHub API endpoints.
-- Manual fallback fine-grained GitHub tokens should be scoped to `advantages-cz/avds` only.
+- Fine-grained GitHub tokens should be scoped to `advantages-cz/avds` only.
 - Default product mode is read-only browsing.
 - Pressing Edit creates a working branch only from the default branch; existing working branches are reused.
 - Direct commits to the default branch are disabled by default.
@@ -73,12 +72,7 @@ The product should stay small, auditable, and easy to deploy.
 - User-provided repository content must be escaped unless intentionally rendered in a sandbox.
 - The app should avoid unnecessary third-party runtime dependencies.
 
-## Recommended GitHub OAuth And Token Permissions
-
-For OAuth device flow:
-
-- Scope: `repo`
-- Scope: `workflow`, if rerunning workflows from the CMS is required.
+## Recommended Token Permissions
 
 For a fine-grained personal access token:
 
@@ -110,7 +104,7 @@ Key files:
 
 Implemented capabilities:
 
-- GitHub OAuth device flow sign-in with manual token fallback.
+- Token-only GitHub sign-in.
 - Fixed repository connection to `advantages-cz/avds`, default branch `master`.
 - Branch listing and branch creation.
 - Repository tree loading.
@@ -172,7 +166,7 @@ Implemented capabilities:
 
 - Which paths should be editable by default?
 - Which paths should be considered generated preview outputs?
-- Should the CMS support GitHub App authentication later, or is OAuth App device flow enough?
+- Should the CMS support GitHub App authentication later, or is token-only login enough?
 - Should workflow reruns be enabled by default, or kept as an optional permission?
 - Which generated artifact types are most important: PDF, static HTML, images, JSON reports, or something else?
 - Should we add schema-aware editors for Markdown, YAML, JSON, or frontmatter?
@@ -238,11 +232,11 @@ Decision: Start with per-user GitHub tokens stored in the browser.
 
 Reasoning: A public GitHub Pages application cannot safely hold a server-side secret. Per-user tokens keep repository access tied to GitHub identity and permissions.
 
-### 2026-06-03: Make GitHub OAuth Device Flow The Primary Sign-In
+### 2026-06-08: Simplify Login To Token Entry
 
-Decision: GitHub sign-in now presents OAuth device flow as the desired primary path when `githubOAuthClientId` is configured. Manual token entry remains available as an advanced fallback.
+Decision: The sign-in screen now focuses on a single token input and no longer exposes OAuth device flow or fallback branching.
 
-Reasoning: Asking editors to create and paste a PAT is too demanding for normal use. GitHub's standard redirect OAuth flow requires a server-side client secret/token exchange and is not safe for a public static GitHub Pages app. Device flow avoids a client secret, but GitHub's OAuth endpoints do not provide the CORS response needed for direct browser calls, so production OAuth still needs a small trusted proxy/serverless function unless the CMS keeps using the token fallback.
+Reasoning: The deployment does not have a backend secret or OAuth proxy, so a token-only login keeps the entry point honest, reduces UI complexity, and makes the required GitHub permissions explicit up front.
 
 ### 2026-06-02: Keep Merge In GitHub
 

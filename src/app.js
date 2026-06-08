@@ -257,7 +257,7 @@ async function handleForm(form) {
 
   if (formName === "auth") {
     const token = String(data.get("token") || "").trim();
-    const persistence = String(data.get("persistence") || "session");
+    const persistence = "session";
     let shouldCheckToken = Boolean(state.token && state.client);
     state.tokenPersistence = persistence;
     if (token) {
@@ -504,23 +504,6 @@ async function handleAction(button) {
     return;
   }
 
-  if (action === "start-oauth") {
-    await startDeviceFlow();
-    return;
-  }
-
-  if (action === "poll-oauth") {
-    await pollDeviceFlow();
-    return;
-  }
-
-  if (action === "copy-code") {
-    const code = button.dataset.code;
-    if (code && navigator.clipboard) {
-      await navigator.clipboard.writeText(code);
-      toast(t("auth.codeCopied"), "ok");
-    }
-  }
 }
 
 async function handleChange(target) {
@@ -2009,56 +1992,6 @@ async function rerunWorkflow(runId) {
   });
 }
 
-async function startDeviceFlow() {
-  const clientId = state.publicConfig.githubOAuthClientId;
-  if (!clientId) {
-    toast(t("auth.oauthMissing"), "warn");
-    return;
-  }
-
-  await withBusy(t("auth.oauthPreparing"), async () => {
-    const client = new GitHubClient("");
-    let payload;
-    try {
-      payload = await client.requestDeviceCode(clientId, "repo workflow read:user");
-    } catch (error) {
-      if (!(error instanceof GitHubError)) {
-        throw new Error(t("auth.oauthBrowserBlocked"));
-      }
-      throw error;
-    }
-    state.modal = {
-      type: "device-flow",
-      clientId,
-      payload,
-      requestedAt: Date.now(),
-    };
-  });
-}
-
-async function pollDeviceFlow() {
-  if (state.modal?.type !== "device-flow") {
-    return;
-  }
-
-  await withBusy(t("auth.oauthChecking"), async () => {
-    const client = new GitHubClient("");
-    const payload = await client.pollDeviceToken(state.modal.clientId, state.modal.payload.device_code);
-    if (payload.access_token) {
-      state.token = payload.access_token;
-      state.tokenPersistence = "session";
-      state.client = new GitHubClient(state.token);
-      resetChecksApiState();
-      saveToken(state.token, "session");
-      state.modal = null;
-      toast(t("auth.oauthSaved"), "ok");
-      await connectRepository({ keepBusy: true });
-      return;
-    }
-    toast(payload.error_description || t("auth.oauthPending"), "warn");
-  });
-}
-
 function render({ treeScrollTop = null } = {}) {
   if (treeScrollTop === null) {
     captureTreeScroll();
@@ -2184,7 +2117,12 @@ function renderLanguageSelect(location = "") {
 
 function renderUserMenu() {
   if (!state.token) {
-    return `<button class="account-button is-logged-out" type="button" data-action="login">${t("auth.login")}</button>`;
+    return `
+      <div class="topbar-public-controls">
+        ${renderLanguageSelect("topbar")}
+        ${renderThemeSelect("topbar")}
+      </div>
+    `;
   }
 
   const label = state.user?.login || t("auth.tokenSavedLabel");
@@ -2317,9 +2255,12 @@ function renderConnectionError() {
 }
 
 function renderWelcome(message) {
+  if (!state.token) {
+    return renderLoginScreen(message);
+  }
+
   return `
     <p class="banner info">${escapeHtml(message)}</p>
-    ${state.token ? "" : `<p><button class="primary" type="button" data-action="login">${t("auth.loginWithToken")}</button></p>`}
     <div class="split">
       <section class="panel">
         <div class="panel-header"><h2>${t("workflow.title")}</h2></div>
@@ -2338,6 +2279,29 @@ function renderWelcome(message) {
         </div>
       </section>
     </div>
+  `;
+}
+
+function renderLoginScreen(message) {
+  return `
+    <section class="login-screen">
+      <form class="login-card" data-form="auth">
+        <div class="login-card-header">
+          <h1>${t("auth.title")}</h1>
+          <p>${escapeHtml(message)}</p>
+        </div>
+        <div class="field">
+          <label for="token">${t("auth.tokenLabel")}</label>
+          <input id="token" name="token" type="password" autocomplete="off" placeholder="${escapeHtml(t("auth.tokenHint"))}" autofocus />
+        </div>
+        <div class="login-help">
+          <p>${t("auth.fixedRepo", { repo: `<span class="path">${escapeHtml(FIXED_REPOSITORY)}</span>`, branch: `<span class="path">${escapeHtml(FIXED_DEFAULT_BRANCH)}</span>` })}</p>
+          <p>${t("auth.minimumPermissions")}</p>
+          <p>${t("auth.tokenRepoScope")}</p>
+        </div>
+        <button class="primary" type="submit">${t("auth.saveToken")}</button>
+      </form>
+    </section>
   `;
 }
 
@@ -3510,7 +3474,6 @@ function renderModal() {
     "create-text-file": renderCreateTextFileModal,
     "create-folder": renderCreateFolderModal,
     "create-pr": renderCreatePrModal,
-    "device-flow": renderDeviceFlowModal,
   }[state.modal.type]?.();
 
   if (!body) {
@@ -3521,55 +3484,25 @@ function renderModal() {
 }
 
 function renderAuthModal() {
-  const hasOAuthClient = Boolean(state.publicConfig.githubOAuthClientId);
   const tokenHint = state.token ? t("auth.tokenStoredHint") : t("auth.tokenHint");
-  const tokenFields = `
-    <div class="field">
-      <label for="token">${t("auth.tokenLabel")}</label>
-      <input id="token" name="token" type="password" autocomplete="off" placeholder="${escapeHtml(tokenHint)}" ${hasOAuthClient ? "" : "autofocus"} />
-    </div>
-    <div class="field">
-      <label for="persistence">${t("auth.persistence")}</label>
-      <select id="persistence" name="persistence">
-        <option value="session" ${state.tokenPersistence === "session" ? "selected" : ""}>${t("auth.sessionOnly")}</option>
-        <option value="local" ${state.tokenPersistence === "local" ? "selected" : ""}>${t("auth.localStorage")}</option>
-      </select>
-    </div>
-    <p class="help">${t("auth.minimumPermissions")}</p>
-  `;
   return `
     <form class="modal" data-form="auth">
       <div class="modal-header"><h2>${t("auth.title")}</h2></div>
       <div class="modal-body form-grid">
         ${renderLanguageSelect("auth")}
         <p class="help">${t("auth.fixedRepo", { repo: `<span class="path">${escapeHtml(FIXED_REPOSITORY)}</span>`, branch: `<span class="path">${escapeHtml(FIXED_DEFAULT_BRANCH)}</span>` })}</p>
-        ${
-          hasOAuthClient
-            ? `
-              <div class="auth-primary">
-                <button class="primary" type="button" data-action="start-oauth" autofocus>${t("auth.deviceFlow")}</button>
-                <p class="help">${t("auth.oauthHelp")}</p>
-              </div>
-              <details class="auth-fallback">
-                <summary>${t("auth.tokenFallback")}</summary>
-                <div class="form-grid">
-                  <p class="help">${t("auth.tokenFallbackHelp")}</p>
-                  ${tokenFields}
-                  <div class="button-row">
-                    <button type="submit">${t("auth.saveToken")}</button>
-                  </div>
-                </div>
-              </details>
-            `
-            : `
-              <p class="help">${t("auth.oauthMissing")}</p>
-              ${tokenFields}
-            `
-        }
+        <div class="auth-token-only">
+          <div class="field">
+            <label for="token">${t("auth.tokenLabel")}</label>
+            <input id="token" name="token" type="password" autocomplete="off" placeholder="${escapeHtml(tokenHint)}" autofocus />
+          </div>
+          <p class="help">${t("auth.minimumPermissions")}</p>
+          <p class="help">${t("auth.tokenRepoScope")}</p>
+        </div>
       </div>
       <div class="modal-footer">
         <button type="button" data-action="close-modal">${t("common.cancel")}</button>
-        ${hasOAuthClient ? "" : `<button class="primary" type="submit">${t("auth.saveToken")}</button>`}
+        <button class="primary" type="submit">${t("auth.saveToken")}</button>
       </div>
     </form>
   `;
@@ -3651,32 +3584,6 @@ function renderCreatePrModal() {
         <button class="primary" type="submit">${t("common.createPr")}</button>
       </div>
     </form>
-  `;
-}
-
-function renderDeviceFlowModal() {
-  const payload = state.modal.payload;
-  return `
-    <div class="modal">
-      <div class="modal-header"><h2>${t("auth.deviceTitle")}</h2></div>
-      <div class="modal-body form-grid">
-        <p class="help">${t("auth.deviceHelp")}</p>
-        <div class="row">
-          <div class="row-main">
-            <p class="row-title path">${escapeHtml(payload.user_code)}</p>
-            <p class="help">${escapeHtml(payload.verification_uri)}</p>
-          </div>
-          <div class="button-row">
-            <button type="button" data-action="copy-code" data-code="${escapeHtml(payload.user_code)}">${t("common.copy")}</button>
-            <button class="external-link-button" type="button" data-action="open-link" data-url="${escapeHtml(payload.verification_uri)}">${t("common.open")}</button>
-          </div>
-        </div>
-      </div>
-      <div class="modal-footer">
-        <button type="button" data-action="close-modal">${t("common.cancel")}</button>
-        <button class="primary" type="button" data-action="poll-oauth">${t("common.authorized")}</button>
-      </div>
-    </div>
   `;
 }
 
@@ -4434,14 +4341,11 @@ function captureTokenFromAuthForm() {
   if (!token) {
     return;
   }
-
-  const persistenceInput = document.querySelector("#persistence");
-  const persistence = persistenceInput instanceof HTMLSelectElement ? persistenceInput.value : state.tokenPersistence;
   state.token = token;
-  state.tokenPersistence = persistence;
+  state.tokenPersistence = "session";
   state.client = new GitHubClient(token);
   resetChecksApiState();
-  saveToken(token, persistence);
+  saveToken(token, "session");
 }
 
 function resetChecksApiState() {
