@@ -516,6 +516,12 @@ Decision: The selected-file header owns file-specific actions such as `Upravit`,
 
 Reasoning: Editing and discussion both depend on the currently selected file, while branch switching and PR creation apply to the whole repository state. Grouping actions by scope reduces toolbar noise and keeps the preview header as the single place to act on the current file.
 
+### 2026-06-08: Use Deterministic Discussion Lookup Keys For Exact Discourse Search
+
+Decision: The Discourse search link no longer searches by raw CMS document URL alone. New topic prefills append a deterministic lookup key derived from the exact CMS file URL, and `Open discussion` searches that key as an exact term.
+
+Reasoning: Discourse tokenizes URLs and broad domain matches made the previous URL-only search return many unrelated topics. A stable lookup token preserves the static no-auth workflow while making newly created discussion topics discoverable by exact file identity.
+
 ## Update Protocol
 
 When the project changes, update this document in the same commit as the related code or configuration change.

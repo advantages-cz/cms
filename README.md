@@ -30,7 +30,7 @@ Adaptivio also needs GitHub Actions status, failing check annotations, detection
 - Shows workflow runs for the current branch.
 - Optionally loads check runs and check annotations for CI errors when the token/installation supports the Checks API.
 - Renders Markdown previews including front matter.
-- Opens a slide-over Discourse discussion panel for the selected file, using the current CMS file URL plus plain Discourse links for opening search and a pre-filled new-topic composer. Markdown files additionally prefill quote selections, including selected table rows or partial cell ranges converted to Markdown tables, plus front matter-based metadata.
+- Opens a slide-over Discourse discussion panel for the selected file, using the current CMS file URL and a deterministic lookup key for exact Discourse search plus plain links for opening search and a pre-filled new-topic composer. Markdown files additionally prefill quote selections, including selected table rows or partial cell ranges converted to Markdown tables, plus front matter-based metadata.
 - Previews HTML in a sandboxed iframe with relative image/SVG/CSS assets resolved when possible.
 - Previews PDF, SVG, images, and text.
 - Supports English and Czech UI through `src/i18n.js`; English is the default language.
@@ -82,7 +82,7 @@ For the discussion MVP:
 
 - `discourseUrl` points to the self-hosted Discourse base URL.
 - `discourseCategoryId` and `discourseTags` optionally prefill topic creation.
-- `Open discussion` uses Discourse search for the current CMS file URL, while `Create topic` opens `/new-topic` with a pre-filled title, body, category, and tags as described in the official Discourse guide.
+- `Open discussion` uses Discourse search for a deterministic lookup key derived from the exact current CMS file URL, while `Create topic` writes the same key into the pre-filled topic body and opens `/new-topic` with title, body, category, and tags as described in the official Discourse guide.
 - Markdown files keep the richer discussion prefill behavior: selected quote snippets, front matter discussion titles, and owner-derived category hints.
 
 ## Localization

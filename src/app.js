@@ -3960,12 +3960,13 @@ function discussionTopicBody(context = selectedDiscussionContext()) {
   const githubUrl = githubFileUrlForSelection();
   const githubLine = quoteBlock ? `GitHub Location: ${githubUrl}` : githubUrl;
   const cmsLine = `This discussion is based on [this document](${cmsDocumentUrlForSelection()}) in Adaptivio CMS.`;
+  const lookupLine = `Adaptivio CMS lookup key: ${discussionLookupKeyForSelection()}`;
 
   if (quoteBlock) {
-    return `${quoteBlock}\n\n${githubLine}\n${cmsLine}`;
+    return `${quoteBlock}\n\n${githubLine}\n${cmsLine}\n${lookupLine}`;
   }
 
-  return `${githubLine}\n${cmsLine}`;
+  return `${githubLine}\n${cmsLine}\n${lookupLine}`;
 }
 
 function githubFileUrlForSelection() {
@@ -3991,6 +3992,23 @@ function cmsDocumentUrlForSelection() {
   }
   url.hash = "";
   return `${url.origin}${url.pathname}${url.search}`;
+}
+
+function discussionLookupKeyForSelection() {
+  const input = cmsDocumentUrlForSelection();
+  if (!input) {
+    return "";
+  }
+  return `avdsref${fnv1aHash(input)}`;
+}
+
+function fnv1aHash(value) {
+  let hash = 0x811c9dc5;
+  for (let index = 0; index < value.length; index += 1) {
+    hash ^= value.charCodeAt(index);
+    hash = Math.imul(hash, 0x01000193);
+  }
+  return (hash >>> 0).toString(16).padStart(8, "0");
 }
 
 function discussionQuoteBlock() {
@@ -4344,7 +4362,8 @@ function discourseSearchUrl(context = selectedDiscussionContext()) {
     return "";
   }
   const url = new URL("/search", context.discourseUrl);
-  url.searchParams.set("q", `"${cmsDocumentUrlForSelection()}"`);
+  const lookupKey = discussionLookupKeyForSelection();
+  url.searchParams.set("q", lookupKey ? `" ${lookupKey} "` : `"${cmsDocumentUrlForSelection()}"`);
   return url.toString();
 }
 
