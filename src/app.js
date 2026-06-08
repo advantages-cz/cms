@@ -2649,7 +2649,6 @@ function renderTreeDirectory(dir, depth, forceExpanded = false, changedStatuses 
 }
 
 function renderTreeFile(file, depth, changedStatuses = new Map()) {
-  const previewable = isTextPath(file.path) || isImagePath(file.path) || isPdfPath(file.path);
   const displayName = treeFileDisplayName(file);
   const changedStatus = changedStatuses.get(file.path) || "";
   const changedClass = changedStatus ? ` is-changed change-${changedStatus}` : "";
@@ -2665,7 +2664,6 @@ function renderTreeFile(file, depth, changedStatuses = new Map()) {
           ${displayName.filename ? `<span class="tree-file-name-muted">(${escapeHtml(displayName.filename)})</span>` : ""}
         </span>
       </span>
-      <span class="tree-size ${previewable ? "" : "is-binary"}">${previewable ? escapeHtml(humanBytes(file.size)) : t("common.binary")}</span>
     </button>
   `;
 }
@@ -2678,7 +2676,7 @@ function treeFileDisplayName(file) {
 function treeDirectoryDisplayName(dir) {
   const readme = directoryReadmeEntry(dir.path);
   const title = markdownDisplayTitle(readme);
-  return title ? { title, filename: dir.name } : { title: dir.name, filename: "" };
+  return title ? { title, filename: "" } : { title: dir.name, filename: "" };
 }
 
 function directoryReadmeEntry(dirPath) {
