@@ -2013,9 +2013,9 @@ mark,
 
 .frontmatter-preview {
   margin: 0 0 22px;
-  border: 1px solid var(--accent);
+  border: 1px solid var(--line);
   border-radius: var(--radius-sm);
-  background: var(--info-soft);
+  background: var(--surface-alt);
 }
 
 .frontmatter-preview summary {
@@ -2023,7 +2023,7 @@ mark,
   list-style: none;
   margin: 0;
   padding: 10px 12px;
-  color: var(--info);
+  color: var(--muted);
   font-size: 13px;
   font-weight: 760;
   text-transform: uppercase;
@@ -2042,7 +2042,7 @@ mark,
 }
 
 .frontmatter-preview[open] summary {
-  border-bottom: 1px solid var(--accent);
+  border-bottom: 1px solid var(--line);
 }
 
 .frontmatter-preview[open] summary::before {
@@ -2067,7 +2067,7 @@ mark,
 }
 
 .frontmatter-preview dt {
-  color: var(--info);
+  color: var(--muted);
   font-family: var(--mono);
   font-size: 12px;
   font-weight: 760;
