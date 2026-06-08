@@ -2109,9 +2109,10 @@ function renderWhenBackgroundRefreshCompletes() {
 
 function renderThemeSelect(location = "") {
   const id = `theme-select${location ? `-${location}` : ""}`;
+  const labelClass = location === "menu" ? "menu-field-label" : "sr-only";
   return `
     <label class="theme-control ${location ? `theme-control-${escapeHtml(location)}` : ""}">
-      <span class="sr-only">${t("common.theme")}</span>
+      <span class="${labelClass}">${t("common.theme")}</span>
       <select id="${escapeHtml(id)}" data-setting="theme" aria-label="${t("common.theme")}">
         ${THEME_MODES.map((theme) => `<option value="${escapeHtml(theme)}" ${theme === state.theme ? "selected" : ""}>${escapeHtml(t(`theme.${theme}`))}</option>`).join("")}
       </select>
@@ -2121,9 +2122,10 @@ function renderThemeSelect(location = "") {
 
 function renderLanguageSelect(location = "") {
   const id = `language-select${location ? `-${location}` : ""}`;
+  const labelClass = location === "menu" ? "menu-field-label" : "sr-only";
   return `
     <label class="language-control ${location ? `language-control-${escapeHtml(location)}` : ""}">
-      <span class="sr-only">${t("common.language")}</span>
+      <span class="${labelClass}">${t("common.language")}</span>
       <select id="${escapeHtml(id)}" data-setting="language" aria-label="${t("common.language")}">
         ${LANGUAGES.map((language) => `<option value="${escapeHtml(language.code)}" ${language.code === state.language ? "selected" : ""}>${escapeHtml(language.label)}</option>`).join("")}
       </select>
@@ -2156,8 +2158,10 @@ function renderUserMenu() {
                 ${renderLanguageSelect("menu")}
                 ${renderThemeSelect("menu")}
               </div>
-              <button type="button" data-action="login">${t("auth.changeToken")}</button>
-              <button type="button" data-action="clear-token">${t("auth.logout")}</button>
+              <div class="user-menu-actions">
+                <button class="user-menu-action user-menu-action-accent" type="button" data-action="login">${t("auth.changeToken")}</button>
+                <button class="user-menu-action user-menu-action-danger" type="button" data-action="clear-token">${t("auth.logout")}</button>
+              </div>
             </div>`
           : ""
       }
