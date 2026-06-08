@@ -2171,12 +2171,6 @@ function renderTopbarWorkflowControls() {
       : hasChanges
         ? `<button class="primary" type="button" data-action="prepare-pr">${t("common.createPr")}</button>`
         : "";
-  const editButton = state.editMode
-    ? `<button class="button-secondary" type="button" data-action="leave-edit-session">${t("toolbar.backToPreview")}</button>`
-    : `<button class="primary" type="button" data-action="start-edit-session">${t("common.edit")}</button>`;
-  const newBranchButton = state.branch === state.defaultBranch
-    ? ""
-    : `<button type="button" data-action="new-edit-branch" title="${t("toolbar.newBranchTitle")}">${t("toolbar.newBranch")}</button>`;
 
   return `
     <div class="branch-control">
@@ -2184,8 +2178,6 @@ function renderTopbarWorkflowControls() {
       <select id="branch-select" class="top-branch-select" aria-label="${t("toolbar.currentBranch")}">${branchOptions}</select>
       <span class="status-pill status-sha" title="${t("common.headTitle")}">head ${escapeHtml(shortSha(state.headSha))}</span>
     </div>
-    ${editButton}
-    ${newBranchButton}
     ${prButton}
     <button class="icon-button button-quiet refresh-button" type="button" data-action="refresh" title="${t("toolbar.refreshGithub")}" aria-label="${t("toolbar.refreshGithub")}">${treeIconSvg("refresh")}</button>
   `;
@@ -2539,14 +2531,35 @@ function renderSelectedFileHeading() {
 }
 
 function renderDiscussionHeaderActions(context = selectedDiscussionContext()) {
-  if (!context.supported || state.editMode || !state.selectedPath || !isMarkdownPath(state.selectedPath)) {
+  if (!state.selectedPath) {
     return "";
   }
 
-  return `
-    <button type="button" data-action="open-discourse-topic">${t("discussion.openTopic")}</button>
-    <button class="primary" type="button" data-action="open-discourse-composer">${t("discussion.createTopic")}</button>
-  `;
+  const buttons = [];
+
+  if (canEditSelectedFile()) {
+    if (state.editMode) {
+      buttons.push(renderHeaderActionButton("button-secondary", "leave-edit-session", "preview", t("toolbar.backToPreview")));
+    } else {
+      buttons.push(renderHeaderActionButton("primary", "start-edit-session", "edit", t("common.edit")));
+    }
+  }
+
+  if (!state.editMode && context.supported) {
+    buttons.push(renderHeaderActionButton("", "open-discourse-topic", "search", t("discussion.openTopic")));
+    buttons.push(renderHeaderActionButton("primary", "open-discourse-composer", "discussion", t("discussion.createTopic")));
+  }
+
+  return buttons.join("");
+}
+
+function renderHeaderActionButton(className, action, icon, label) {
+  const classes = ["button-with-icon", className].filter(Boolean).join(" ");
+  return `<button class="${classes}" type="button" data-action="${action}">${treeIconSvg(icon)}<span>${escapeHtml(label)}</span></button>`;
+}
+
+function canEditSelectedFile() {
+  return Boolean(state.selectedPath && isMarkdownPath(state.selectedPath));
 }
 
 function renderFileList() {
@@ -2770,6 +2783,8 @@ function treeIconSvg(iconClass) {
     "tree-icon-code": `${fileBase}<path d="m10 13-2 2 2 2"></path><path d="m14 13 2 2-2 2"></path>`,
     "tree-icon-image": `${fileBase}<circle cx="10" cy="13" r="1"></circle><path d="m8 18 2.4-2.4a1 1 0 0 1 1.4 0L14 17l1-1a1 1 0 0 1 1.4 0L18 18"></path>`,
     discussion: '<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2Z"></path><path d="M8 9h8"></path><path d="M8 13h5"></path>',
+    edit: '<path d="M12 20h9"></path><path d="m16.5 3.5 4 4"></path><path d="M3 17.3V21h3.7L18.9 8.8a2.8 2.8 0 1 0-4-4Z"></path>',
+    preview: '<path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6-10-6-10-6Z"></path><circle cx="12" cy="12" r="3"></circle>',
     refresh: '<path d="M21 12a9 9 0 0 1-15.6 6.1L3 16"></path><path d="M3 21v-5h5"></path><path d="M3 12A9 9 0 0 1 18.6 5.9L21 8"></path><path d="M21 3v5h-5"></path>',
     search: '<path d="m21 21-4.34-4.34"></path><circle cx="11" cy="11" r="8"></circle>',
     file: fileBase,
@@ -3728,6 +3743,7 @@ function fileMatchesSearch(file, query) {
 function selectedDiscussionContext() {
   const title = state.selectedPath || t("discussion.title");
   const discourseUrl = normalizeDiscourseUrl(state.publicConfig.discourseUrl || state.publicConfig.discussion?.discourseUrl || "");
+  const markdownSelected = Boolean(state.selectedPath && isMarkdownPath(state.selectedPath));
   const context = {
     supported: false,
     title,
@@ -3736,14 +3752,16 @@ function selectedDiscussionContext() {
     topicTitle: "",
     composerUrl: "",
     searchUrl: "",
+    markdownSelected,
   };
 
-  if (!state.selectedPath || !state.editor || !isMarkdownPath(state.selectedPath)) {
-    context.message = t("discussion.selectMarkdown");
+  if (!state.selectedPath) {
+    context.message = t("discussion.selectFile");
     return context;
   }
 
-  context.title = markdownDisplayTitle(state.files.find((file) => file.path === state.selectedPath)) || state.selectedPath;
+  const selectedFile = state.files.find((file) => file.path === state.selectedPath);
+  context.title = markdownSelected ? markdownDisplayTitle(selectedFile) || state.selectedPath : state.selectedPath;
 
   if (!discourseUrl) {
     context.message = t("discussion.needsDiscourseUrl");
@@ -3759,12 +3777,14 @@ function selectedDiscussionContext() {
 }
 
 function discussionTopicTitleForSelection() {
-  const explicit = extractFrontMatterValue(state.editor?.content || "", ["discussion_title", "discussionTitle"]);
-  if (explicit) {
-    return explicit;
+  if (isMarkdownPath(state.selectedPath) && state.editor?.content) {
+    const explicit = extractFrontMatterValue(state.editor.content, ["discussion_title", "discussionTitle"]);
+    if (explicit) {
+      return explicit;
+    }
   }
   const file = state.files.find((item) => item.path === state.selectedPath);
-  const displayTitle = markdownDisplayTitle(file);
+  const displayTitle = isMarkdownPath(state.selectedPath) ? markdownDisplayTitle(file) : "";
   return displayTitle ? `Diskuse: ${displayTitle}` : `Diskuse: ${state.selectedPath}`;
 }
 
@@ -4049,7 +4069,9 @@ function normalizeQuotedMarkdown(value) {
 }
 
 function discussionCategoryForSelection() {
-  const frontMatterOwner = extractFrontMatterValue(state.editor?.content || "", ["owner"]);
+  const frontMatterOwner = isMarkdownPath(state.selectedPath)
+    ? extractFrontMatterValue(state.editor?.content || "", ["owner"])
+    : "";
   const baseName = frontMatterOwner || "AVDS";
   return `${normalizeDiscussionCategoryName(baseName)}-RUN`;
 }

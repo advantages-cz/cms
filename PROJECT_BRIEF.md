@@ -142,7 +142,7 @@ Implemented capabilities:
 - Rendered Markdown preview in browse mode.
 - Front matter-aware Markdown rendering.
 - Collapsed front matter display in rendered Markdown preview.
-- Optional Discourse discussion side panel for Markdown documents. The panel opens from the file header and supports a no-auth MVP for private Discourse instances by opening Discourse search for the current CMS document URL and a pre-filled `new-topic` composer built from the current document metadata.
+- Optional Discourse discussion side panel for any selected file. The panel opens from the file header and supports a no-auth MVP for private Discourse instances by opening Discourse search for the current CMS file URL and a pre-filled `new-topic` composer. Markdown documents additionally contribute selection quotes and front matter-based discussion metadata.
 - Internal Markdown links resolved through the CMS tree instead of navigating the browser frame; links to existing directories select and expand the matching tree folder.
 - Markdown heading anchors normalize diacritics consistently between generated heading IDs and rendered internal links.
 - Markdown preview hides HTML comments and supports angle-bracket link destinations with spaces, such as `[PDF](<vystupy/test pozvanky/file.pdf>)`.
@@ -151,7 +151,7 @@ Implemented capabilities:
 - Fixed-height application shell with internal scrolling in the tree and preview regions.
 - Resizable file tree width in the files workbench.
 - Dismissible error and notification messages.
-- Consolidated top workflow toolbar for branch, mode, edit, pull request, and refresh actions.
+- Consolidated top workflow toolbar for branch, pull request, and refresh actions, while file-specific edit and discussion actions live in the selected-file header.
 - User menu in the top toolbar for changing sign-in and logging out.
 - English/Czech localization with English as the default language, UI copy centralized in `src/i18n.js`, and language selectors in both the top toolbar and GitHub sign-in modal.
 - Light, dark, and automatic appearance modes in the top toolbar. Automatic mode follows `prefers-color-scheme`, and the selected preference is stored with other browser-local CMS settings.
@@ -480,6 +480,18 @@ Reasoning: Locale and visual theme are account/session preferences, not primary 
 Decision: The Discourse discussion workflow no longer reads or generates canonical document URLs. Both Discourse search and the prefilled topic body use the current CMS document URL instead, and the optional canonical-related config keys were removed.
 
 Reasoning: The canonical URL mapping was only used as an internal lookup string, not as a stable public route. Reusing the existing CMS URL removes extra configuration and front matter expectations without changing the static GitHub Pages architecture.
+
+### 2026-06-08: Extend Discussion Links Beyond Markdown
+
+Decision: The optional Discourse discussion workflow is available for any selected repository file, including images, PDFs, and generated outputs. Markdown files keep richer prefill behavior such as selected quote snippets, front matter discussion titles, and owner-derived category hints.
+
+Reasoning: Review conversations often belong to generated artifacts or binary deliverables rather than only source Markdown. Using the CMS file URL as the common lookup key keeps the MVP static and credential-free while preserving Markdown-specific conveniences where they exist.
+
+### 2026-06-08: Keep File Actions In The File Header
+
+Decision: The selected-file header owns file-specific actions such as `Upravit`, back-to-preview, and Discourse discussion links. The top toolbar keeps branch switching, PR, and refresh workflow controls only.
+
+Reasoning: Editing and discussion both depend on the currently selected file, while branch switching and PR creation apply to the whole repository state. Grouping actions by scope reduces toolbar noise and keeps the preview header as the single place to act on the current file.
 
 ## Update Protocol
 

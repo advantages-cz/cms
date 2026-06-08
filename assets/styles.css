@@ -792,6 +792,18 @@ textarea:focus {
   justify-content: flex-end;
 }
 
+.button-with-icon {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.button-with-icon svg {
+  width: 15px;
+  height: 15px;
+  flex: 0 0 auto;
+}
+
 .primary {
   border-color: var(--cms-color-brand-black);
   background: var(--cms-color-brand-black);

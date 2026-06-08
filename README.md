@@ -29,7 +29,7 @@ Adaptivio also needs GitHub Actions status, failing check annotations, detection
 - Shows workflow runs for the current branch.
 - Optionally loads check runs and check annotations for CI errors when the token/installation supports the Checks API.
 - Renders Markdown previews including front matter.
-- Opens a slide-over Discourse discussion panel for the selected Markdown document, using the current CMS document URL plus plain Discourse links for opening search and a pre-filled new-topic composer.
+- Opens a slide-over Discourse discussion panel for the selected file, using the current CMS file URL plus plain Discourse links for opening search and a pre-filled new-topic composer. Markdown files additionally prefill quote selections and front matter-based metadata.
 - Previews HTML in a sandboxed iframe with relative image/SVG/CSS assets resolved when possible.
 - Previews PDF, SVG, images, and text.
 - Supports English and Czech UI through `src/i18n.js`; English is the default language.
@@ -81,7 +81,8 @@ For the discussion MVP:
 
 - `discourseUrl` points to the self-hosted Discourse base URL.
 - `discourseCategoryId` and `discourseTags` optionally prefill topic creation.
-- `Open discussion` uses Discourse search for the current CMS document URL, while `Create topic` opens `/new-topic` with a pre-filled title, body, category, and tags as described in the official Discourse guide.
+- `Open discussion` uses Discourse search for the current CMS file URL, while `Create topic` opens `/new-topic` with a pre-filled title, body, category, and tags as described in the official Discourse guide.
+- Markdown files keep the richer discussion prefill behavior: selected quote snippets, front matter discussion titles, and owner-derived category hints.
 
 ## Localization
 
