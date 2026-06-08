@@ -155,6 +155,14 @@ function registerServiceWorker() {
   });
 }
 
+function syncThemeColor() {
+  const meta = document.querySelector('meta[name="theme-color"]');
+  if (!(meta instanceof HTMLMetaElement)) {
+    return;
+  }
+  meta.setAttribute("content", document.documentElement.dataset.theme === "dark" ? "#111315" : "#f6f7f8");
+}
+
 app.addEventListener("submit", (event) => {
   const form = event.target.closest("form[data-form]");
   if (!form) {
@@ -5227,6 +5235,7 @@ function applyTheme() {
   root.dataset.theme = resolved;
   root.dataset.themeMode = state.theme;
   root.style.colorScheme = resolved;
+  syncThemeColor();
 }
 
 function normalizeTreePaneWidth(value) {
