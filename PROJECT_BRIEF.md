@@ -158,6 +158,7 @@ Implemented capabilities:
 - English/Czech localization with English as the default language, UI copy centralized in `src/i18n.js`, and language selectors in both the top toolbar and GitHub sign-in modal.
 - Light, dark, and automatic appearance modes in the top toolbar. Automatic mode follows `prefers-color-scheme`, and the selected preference is stored with other browser-local CMS settings.
 - CMS design-system pass based on Adaptivio brand rules: role-based CSS tokens, approved black Adaptivio symbol in the toolbar, compact product toolbar, explicit branch/mode status patterns, restrained brand treatment, quieter panels, denser tree rows, and document-like previews.
+- The application shell includes a branded SVG favicon derived from the approved Adaptivio symbol so the CMS is recognizable in browser tabs and pinned tab lists.
 - Refined toolbar action model: edit/browse state lives in the primary workflow button, refresh is icon-only with a local Lucide-style SVG and an accessible label, PR creation is hidden until the branch has changes, and the signed-in user control looks like an account menu.
 - Review workspace split into separate `Změny` and `Commity` tabs with badge counts. PR creation/opening lives in the toolbar, while the tabs focus on changed-file and commit lists and refresh after commit operations.
 - Post-commit Actions feedback shows concrete files changed after the last CMS commit as clickable CMS links instead of a generic completed-workflow banner.

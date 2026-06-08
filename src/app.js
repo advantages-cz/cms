@@ -2329,6 +2329,7 @@ function renderLoginScreen(message) {
           <p>${t("auth.fixedRepo", { repo: `<span class="path">${escapeHtml(FIXED_REPOSITORY)}</span>`, branch: `<span class="path">${escapeHtml(FIXED_DEFAULT_BRANCH)}</span>` })}</p>
           <p>${t("auth.minimumPermissions")}</p>
           <p>${t("auth.tokenRepoScope")}</p>
+          <p><a href="https://github.com/settings/personal-access-tokens" target="_blank" rel="noopener noreferrer">${t("auth.openTokenSettings")}</a></p>
         </div>
         <figure class="login-permissions-example">
           <figcaption>
