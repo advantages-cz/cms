@@ -2763,7 +2763,7 @@ function treeIconSvg(iconClass) {
 }
 
 function isLowEmphasisTreeFile(path) {
-  if (String(path || "").toLowerCase() === "agents.md") {
+  if (isAgentsPath(path)) {
     return true;
   }
   const ext = extensionOf(path);
@@ -4017,12 +4017,16 @@ function isHiddenRootTreeChild(child, depth) {
   if (child.type === "dir") {
     return isLowEmphasisRootDirectory(child, depth);
   }
-  return child.type === "file" && isLowEmphasisTreeFile(child.path);
+  return child.type === "file" && isLowEmphasisTreeFile(child.path) && !isAgentsPath(child.path);
 }
 
 function isReadmePath(path) {
   const name = String(path || "").split("/").pop() || "";
   return /^readme\.md$/i.test(name);
+}
+
+function isAgentsPath(path) {
+  return String(path || "").toLowerCase() === "agents.md";
 }
 
 function isSearchIndexablePath(path) {

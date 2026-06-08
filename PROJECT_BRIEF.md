@@ -115,7 +115,7 @@ Implemented capabilities:
 - Tree browser for repository contents.
 - CMS-oriented tree sorting: root `README.md` opens by default; each level sorts `README.md` first, `rozcestnik.md` second, then regular files, dotfiles, regular folders, and dot-prefixed folders.
 - Root-level muted technical folders and files are hidden from the tree instead of being rendered in a dimmed state.
-- `AGENTS.md` is rendered as a muted technical file in the tree.
+- `AGENTS.md` is rendered as a muted technical file in the tree, including at the root level.
 - Markdown front matter titles in the tree when available, with the filename shown in muted parentheses.
 - Front matter titles and fulltext search are populated from hydrated startup content instead of separate background Git blob reads.
 - Search input rendering is debounced so fast typing is not interrupted by immediate result re-renders.
@@ -373,7 +373,7 @@ Decision: Root-level muted technical folders and files are removed from the tree
 
 Reasoning: The muted root items were still adding visual noise even though they were intentionally de-emphasized. Hiding them makes the default repository tree cleaner while keeping deeper non-root files available for browsing.
 
-Decision: `AGENTS.md` is treated as a muted technical file in the tree.
+Decision: `AGENTS.md` is treated as a muted technical file in the tree, including at the root level.
 
 Reasoning: The agent guidance file is useful for the workspace but should not visually compete with the main content pages.
 
