@@ -116,7 +116,7 @@ Implemented capabilities:
 - CMS-oriented tree sorting: root `README.md` opens by default; each level sorts `README.md` first, `rozcestnik.md` second, then regular files, dotfiles, regular folders, and dot-prefixed folders.
 - Root-level muted technical folders and files are hidden from the tree instead of being rendered in a dimmed state.
 - `AGENTS.md` is rendered as a muted technical file in the tree, including at the root level.
-- Markdown front matter titles in the tree when available, with the filename shown in muted parentheses.
+- Markdown front matter titles in the tree when available, hiding the filename when a title exists.
 - Front matter titles and fulltext search are populated from hydrated startup content instead of separate background Git blob reads.
 - Search input rendering is debounced so fast typing is not interrupted by immediate result re-renders.
 - Live front matter title updates while editing Markdown, reflected in the tree and changed-file metadata before the commit finishes.
@@ -379,7 +379,7 @@ Reasoning: The agent guidance file is useful for the workspace but should not vi
 
 ### 2026-06-02: Show Front Matter Titles In Tree
 
-Decision: Markdown files can display their front matter `title` in the tree, with the filename in parentheses. The original capped background scan was superseded on 2026-06-08 by startup content hydration and blob-SHA caching.
+Decision: Markdown files can display their front matter `title` in the tree, hiding the filename when a title is available. The original capped background scan was superseded on 2026-06-08 by startup content hydration and blob-SHA caching.
 
 Reasoning: Editors recognize content by page title more easily than by slug. Loading titles from already hydrated startup content keeps the static GitHub API workflow predictable without a second scan.
 

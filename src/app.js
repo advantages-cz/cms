@@ -2672,7 +2672,7 @@ function renderTreeFile(file, depth, changedStatuses = new Map()) {
 
 function treeFileDisplayName(file) {
   const title = markdownDisplayTitle(file);
-  return title ? { title, filename: file.name } : { title: file.name, filename: "" };
+  return title ? { title, filename: "" } : { title: file.name, filename: "" };
 }
 
 function treeDirectoryDisplayName(dir) {
