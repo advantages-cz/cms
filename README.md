@@ -109,7 +109,8 @@ node --test
 
 ## Limitations
 
-- The CMS loads the repository tree through the Git Trees API. For very large repositories, GitHub may return a truncated tree.
+- The CMS caches repository snapshots and hydrated `.md`, `.mdx`, `.html`, and `.htm` contents in browser IndexedDB by branch head SHA and file blob SHA. If the cached head matches the current branch head, startup uses the local snapshot instead of re-downloading the tree or text contents.
+- The CMS loads the repository tree through the Git Trees API when the branch head changes. For very large repositories, GitHub may return a truncated tree.
 - Editing is intentionally limited to Markdown. Other files are browsed or created by automation.
 - Previews show files committed to the branch. The app does not download separate Actions artifact ZIPs.
 - PR merge stays in the GitHub UI so branch protection and review rules remain the source of truth.

@@ -1177,6 +1177,7 @@ body.is-resizing-tree-pane {
 .search-results {
   align-content: start;
   gap: 4px;
+  grid-auto-rows: auto;
   padding: 6px;
 }
 
@@ -1199,7 +1200,7 @@ body.is-resizing-tree-pane {
   grid-template-columns: 18px minmax(0, 1fr) auto;
   align-items: start;
   gap: 8px;
-  min-height: 68px;
+  min-height: 92px;
   width: 100%;
   border-color: transparent;
   padding: 8px 7px;
@@ -1219,6 +1220,7 @@ body.is-resizing-tree-pane {
   gap: 3px;
   min-width: 0;
   min-height: 0;
+  overflow: hidden;
 }
 
 .search-result-title,
@@ -1248,11 +1250,15 @@ body.is-resizing-tree-pane {
 }
 
 .search-result-snippet {
-  display: block;
-  max-height: 34px;
+  display: -webkit-box;
+  overflow: hidden;
+  max-height: calc(2 * 12px * 1.35);
   color: var(--muted);
   font-size: 12px;
   line-height: 1.35;
+  line-clamp: 2;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
 }
 
 .search-result-kind {
@@ -1265,7 +1271,7 @@ mark,
   border-radius: 3px;
   padding: 0 2px;
   background: color-mix(in srgb, var(--cms-color-brand-blue) 55%, transparent);
-  color: inherit;
+  color: #000000;
 }
 
 .tree-browser {
@@ -2080,6 +2086,81 @@ mark,
   padding: 20px;
 }
 
+.connection-status {
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: 12px;
+  min-height: calc(100vh - var(--toolbar-height) - 36px);
+  padding: 28px;
+  text-align: center;
+}
+
+.connection-status h2,
+.connection-status p {
+  margin: 0;
+}
+
+.connection-status h2 {
+  font-size: 22px;
+}
+
+.connection-status p {
+  max-width: 560px;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.connection-status .button-row {
+  justify-content: center;
+  margin-top: 8px;
+}
+
+.connection-status-indicator {
+  width: 42px;
+  height: 42px;
+  border: 3px solid var(--line-strong);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: busy-spin 900ms linear infinite;
+}
+
+.connection-status.is-error .connection-status-indicator {
+  display: grid;
+  place-items: center;
+  border-color: var(--danger);
+  animation: none;
+}
+
+.connection-status.is-error .connection-status-indicator::before {
+  content: "!";
+  color: var(--danger);
+  font-weight: 800;
+}
+
+.connection-status-progress {
+  position: relative;
+  width: min(420px, 78vw);
+  height: 7px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--surface-strong);
+}
+
+.connection-status-progress span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--accent);
+  transition: width 160ms ease;
+}
+
+.connection-status-progress.is-indeterminate span {
+  position: absolute;
+  width: 36%;
+  animation: busy-progress-slide 1100ms ease-in-out infinite;
+}
+
 .split {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -2122,6 +2203,92 @@ mark,
 .loading {
   opacity: 0.72;
   pointer-events: none;
+}
+
+.busy-overlay {
+  position: fixed;
+  left: 50%;
+  top: 14px;
+  z-index: 55;
+  display: grid;
+  grid-template-columns: 22px minmax(220px, 340px);
+  gap: 12px;
+  align-items: center;
+  width: min(420px, calc(100vw - 28px));
+  transform: translateX(-50%);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  padding: 12px 14px;
+  background: color-mix(in srgb, var(--surface) 94%, transparent);
+  box-shadow: var(--shadow);
+  backdrop-filter: blur(12px);
+}
+
+.busy-indicator {
+  width: 22px;
+  height: 22px;
+  border: 2px solid var(--line-strong);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: busy-spin 900ms linear infinite;
+}
+
+.busy-main {
+  min-width: 0;
+}
+
+.busy-title,
+.busy-detail {
+  margin: 0;
+}
+
+.busy-title {
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.busy-detail {
+  margin-top: 2px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.busy-progress {
+  position: relative;
+  height: 5px;
+  margin-top: 8px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--surface-strong);
+}
+
+.busy-progress span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--accent);
+  transition: width 160ms ease;
+}
+
+.busy-progress-indeterminate span {
+  position: absolute;
+  width: 38%;
+  animation: busy-progress-slide 1100ms ease-in-out infinite;
+}
+
+@keyframes busy-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes busy-progress-slide {
+  0% {
+    left: -40%;
+  }
+  100% {
+    left: 102%;
+  }
 }
 
 .toast-stack {

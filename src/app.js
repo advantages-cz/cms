@@ -8,7 +8,13 @@ import {
   upsertFileMetadata as upsertFileMetadataState,
 } from "./editorWorkflow.js?v=20260603-post-save-ref";
 import { GitHubClient, GitHubError } from "./github.js";
-import { DEFAULT_LANGUAGE, LANGUAGES, normalizeLanguage, translate } from "./i18n.js";
+import { DEFAULT_LANGUAGE, LANGUAGES, normalizeLanguage, translate } from "./i18n.js?v=20260608-connection-status";
+import {
+  loadCachedContents,
+  loadRepositoryCache,
+  saveCachedContent,
+  saveRepositoryCache,
+} from "./repoCache.js";
 import {
   clearToken,
   loadLastSave,
@@ -19,7 +25,6 @@ import {
   saveToken,
 } from "./storage.js";
 import {
-  base64ToText,
   blobFromBase64,
   classifyConclusion,
   debounce,
@@ -47,15 +52,9 @@ const FIXED_DEFAULT_BRANCH = "master";
 const DEFAULT_TREE_PANE_WIDTH = 380;
 const MIN_TREE_PANE_WIDTH = 260;
 const MIN_PREVIEW_PANE_WIDTH = 360;
-const MAX_FRONT_MATTER_TITLE_FILES = 200;
-const MAX_FRONT_MATTER_TITLE_BYTES = 256 * 1024;
-const FRONT_MATTER_TITLE_CONCURRENCY = 4;
-const FRONT_MATTER_TITLE_EAGER_RENDER_COUNT = 24;
-const FRONT_MATTER_TITLE_RENDER_BATCH = 4;
 const MAX_SEARCH_INDEX_BYTES = 256 * 1024;
-const SEARCH_INDEX_CONCURRENCY = 1;
-const SEARCH_INDEX_START_DELAY_MS = 1200;
 const THEME_MODES = ["auto", "light", "dark"];
+const STARTUP_CONTENT_EXTENSIONS = ["md", "mdx", "html", "htm"];
 const systemDarkQuery = window.matchMedia?.("(prefers-color-scheme: dark)") || null;
 
 const state = {
@@ -80,13 +79,6 @@ const state = {
   frontMatterTitleDraftByPath: new Map(),
   searchTextBySha: new Map(),
   searchContentBySha: new Map(),
-  frontMatterTitleScanning: false,
-  frontMatterTitleScannedCount: 0,
-  frontMatterTitleScanCount: 0,
-  frontMatterTitlesReady: false,
-  searchIndexing: false,
-  searchIndexedCount: 0,
-  searchIndexableCount: 0,
   treeTruncated: false,
   headSha: "",
   tab: normalizeTab(settings.tab),
@@ -110,11 +102,13 @@ const state = {
   pullCommits: [],
   checkRuns: [],
   checkRunsError: "",
+  checksApiUnavailable: false,
   workflowRuns: [],
   annotations: {},
   modal: null,
   busy: false,
   busyLabel: "",
+  busyProgress: null,
   connectionError: "",
   toasts: [],
   permissionCheck: null,
@@ -130,18 +124,18 @@ let actionPollTimer = null;
 let actionPollInFlight = false;
 let restoringBrowserNavigation = false;
 let treePaneResizeDrag = null;
-let frontMatterTitleScanId = 0;
-let searchIndexScanId = 0;
-let searchIndexTimer = null;
-let backgroundIdleRenderTimer = null;
-let deferBackgroundRenderUntilIndexingComplete = false;
 let backgroundRenderPending = false;
+let globalSearchTypingTimer = null;
+let globalSearchTyping = false;
 
 function normalizeTab(tab) {
   return ["files", "changes", "commits", "actions"].includes(tab) ? tab : tab === "review" ? "changes" : "files";
 }
 
-const scheduleFilterRender = debounce(() => render(), 160);
+const scheduleFilterRender = debounce(() => {
+  globalSearchTyping = false;
+  render();
+}, 320);
 const scheduleEditorMetadataRender = debounce(() => render(), 160);
 
 applyTheme();
@@ -270,6 +264,7 @@ async function handleForm(form) {
       state.token = token;
       state.client = new GitHubClient(token);
       state.permissionCheck = null;
+      resetChecksApiState();
       saveToken(token, persistence);
       toast(t("auth.tokenSaved"), "ok");
       shouldCheckToken = true;
@@ -329,6 +324,7 @@ async function handleAction(button) {
     state.user = null;
     state.userMenuOpen = false;
     state.permissionCheck = null;
+    resetChecksApiState();
     clearToken();
     toast(t("auth.tokenCleared"), "ok");
     render();
@@ -406,7 +402,7 @@ async function handleAction(button) {
 
   if (action === "select-file") {
     const path = button.dataset.path || "";
-    await loadFile(path, { syncLatest: path === state.selectedPath, navigation: "push" });
+    await loadFile(path, { navigation: "push" });
     return;
   }
 
@@ -443,7 +439,7 @@ async function handleAction(button) {
   if (action === "preview-file") {
     state.tab = "files";
     persistSettings();
-    await loadFile(button.dataset.path || "", { syncLatest: true, navigation: "push", revealInTree: true });
+    await loadFile(button.dataset.path || "", { navigation: "push", revealInTree: true });
     return;
   }
 
@@ -531,7 +527,7 @@ async function handleChange(target) {
     state.selectedDir = "";
     state.editor = null;
     persistSettings();
-    await refreshRepositoryData();
+    await refreshRepositoryData({ knownHeadSha: headShaForBranch(state.branch) });
     updateBrowserNavigation({ mode: "push" });
     return;
   }
@@ -559,6 +555,11 @@ async function handleChange(target) {
 function handleInput(target) {
   if (target.id === "global-search" && target instanceof HTMLInputElement) {
     state.pathFilter = target.value;
+    globalSearchTyping = true;
+    window.clearTimeout(globalSearchTypingTimer);
+    globalSearchTypingTimer = window.setTimeout(() => {
+      globalSearchTyping = false;
+    }, 360);
     scheduleFilterRender();
     return;
   }
@@ -683,7 +684,7 @@ async function connectRepository({ silent = false } = {}) {
     }
 
     persistSettings();
-    await refreshRepositoryData({ keepBusy: true });
+    await refreshRepositoryData({ keepBusy: true, knownHeadSha: headShaForBranch(state.branch) });
     await restoreSelectionFromLocation({ keepBusy: true });
     await selectDefaultRootReadme({ keepBusy: true });
     updateBrowserNavigation({ mode: "replace" });
@@ -730,26 +731,20 @@ async function checkTokenAccess({ keepBusy = false } = {}) {
     const repo = encodeURIComponent(state.repo);
     const branch = encodeURIComponent(state.branch || state.defaultBranch || "main");
     const repoPath = `/repos/${owner}/${repo}`;
-    const branchPath = `${repoPath}/branches/${branch}`;
-    let branchPayload = null;
-
     await probeTokenEndpoint(items, {
       label: t("permissions.repoMetadata"),
       required: "Metadata: read a repository access",
       run: () => state.client.requestWithMeta(repoPath),
     });
 
-    const contentsReadProbe = await probeTokenEndpoint(items, {
+    const contentsReadProbe = state.files.length || state.headSha;
+    items.push({
       label: t("permissions.contentsRead"),
       required: "Contents: read",
-      run: async () => {
-        const branchResult = await state.client.requestWithMeta(branchPath);
-        branchPayload = branchResult.payload;
-        const commitSha = branchPayload?.commit?.sha;
-        const commitResult = await state.client.requestWithMeta(`${repoPath}/git/commits/${commitSha}`);
-        const treeSha = commitResult.payload?.tree?.sha;
-        return state.client.requestWithMeta(`${repoPath}/git/trees/${treeSha}?recursive=1`);
-      },
+      status: contentsReadProbe ? "ok" : "warn",
+      optional: false,
+      endpoint: "repository cache / Git tree refresh",
+      detail: contentsReadProbe ? t("permissions.readPassedMessage") : t("permissions.addRepoAndRetry"),
     });
 
     await probeTokenEndpoint(items, {
@@ -758,7 +753,7 @@ async function checkTokenAccess({ keepBusy = false } = {}) {
       run: () => state.client.requestWithMeta(`${repoPath}/pulls?state=open&per_page=1`),
     });
 
-    const ref = branchPayload?.commit?.sha || state.headSha || state.branch || state.defaultBranch || "main";
+    const ref = state.headSha || state.branch || state.defaultBranch || "main";
     await probeTokenEndpoint(items, {
       label: t("permissions.checks"),
       required: `Checks: ${t("permissions.checksOptional")}`,
@@ -841,12 +836,12 @@ function addManualTokenChecks(items, detail) {
   );
 }
 
-async function refreshRepositoryData({ keepBusy = false, preserveSelection = false } = {}) {
+async function refreshRepositoryData({ keepBusy = false, preserveSelection = false, knownHeadSha = "" } = {}) {
   const run = async () => {
     assertConnected();
     const previousPath = preserveSelection && !state.editor?.dirty ? state.selectedPath : "";
     const previousDir = preserveSelection ? state.selectedDir : "";
-    const tree = await state.client.listTree(state.owner, state.repo, state.branch);
+    const tree = await loadRepositorySnapshot(knownHeadSha);
     revokePreviewUrls();
     state.editor = null;
     state.preview = null;
@@ -854,7 +849,6 @@ async function refreshRepositoryData({ keepBusy = false, preserveSelection = fal
     state.selectedDir = "";
     applyRepositoryTree(tree);
     state.lastSave = loadLastSave(state.owner, state.repo, state.branch);
-    deferBackgroundRenderUntilIndexingComplete = true;
     const reviewRefresh = Promise.allSettled([
       refreshReviewData({ keepBusy: true }),
       refreshActions({ keepBusy: true, syncBranch: false }),
@@ -865,7 +859,7 @@ async function refreshRepositoryData({ keepBusy = false, preserveSelection = fal
       void reviewRefresh.then(() => {
         syncActionPollingWithStatus();
         backgroundRenderPending = true;
-        renderWhenBackgroundLoadingIdle();
+        renderWhenBackgroundRefreshCompletes();
       });
     }
 
@@ -881,22 +875,16 @@ async function refreshRepositoryData({ keepBusy = false, preserveSelection = fal
   } else {
     await withBusy(t("repo.loadingBranch"), run);
   }
-  if (state.files.length && state.client && state.owner && state.repo) {
-    scheduleFrontMatterTitleScan();
-  } else {
-    completeBackgroundIndexingCycle();
-  }
 }
 
 async function refreshRepositoryTree({ keepBusy = false, expectedHeadSha = "" } = {}) {
   const run = async () => {
     assertConnected();
-    const tree = await state.client.listTree(state.owner, state.repo, state.branch);
+    const tree = await loadRepositorySnapshot(expectedHeadSha || headShaForBranch(state.branch));
     if (expectedHeadSha && tree.headSha !== expectedHeadSha) {
       return;
     }
     applyRepositoryTree(tree);
-    scheduleFrontMatterTitleScan();
     state.lastSave = loadLastSave(state.owner, state.repo, state.branch);
   };
 
@@ -905,6 +893,100 @@ async function refreshRepositoryTree({ keepBusy = false, expectedHeadSha = "" } 
   } else {
     await withBusy(t("repo.loadingBranch"), run);
   }
+}
+
+async function loadRepositorySnapshot(headSha = "") {
+  const cached = await loadRepositoryCache(state.owner, state.repo, state.branch).catch(() => null);
+  if (cached && headSha && cached.headSha === headSha && sameStartupContentExtensions(cached.startupContentExtensions)) {
+    return {
+      headSha: cached.headSha,
+      treeSha: cached.treeSha || "",
+      truncated: Boolean(cached.truncated),
+      tree: cached.tree || [],
+      cacheHit: true,
+    };
+  }
+
+  const tree = await state.client.listTree(state.owner, state.repo, state.branch, { headSha });
+  const nextTree = await hydrateStartupContent(tree, cached);
+  await saveRepositoryCache(state.owner, state.repo, state.branch, {
+    headSha: nextTree.headSha,
+    treeSha: nextTree.treeSha || "",
+    truncated: Boolean(nextTree.truncated),
+    startupContentExtensions: STARTUP_CONTENT_EXTENSIONS,
+    tree: nextTree.tree,
+  }).catch(() => {});
+  return nextTree;
+}
+
+async function hydrateStartupContent(tree, cached) {
+  const startupEntries = tree.tree.filter((entry) => entry.type === "blob" && isStartupContentPath(entry.path));
+  const cachedTreeBySha = new Map();
+  for (const entry of cached?.tree || []) {
+    if (entry?.sha && typeof entry.content === "string") {
+      cachedTreeBySha.set(entry.sha, entry.content);
+    }
+  }
+  const storedBySha = await loadCachedContents(
+    state.owner,
+    state.repo,
+    startupEntries.map((entry) => entry.sha),
+  ).catch(() => new Map());
+  const contentBySha = new Map([...cachedTreeBySha, ...storedBySha]);
+  const missingEntries = startupEntries.filter((entry) => !contentBySha.has(entry.sha));
+  setBusyProgress(
+    missingEntries.length
+      ? {
+          label: t("repo.loadingStartupContent"),
+          current: 0,
+          total: missingEntries.length,
+        }
+      : null,
+  );
+
+  for (let index = 0; index < missingEntries.length; index += 1) {
+    const entry = missingEntries[index];
+    const content = await state.client.getContent(state.owner, state.repo, entry.path, tree.headSha || state.branch);
+    if (Array.isArray(content) || content.type !== "file") {
+      setBusyProgress({
+        label: t("repo.loadingStartupContent"),
+        current: index + 1,
+        total: missingEntries.length,
+      });
+      continue;
+    }
+    const text = decodeContentApiText(content.content || "");
+    contentBySha.set(entry.sha, text);
+    await saveCachedContent(state.owner, state.repo, entry.sha, text, entry.path).catch(() => {});
+    setBusyProgress({
+      label: t("repo.loadingStartupContent"),
+      current: index + 1,
+      total: missingEntries.length,
+    });
+  }
+  setBusyProgress(null);
+
+  return {
+    ...tree,
+    tree: tree.tree.map((entry) => {
+      if (entry.type !== "blob" || !isStartupContentPath(entry.path) || !contentBySha.has(entry.sha)) {
+        return entry;
+      }
+      return { ...entry, content: contentBySha.get(entry.sha) };
+    }),
+  };
+}
+
+function headShaForBranch(branchName) {
+  return state.branches.find((branch) => branch.name === branchName)?.commit?.sha || "";
+}
+
+function isStartupContentPath(path) {
+  return STARTUP_CONTENT_EXTENSIONS.includes(extensionOf(path));
+}
+
+function sameStartupContentExtensions(extensions) {
+  return JSON.stringify(extensions || []) === JSON.stringify(STARTUP_CONTENT_EXTENSIONS);
 }
 
 async function refreshReviewData({ keepBusy = false } = {}) {
@@ -955,16 +1037,24 @@ async function refreshActions({ keepBusy = false, syncBranch = true } = {}) {
     if (syncBranch) {
       headChanged = await syncRepositoryHead({ notify: false });
     }
+    const checkRunsPromise = state.checksApiUnavailable
+      ? Promise.resolve({ check_runs: [] })
+      : state.client.getCheckRuns(state.owner, state.repo, state.headSha || state.branch);
     const [checkRunsResult, workflowRunsResult] = await Promise.allSettled([
-      state.client.getCheckRuns(state.owner, state.repo, state.headSha || state.branch),
+      checkRunsPromise,
       state.client.getWorkflowRuns(state.owner, state.repo, state.branch),
     ]);
     if (checkRunsResult.status === "fulfilled") {
       state.checkRuns = checkRunsResult.value.check_runs || [];
-      state.checkRunsError = "";
+      if (!state.checksApiUnavailable) {
+        state.checkRunsError = "";
+      }
     } else {
       state.checkRuns = [];
       state.checkRunsError = formatError(checkRunsResult.reason);
+      if (isOptionalChecksApiError(checkRunsResult.reason)) {
+        state.checksApiUnavailable = true;
+      }
     }
     if (workflowRunsResult.status === "rejected") {
       throw workflowRunsResult.reason;
@@ -980,6 +1070,13 @@ async function refreshActions({ keepBusy = false, syncBranch = true } = {}) {
   }
 
   return { headChanged };
+}
+
+function isOptionalChecksApiError(error) {
+  if (!(error instanceof GitHubError)) {
+    return false;
+  }
+  return error.status === 403 || error.status === 404;
 }
 
 function startActionPolling() {
@@ -1055,11 +1152,10 @@ async function syncRepositoryHead({ reloadSelection = true, notify = true } = {}
   const previousHeadSha = state.headSha;
   const previousPath = state.selectedPath;
   const canReloadSelection = reloadSelection && Boolean(previousPath) && !state.editor?.dirty;
-  const tree = await state.client.listTree(state.owner, state.repo, state.branch);
+  const tree = await loadRepositorySnapshot(headShaForBranch(state.branch));
   const headChanged = Boolean(previousHeadSha) && tree.headSha !== previousHeadSha;
 
   applyRepositoryTree(tree);
-  scheduleFrontMatterTitleScan();
   state.lastSave = loadLastSave(state.owner, state.repo, state.branch);
 
   if (!headChanged) {
@@ -1099,15 +1195,7 @@ function applyRepositoryTree(tree) {
     }))
     .sort((a, b) => a.path.localeCompare(b.path));
   pruneBlobCaches();
-  cancelSearchIndexScan();
-}
-
-function cancelSearchIndexScan() {
-  searchIndexScanId += 1;
-  window.clearTimeout(searchIndexTimer);
-  searchIndexTimer = null;
-  state.searchIndexing = false;
-  state.frontMatterTitlesReady = false;
+  hydrateContentCachesFromFiles();
 }
 
 function pruneBlobCaches() {
@@ -1116,6 +1204,24 @@ function pruneBlobCaches() {
   pruneSetValues(state.frontMatterTitleAttemptedBySha, activeShas);
   pruneMapKeys(state.searchTextBySha, activeShas);
   pruneMapKeys(state.searchContentBySha, activeShas);
+}
+
+function hydrateContentCachesFromFiles() {
+  for (const file of state.files) {
+    if (!isStartupContentPath(file.path) || typeof file.content !== "string") {
+      continue;
+    }
+    if (isSearchIndexablePath(file.path) && file.size <= MAX_SEARCH_INDEX_BYTES) {
+      state.searchTextBySha.set(file.sha, normalizeSearchText(file.content));
+      state.searchContentBySha.set(file.sha, file.content);
+    }
+    if (isMarkdownPath(file.path)) {
+      const title = extractFrontMatterTitle(file.content);
+      state.frontMatterTitleBySha.set(file.sha, title);
+      state.frontMatterTitleAttemptedBySha.add(file.sha);
+      applyFrontMatterTitleToFile(file.sha, title);
+    }
+  }
 }
 
 function pruneMapKeys(map, activeKeys) {
@@ -1173,6 +1279,7 @@ async function startEditSession({ forceNewBranch = false } = {}) {
 
     state.editMode = true;
     persistSettings();
+    updateBrowserNavigation({ mode: "replace" });
     await refreshRepositoryData({ keepBusy: true });
 
     if (previousPath && state.files.some((file) => file.path === previousPath)) {
@@ -1222,8 +1329,7 @@ async function loadFile(path, { keepBusy = false, syncLatest = false, navigation
     };
 
     if (isTextPath(path)) {
-      const blob = await state.client.getBlob(state.owner, state.repo, entry.sha);
-      state.editor.content = base64ToText(blob.content || "");
+      state.editor.content = await loadTextContentForEntry(entry);
       state.editor.baseContent = state.editor.content;
       if (isSearchIndexablePath(path) && entry.size <= MAX_SEARCH_INDEX_BYTES) {
         state.searchTextBySha.set(entry.sha, normalizeSearchText(state.editor.content));
@@ -1249,6 +1355,23 @@ async function loadFile(path, { keepBusy = false, syncLatest = false, navigation
   } else {
     await withBusy(t("repo.loadingFile"), run);
   }
+}
+
+async function loadTextContentForEntry(entry) {
+  if (typeof entry.content === "string") {
+    return entry.content;
+  }
+  const cached = await loadCachedContents(state.owner, state.repo, [entry.sha]).catch(() => new Map());
+  if (cached.has(entry.sha)) {
+    return cached.get(entry.sha);
+  }
+  const content = await state.client.getContent(state.owner, state.repo, entry.path, state.headSha || state.branch);
+  if (Array.isArray(content) || content.type !== "file") {
+    throw new Error(t("files.selectedMissing"));
+  }
+  const text = decodeContentApiText(content.content || "");
+  await saveCachedContent(state.owner, state.repo, entry.sha, text, entry.path).catch(() => {});
+  return text;
 }
 
 async function openMarkdownLink(path, anchor) {
@@ -1466,10 +1589,14 @@ async function loadFileFromContents(path, { ref = state.branch } = {}) {
     sha: content.sha,
     size: content.size || existing.size || 0,
     frontMatterTitle: existing.frontMatterTitle || "",
+    content: isTextPath(path) ? decodeContentApiText(content.content || "") : undefined,
   };
   upsertFileMetadata(entry);
 
-  const textContent = isTextPath(path) ? decodeContentApiText(content.content || "") : "";
+  const textContent = isTextPath(path) ? entry.content || "" : "";
+  if (textContent) {
+    await saveCachedContent(state.owner, state.repo, entry.sha, textContent, path).catch(() => {});
+  }
   revokePreviewUrls();
   state.selectedPath = path;
   state.selectedDir = directoryOfPath(path);
@@ -1761,6 +1888,7 @@ async function createBranch(rawName) {
     state.branch = name;
     upsertBranchOption(name);
     persistSettings();
+    updateBrowserNavigation({ mode: "replace" });
     await refreshRepositoryData({ keepBusy: true });
     toast(t("edit.branchReady", { branch: name }), "ok");
   });
@@ -1912,6 +2040,7 @@ async function pollDeviceFlow() {
       state.token = payload.access_token;
       state.tokenPersistence = "session";
       state.client = new GitHubClient(state.token);
+      resetChecksApiState();
       saveToken(state.token, "session");
       state.modal = null;
       toast(t("auth.oauthSaved"), "ok");
@@ -1936,6 +2065,7 @@ function render({ treeScrollTop = null } = {}) {
         <main class="content">${renderContent()}</main>
       </div>
     </div>
+    ${renderBusyOverlay()}
     ${renderModal()}
     <div class="toast-stack">${state.toasts.map(renderToast).join("")}</div>
   `;
@@ -1943,6 +2073,37 @@ function render({ treeScrollTop = null } = {}) {
   revealSelectedTreeRow();
   restoreFocusSnapshot(focusSnapshot);
   highlightSearchMatches();
+}
+
+function renderBusyOverlay() {
+  if (!state.busy || (state.token && state.owner && state.repo && !state.headSha)) {
+    return "";
+  }
+
+  const progress = state.busyProgress;
+  const label = progress?.label || state.busyLabel || t("common.loading");
+  const total = Math.max(0, Number(progress?.total || 0));
+  const current = clamp(Number(progress?.current || 0), 0, total || 0);
+  const remaining = Math.max(0, total - current);
+  const percent = total ? Math.round((current / total) * 100) : 0;
+  const detail = total
+    ? t("repo.loadingStartupContentProgress", { current, total, remaining })
+    : state.busyLabel || "";
+
+  return `
+    <div class="busy-overlay" role="status" aria-live="polite">
+      <div class="busy-indicator" aria-hidden="true"></div>
+      <div class="busy-main">
+        <p class="busy-title">${escapeHtml(label)}</p>
+        ${detail ? `<p class="busy-detail">${escapeHtml(detail)}</p>` : ""}
+        ${
+          total
+            ? `<div class="busy-progress" aria-label="${escapeHtml(detail)}"><span style="width: ${percent}%"></span></div>`
+            : `<div class="busy-progress busy-progress-indeterminate" aria-hidden="true"><span></span></div>`
+        }
+      </div>
+    </div>
+  `;
 }
 
 function renderTopbar() {
@@ -1970,120 +2131,22 @@ function renderGlobalSearch() {
   if (!state.token || !state.owner || !state.repo || !state.headSha) {
     return "";
   }
-  const status = searchBarStatus();
 
   return `
     <label class="global-search">
       <span class="sr-only">${t("search.label")}</span>
       <span class="global-search-icon" aria-hidden="true">${treeIconSvg("search")}</span>
       <input id="global-search" value="${escapeHtml(state.pathFilter)}" aria-label="${t("search.label")}" placeholder="${t("search.placeholder")}" autocomplete="off" />
-      ${status ? `<span class="global-search-status" title="${escapeHtml(status.title)}">${escapeHtml(status.label)}</span>` : ""}
     </label>
   `;
 }
 
-function searchBarStatus() {
-  if (state.frontMatterTitleScanning) {
-    return {
-      label: `${state.frontMatterTitleScannedCount}/${state.frontMatterTitleScanCount}`,
-      title: t("search.titlesIndexingTitle", {
-        done: state.frontMatterTitleScannedCount,
-        total: state.frontMatterTitleScanCount,
-      }),
-    };
-  }
-  if (state.searchIndexing) {
-    return {
-      label: `${state.searchIndexedCount}/${state.searchIndexableCount}`,
-      title: t("search.indexingTitle", { done: state.searchIndexedCount, total: state.searchIndexableCount }),
-    };
-  }
-  return null;
-}
-
-function refreshSearchIndexUi() {
-  if (state.pathFilter.trim()) {
-    render();
-    return;
-  }
-  updateGlobalSearchStatus();
-}
-
-function renderWhenBackgroundLoadingIdle() {
-  window.clearTimeout(backgroundIdleRenderTimer);
-  if (deferBackgroundRenderUntilIndexingComplete || state.frontMatterTitleScanning || state.searchIndexing || searchIndexTimer) {
-    backgroundIdleRenderTimer = window.setTimeout(renderWhenBackgroundLoadingIdle, 250);
-    return;
-  }
+function renderWhenBackgroundRefreshCompletes() {
   if (!backgroundRenderPending) {
     return;
   }
   backgroundRenderPending = false;
   render();
-}
-
-function completeBackgroundIndexingCycle() {
-  deferBackgroundRenderUntilIndexingComplete = false;
-  renderWhenBackgroundLoadingIdle();
-}
-
-function updateGlobalSearchStatus() {
-  const search = app.querySelector(".global-search");
-  if (!search) {
-    return;
-  }
-
-  const existing = search.querySelector(".global-search-status");
-  const status = searchBarStatus();
-  if (!status) {
-    existing?.remove();
-    return;
-  }
-
-  if (existing) {
-    existing.textContent = status.label;
-    existing.setAttribute("title", status.title);
-    return;
-  }
-
-  const node = document.createElement("span");
-  node.className = "global-search-status";
-  node.textContent = status.label;
-  node.setAttribute("title", status.title);
-  search.append(node);
-}
-
-function refreshFrontMatterTitleUi(paths = []) {
-  if (state.pathFilter.trim()) {
-    render();
-    return;
-  }
-  updateGlobalSearchStatus();
-  for (const path of paths) {
-    updateTreeFileTitle(path);
-  }
-}
-
-function updateTreeFileTitle(path) {
-  const file = state.files.find((item) => item.path === path);
-  if (!file) {
-    return;
-  }
-
-  const row = Array.from(app.querySelectorAll(".tree-file[data-path]")).find((item) => item.dataset.path === path);
-  const label = row?.querySelector(".tree-label .path");
-  if (!(label instanceof HTMLElement)) {
-    return;
-  }
-
-  const displayName = treeFileDisplayName(file);
-  label.textContent = displayName.title;
-  if (displayName.filename) {
-    const filename = document.createElement("span");
-    filename.className = "tree-file-name-muted";
-    filename.textContent = `(${displayName.filename})`;
-    label.append(" ", filename);
-  }
 }
 
 function renderThemeSelect(location = "") {
@@ -2183,7 +2246,7 @@ function renderContent() {
   }
 
   if (!state.owner || !state.repo || !state.headSha) {
-    return `${renderConnectionError()}${renderWelcome(t("repo.fixedMissing"))}`;
+    return renderConnectionStatus();
   }
 
   return `
@@ -2197,6 +2260,39 @@ function renderContent() {
       ${state.tab === "commits" ? renderCommitsTab() : ""}
       ${state.tab === "actions" ? renderActionsTab() : ""}
     </div>
+  `;
+}
+
+function renderConnectionStatus() {
+  const hasError = Boolean(state.connectionError);
+  const progress = state.busyProgress;
+  const title = hasError
+    ? t("repo.connectionFailed")
+    : progress?.label || state.busyLabel || t("repo.connecting");
+  const total = Math.max(0, Number(progress?.total || 0));
+  const current = clamp(Number(progress?.current || 0), 0, total || 0);
+  const remaining = Math.max(0, total - current);
+  const percent = total ? Math.round((current / total) * 100) : 0;
+  const detail = hasError
+    ? state.connectionError
+    : total
+      ? t("repo.loadingStartupContentProgress", { current, total, remaining })
+      : t("repo.connectionInProgress");
+
+  return `
+    <section class="connection-status ${hasError ? "is-error" : "is-loading"}" role="status" aria-live="polite">
+      <div class="connection-status-indicator" aria-hidden="true"></div>
+      <h2>${escapeHtml(title)}</h2>
+      <p>${escapeHtml(detail)}</p>
+      ${
+        hasError
+          ? `<div class="button-row">
+              <button class="primary" type="button" data-action="login">${t("auth.changeToken")}</button>
+              <button type="button" data-action="refresh">${t("common.refresh")}</button>
+            </div>`
+          : `<div class="connection-status-progress ${total ? "" : "is-indeterminate"}" aria-label="${escapeHtml(detail)}"><span style="width: ${percent}%"></span></div>`
+      }
+    </section>
   `;
 }
 
@@ -2514,7 +2610,6 @@ function renderSearchResults() {
     <div class="search-results file-list" role="list" aria-label="${t("search.results")}">
       <div class="search-results-summary">
         <span>${t("search.resultCount", { count: results.length })}</span>
-        ${state.searchIndexing ? `<span>${t("search.indexingTitle", { done: state.searchIndexedCount, total: state.searchIndexableCount })}</span>` : ""}
       </div>
       ${results.map(renderSearchResult).join("")}
     </div>
@@ -3954,237 +4049,6 @@ function isSearchIndexablePath(path) {
   return ["md", "mdx", "html", "htm"].includes(ext);
 }
 
-function scheduleSearchIndexScan() {
-  const scanId = ++searchIndexScanId;
-  window.clearTimeout(searchIndexTimer);
-  state.searchIndexing = false;
-  state.searchIndexableCount = state.files.filter(
-    (file) => isSearchIndexablePath(file.path) && file.size <= MAX_SEARCH_INDEX_BYTES,
-  ).length;
-  state.searchIndexedCount = state.files.filter(
-    (file) => isSearchIndexablePath(file.path) && file.size <= MAX_SEARCH_INDEX_BYTES && state.searchTextBySha.has(file.sha),
-  ).length;
-
-  if (
-    !state.frontMatterTitlesReady ||
-    !state.client ||
-    !state.owner ||
-    !state.repo ||
-    state.searchIndexedCount >= state.searchIndexableCount
-  ) {
-    if (state.frontMatterTitlesReady) {
-      completeBackgroundIndexingCycle();
-    }
-    return;
-  }
-
-  searchIndexTimer = window.setTimeout(() => {
-    searchIndexTimer = null;
-    startSearchIndexScan(scanId);
-  }, SEARCH_INDEX_START_DELAY_MS);
-}
-
-function startSearchIndexScan(scanId) {
-  if (scanId !== searchIndexScanId) {
-    return;
-  }
-
-  const candidates = state.files.filter(
-    (file) => isSearchIndexablePath(file.path) && file.size <= MAX_SEARCH_INDEX_BYTES && !state.searchTextBySha.has(file.sha),
-  );
-  state.searchIndexableCount = state.files.filter(
-    (file) => isSearchIndexablePath(file.path) && file.size <= MAX_SEARCH_INDEX_BYTES,
-  ).length;
-  state.searchIndexedCount = Math.max(0, state.searchIndexableCount - candidates.length);
-
-  if (!state.client || !state.owner || !state.repo || !candidates.length) {
-    state.searchIndexing = false;
-    completeBackgroundIndexingCycle();
-    return;
-  }
-
-  state.searchIndexing = true;
-  refreshSearchIndexUi();
-  void scanSearchIndex(candidates, scanId);
-}
-
-async function scanSearchIndex(files, scanId) {
-  let index = 0;
-  let indexedSinceUiUpdate = 0;
-
-  async function worker() {
-    while (index < files.length && scanId === searchIndexScanId) {
-      const file = files[index];
-      index += 1;
-      if (state.searchTextBySha.has(file.sha)) {
-        state.searchIndexedCount = Math.min(state.searchIndexableCount, state.searchIndexedCount + 1);
-        continue;
-      }
-      try {
-        const blob = await state.client.getBlob(state.owner, state.repo, file.sha);
-        const text = base64ToText(blob.content || "");
-        state.searchTextBySha.set(file.sha, normalizeSearchText(text));
-        state.searchContentBySha.set(file.sha, text);
-        if (isMarkdownPath(file.path) && !state.frontMatterTitleBySha.has(file.sha)) {
-          const title = extractFrontMatterTitle(text);
-          state.frontMatterTitleBySha.set(file.sha, title);
-          state.frontMatterTitleAttemptedBySha.add(file.sha);
-          applyFrontMatterTitleToFile(file.sha, title);
-        }
-      } catch {
-        state.searchTextBySha.set(file.sha, "");
-      }
-      state.searchIndexedCount = Math.min(state.searchIndexableCount, state.searchIndexedCount + 1);
-      indexedSinceUiUpdate += 1;
-      if (indexedSinceUiUpdate >= 12) {
-        indexedSinceUiUpdate = 0;
-        refreshSearchIndexUi();
-      }
-    }
-  }
-
-  await Promise.allSettled(Array.from({ length: SEARCH_INDEX_CONCURRENCY }, worker));
-  if (scanId === searchIndexScanId) {
-    state.searchIndexing = false;
-    refreshSearchIndexUi();
-    completeBackgroundIndexingCycle();
-  }
-}
-
-function scheduleFrontMatterTitleScan() {
-  const scanId = ++frontMatterTitleScanId;
-  const candidates = state.files
-    .filter((file) => isFrontMatterTitleScanCandidate(file))
-    .sort(compareFrontMatterTitleCandidates)
-    .slice(0, MAX_FRONT_MATTER_TITLE_FILES);
-  state.frontMatterTitleScanCount = candidates.length;
-  state.frontMatterTitleScannedCount = 0;
-
-  if (!state.client || !state.owner || !state.repo || !candidates.length) {
-    state.frontMatterTitleScanning = false;
-    state.frontMatterTitlesReady = true;
-    scheduleSearchIndexScan();
-    return;
-  }
-
-  state.frontMatterTitleScanning = true;
-  state.frontMatterTitlesReady = false;
-  render();
-  window.setTimeout(() => {
-    if (scanId === frontMatterTitleScanId) {
-      void scanFrontMatterTitles(candidates, scanId);
-    }
-  }, 0);
-}
-
-function isFrontMatterTitleScanCandidate(file) {
-  if (!isMarkdownPath(file.path) || file.size > MAX_FRONT_MATTER_TITLE_BYTES) {
-    return false;
-  }
-  if (state.frontMatterTitleAttemptedBySha.has(file.sha)) {
-    return false;
-  }
-  return !normalizeFrontMatterTitle(state.frontMatterTitleBySha.get(file.sha) || "");
-}
-
-function compareFrontMatterTitleCandidates(a, b) {
-  const visibleDiff = frontMatterTitleBucket(a) - frontMatterTitleBucket(b);
-  if (visibleDiff) {
-    return visibleDiff;
-  }
-  const depthDiff = pathDepth(a.path) - pathDepth(b.path);
-  if (depthDiff) {
-    return depthDiff;
-  }
-  const sizeDiff = (a.size || 0) - (b.size || 0);
-  if (sizeDiff) {
-    return sizeDiff;
-  }
-  return a.path.localeCompare(b.path, undefined, { sensitivity: "base" });
-}
-
-function frontMatterTitleBucket(file) {
-  const dir = directoryOfPath(file.path);
-  if (!dir) {
-    return 0;
-  }
-  if (state.selectedPath && file.path === state.selectedPath) {
-    return 0;
-  }
-  if (state.selectedDir && dir === state.selectedDir) {
-    return 1;
-  }
-  if (state.expandedDirs.has(dir)) {
-    return 2;
-  }
-  if (pathDepth(file.path) <= 2) {
-    return 3;
-  }
-  return 4;
-}
-
-async function scanFrontMatterTitles(files, scanId) {
-  let changedSinceUiUpdate = 0;
-  const changedPathsSinceUiUpdate = new Set();
-  let index = 0;
-
-  async function worker() {
-    while (index < files.length && scanId === frontMatterTitleScanId) {
-      const file = files[index];
-      index += 1;
-      try {
-        const result = await loadFrontMatterTitleForFile(file);
-        if (result.changed) {
-          changedPathsSinceUiUpdate.add(result.path);
-        }
-      } catch {
-        // Leave failed title reads uncached so a future refresh can retry them.
-      }
-      state.frontMatterTitleScannedCount = Math.min(state.frontMatterTitleScanCount, state.frontMatterTitleScannedCount + 1);
-      changedSinceUiUpdate += 1;
-      const batchSize =
-        state.frontMatterTitleScannedCount <= FRONT_MATTER_TITLE_EAGER_RENDER_COUNT
-          ? 1
-          : FRONT_MATTER_TITLE_RENDER_BATCH;
-      if (changedSinceUiUpdate >= batchSize && scanId === frontMatterTitleScanId) {
-        const changedPaths = [...changedPathsSinceUiUpdate];
-        changedPathsSinceUiUpdate.clear();
-        changedSinceUiUpdate = 0;
-        refreshFrontMatterTitleUi(changedPaths);
-      }
-    }
-  }
-
-  await Promise.all(Array.from({ length: Math.min(FRONT_MATTER_TITLE_CONCURRENCY, files.length) }, worker));
-
-  if (scanId === frontMatterTitleScanId) {
-    state.frontMatterTitleScanning = false;
-    state.frontMatterTitlesReady = true;
-  }
-
-  if (scanId === frontMatterTitleScanId) {
-    refreshFrontMatterTitleUi([...changedPathsSinceUiUpdate]);
-  }
-  if (scanId === frontMatterTitleScanId) {
-    scheduleSearchIndexScan();
-  }
-}
-
-async function loadFrontMatterTitleForFile(file) {
-  const blob = await state.client.getBlob(state.owner, state.repo, file.sha);
-  const text = base64ToText(blob.content || "");
-  const title = extractFrontMatterTitle(text);
-  state.frontMatterTitleBySha.set(file.sha, title);
-  state.frontMatterTitleAttemptedBySha.add(file.sha);
-  if (isSearchIndexablePath(file.path) && file.size <= MAX_SEARCH_INDEX_BYTES) {
-    state.searchTextBySha.set(file.sha, normalizeSearchText(text));
-    state.searchContentBySha.set(file.sha, text);
-  }
-  const changedBySha = applyFrontMatterTitleToFile(file.sha, title);
-  const changedByPath = applyFrontMatterTitleToPath(file.path, title);
-  return { path: file.path, title, changed: changedBySha || changedByPath };
-}
-
 function applyFrontMatterTitleToFile(sha, title) {
   const result = applyFrontMatterTitleToSha(state.files, sha, title, state.frontMatterTitleDraftByPath);
   state.files = result.files;
@@ -4504,6 +4368,7 @@ async function withBusy(label, task) {
   state.treeScrollTop = preservedTreeScrollTop;
   state.busy = true;
   state.busyLabel = label;
+  state.busyProgress = null;
   render({ treeScrollTop: preservedTreeScrollTop });
   try {
     await task();
@@ -4513,6 +4378,7 @@ async function withBusy(label, task) {
   } finally {
     state.busy = false;
     state.busyLabel = "";
+    state.busyProgress = null;
     if (state.revealSelectedInTree) {
       render();
     } else {
@@ -4520,6 +4386,14 @@ async function withBusy(label, task) {
       render({ treeScrollTop: preservedTreeScrollTop });
     }
   }
+}
+
+function setBusyProgress(progress) {
+  state.busyProgress = progress;
+  if (!state.busy) {
+    return;
+  }
+  render({ treeScrollTop: state.treeScrollTop });
 }
 
 function toast(message, tone = "") {
@@ -4557,7 +4431,14 @@ function captureTokenFromAuthForm() {
   state.token = token;
   state.tokenPersistence = persistence;
   state.client = new GitHubClient(token);
+  resetChecksApiState();
   saveToken(token, persistence);
+}
+
+function resetChecksApiState() {
+  state.checkRuns = [];
+  state.checkRunsError = "";
+  state.checksApiUnavailable = false;
 }
 
 export const __testing = {

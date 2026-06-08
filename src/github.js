@@ -94,8 +94,8 @@ export class GitHubClient {
     return this.request(`/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/git/commits/${sha}`);
   }
 
-  async listTree(owner, repo, branch) {
-    const branchInfo = await this.getBranch(owner, repo, branch);
+  async listTree(owner, repo, branch, { headSha = "" } = {}) {
+    const branchInfo = headSha ? { commit: { sha: headSha } } : await this.getBranch(owner, repo, branch);
     const commit = await this.getGitCommit(owner, repo, branchInfo.commit.sha);
     const tree = await this.request(
       `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/git/trees/${commit.tree.sha}?recursive=1`,

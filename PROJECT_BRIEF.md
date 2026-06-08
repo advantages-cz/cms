@@ -114,19 +114,22 @@ Implemented capabilities:
 - Fixed repository connection to `advantages-cz/avds`, default branch `master`.
 - Branch listing and branch creation.
 - Repository tree loading.
+- Persistent IndexedDB repository cache keyed by owner/repo/branch/head SHA, with a cache schema version and stored startup content extension list.
+- Startup content hydration for `.md`, `.mdx`, `.html`, and `.htm` files through the Contents API, reusing cached file content by blob SHA and downloading only changed or missing allowed text files.
+- Repository content refresh shows an animated busy status with loaded/total/remaining file counts while startup text contents are being hydrated.
+- After a saved token or login starts repository connection, the welcome/workflow page is replaced by a focused connection status screen; token or repository errors remain visible with retry and change-token actions.
 - Tree browser for repository contents.
 - CMS-oriented tree sorting: root `README.md` opens by default; each level sorts `README.md` first, regular files, dotfiles, regular folders, then dot-prefixed folders.
 - Markdown front matter titles in the tree when available, with the filename shown in muted parentheses.
-- Front matter title loading is prioritized immediately after tree refresh and fulltext content indexing waits until the title scan completes.
-- Front matter title progress updates visible tree rows in place instead of re-rendering the whole file tree, so folders remain clickable during loading.
-- Fulltext indexing progress updates the search status without re-rendering the file tree unless an active search query needs refreshed results.
-- Background review and Actions refresh rendering is deferred while title or fulltext indexing is active, preserving tree interactivity during load.
+- Front matter titles and fulltext search are populated from hydrated startup content instead of separate background Git blob reads.
+- Search input rendering is debounced so fast typing is not interrupted by immediate result re-renders.
 - Live front matter title updates while editing Markdown, reflected in the tree and changed-file metadata before the commit finishes.
 - Collapsed tree by default, except when opening a URL or link that targets a deeper file or directory.
 - Browse-first approval workflow.
 - Automatic edit branch creation from the default branch.
 - Reuse of the current working branch when editing outside the default branch.
 - Explicit new edit branch creation when the user asks for it.
+- Browser URL branch state is updated immediately after automatic or manual edit branch creation so reload stays on the working branch.
 - Markdown-only editing for `.md` and `.mdx` files.
 - Commit creation through GitHub Contents API.
 - Pre-commit file SHA resync, 409 retry with cache-busted Contents reads, and post-commit selected-file reload through GitHub Contents API at the returned commit SHA.
@@ -345,9 +348,9 @@ Reasoning: Editors may use the CMS for long review sessions across different env
 
 ### 2026-06-04: Prioritize Tree Titles Before Fulltext
 
-Decision: Repository refresh starts the front matter title scan immediately after applying the Git tree. Fulltext indexing remains delayed until the title scan finishes, and refresh side work such as review or Actions data must not block the first title updates in the tree.
+Decision: Superseded by the 2026-06-08 repository snapshot and startup content cache. Repository refresh no longer starts separate front matter title or fulltext background scans; both are derived from hydrated startup content as the tree is applied.
 
-Reasoning: The tree is the primary navigation surface. Editors need readable page titles as soon as possible after load or refresh; fulltext search completeness is useful but secondary and can arrive later.
+Reasoning: Startup hydration already fetches or reuses the Markdown and HTML blobs needed for titles and search, so a second background pass would duplicate API/cache work and could trigger avoidable UI re-renders.
 
 ### 2026-06-02: Move Login Into A Modal
 
@@ -369,9 +372,9 @@ Reasoning: Content editors usually need the local landing page or index before i
 
 ### 2026-06-02: Show Front Matter Titles In Tree
 
-Decision: Markdown files can display their front matter `title` in the tree, with the filename in parentheses. Titles are loaded from smaller Markdown blobs in a capped background scan and cached by blob SHA.
+Decision: Markdown files can display their front matter `title` in the tree, with the filename in parentheses. The original capped background scan was superseded on 2026-06-08 by startup content hydration and blob-SHA caching.
 
-Reasoning: Editors recognize content by page title more easily than by slug. Capping and caching the scan keeps the static GitHub API workflow reasonable for larger repositories.
+Reasoning: Editors recognize content by page title more easily than by slug. Loading titles from already hydrated startup content keeps the static GitHub API workflow predictable without a second scan.
 
 ### 2026-06-03: Keep Edited Front Matter Titles Live
 
@@ -390,6 +393,12 @@ Reasoning: GitHub's Contents API rejects writes with stale blob SHAs, so the pre
 Decision: After a successful Markdown save, the CMS reloads the selected file from GitHub's Contents API using the returned commit SHA, applies tree refresh data only when it matches the known save commit, and skips an extra branch sync while refreshing Actions for that known commit.
 
 Reasoning: GitHub tree and branch reads can briefly lag a Contents write. Guarding tree refreshes and reloading the saved file through the immutable commit ref and the same API surface as the write prevents the editor from flashing back to the previous blob after commit.
+
+### 2026-06-08: Persist Repository Snapshot And Startup Content
+
+Decision: Repository refresh now stores the Git tree, head commit SHA, tree SHA, startup content extension list, and hydrated `.md`, `.mdx`, `.html`, and `.htm` contents in IndexedDB. When the cached branch snapshot matches the known branch head SHA and cache version, the CMS applies the local snapshot without downloading the tree or file contents. When the head changes, the CMS refreshes the tree and downloads only allowed startup files whose blob SHA is not already cached.
+
+Reasoning: GitHub API rate limits are tight during token verification and branch startup. Caching by commit and blob SHA avoids repeated tree, title, fulltext, and blob calls while keeping GitHub as the source of truth whenever the branch head changes.
 
 ### 2026-06-03: Capture Editor Submit Content From Form Data
 
@@ -417,11 +426,11 @@ Reasoning: Czech and Slovak headings can include diacritics while generated head
 
 ### 2026-06-04: Add Unified Header Search
 
-Decision: The top toolbar includes one search box for folder path, file name, front matter title, and indexed Markdown/HTML content. Without a query the left pane shows the repository tree; with a query it switches to ranked search results with match type labels and content snippets where available. Opening a content match highlights the term in Markdown/text previews. Markdown and HTML blobs up to a capped size are indexed in memory on a background scan keyed by blob SHA; binary files are not indexed.
+Decision: The top toolbar includes one search box for folder path, file name, front matter title, and indexed Markdown/HTML content. Without a query the left pane shows the repository tree; with a query it switches to ranked search results with match type labels and content snippets where available. Opening a content match highlights the term in Markdown/text previews. Hydrated Markdown and HTML startup blobs up to a capped size are indexed in memory by blob SHA; binary files are not indexed.
 
-Reasoning: Editors need one predictable place to search navigation and content, and content matches need enough context to decide which result to open. Keeping the index client-side and capped preserves the static GitHub API architecture while avoiding eager downloads of large assets.
+Reasoning: Editors need one predictable place to search navigation and content, and content matches need enough context to decide which result to open. Keeping the index client-side and capped preserves the static GitHub API architecture while avoiding large assets.
 
-Follow-up: Front matter title scanning is prioritized over fulltext indexing. The title scan runs with higher concurrency and reuses fetched Markdown blobs for search cache, while the slower fulltext scan starts after a short delay and runs with low concurrency.
+Follow-up: The earlier background title and fulltext scans were removed after startup content hydration became the single source for title/search cache population.
 
 ### 2026-06-04: Move Locale And Theme Controls Into User Menu
 
