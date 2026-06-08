@@ -26,6 +26,8 @@
   --info: #17758a;
   --info-soft: #e9f9fd;
   --shadow: 0 10px 24px rgba(17, 17, 17, 0.07);
+  --primary-hover-bg: #2a2a2a;
+  --primary-hover-text: #ffffff;
   --radius: 8px;
   --radius-sm: 6px;
   --toolbar-height: 48px;
@@ -59,6 +61,8 @@
   --info: #9bf0ff;
   --info-soft: #123840;
   --shadow: 0 14px 34px rgba(0, 0, 0, 0.36);
+  --primary-hover-bg: #2a2a2a;
+  --primary-hover-text: #ffffff;
 }
 
 * {
@@ -942,7 +946,8 @@ textarea:focus {
 
 .primary:hover:not(:disabled) {
   border-color: var(--cms-color-brand-black);
-  background: #2a2a2a;
+  background: var(--primary-hover-bg);
+  color: var(--primary-hover-text);
 }
 
 .button-secondary {
