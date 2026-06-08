@@ -2626,13 +2626,18 @@ function renderTreeDirectory(dir, depth, forceExpanded = false, changedStatuses 
   const fileCount = dir.count || 0;
   const isSelectedAncestor = Boolean(state.selectedPath) && state.selectedPath.startsWith(`${dir.path}/`);
   const isSelectedDir = state.selectedDir === dir.path && !state.selectedPath;
+  const displayName = treeDirectoryDisplayName(dir);
+  const mutedClass = isLowEmphasisRootDirectory(dir, depth) ? " is-muted-root-dir" : "";
   return `
-    <div class="tree-row tree-dir ${isSelectedAncestor ? "contains-active" : ""} ${isSelectedDir ? "active-dir" : ""}" role="treeitem" aria-expanded="${expanded}" style="--depth: ${depth};">
+    <div class="tree-row tree-dir ${isSelectedAncestor ? "contains-active" : ""} ${isSelectedDir ? "active-dir" : ""}${mutedClass}" role="treeitem" aria-expanded="${expanded}" style="--depth: ${depth};">
       <button class="tree-toggle" type="button" data-action="toggle-dir" data-path="${escapeHtml(dir.path)}" aria-label="${expanded ? t("files.collapse") : t("files.expand")} ${escapeHtml(dir.name)}">
         <span class="tree-caret" aria-hidden="true">${expanded ? "" : ""}</span>
         <span class="tree-icon tree-icon-lucide tree-icon-dir" aria-hidden="true">${treeIconSvg("folder")}</span>
         <span class="tree-label">
-          <span class="path">${escapeHtml(dir.name)}</span>
+          <span class="path">
+            ${escapeHtml(displayName.title)}
+            ${displayName.filename ? `<span class="tree-file-name-muted">(${escapeHtml(displayName.filename)})</span>` : ""}
+          </span>
         </span>
         <span class="tree-size">${fileCount} ${t("common.files")}</span>
       </button>
@@ -2664,8 +2669,30 @@ function renderTreeFile(file, depth, changedStatuses = new Map()) {
 }
 
 function treeFileDisplayName(file) {
-  const title = normalizeFrontMatterTitle(file.frontMatterTitle || "");
+  const title = markdownDisplayTitle(file);
   return title ? { title, filename: file.name } : { title: file.name, filename: "" };
+}
+
+function treeDirectoryDisplayName(dir) {
+  const readme = directoryReadmeEntry(dir.path);
+  const title = markdownDisplayTitle(readme);
+  return title ? { title, filename: dir.name } : { title: dir.name, filename: "" };
+}
+
+function directoryReadmeEntry(dirPath) {
+  const readmePath = dirPath ? `${dirPath}/README.md` : "README.md";
+  return state.files.find((file) => file.path === readmePath) || null;
+}
+
+function markdownDisplayTitle(file) {
+  if (!file) {
+    return "";
+  }
+  return normalizeFrontMatterTitle(file.frontMatterTitle || "");
+}
+
+function isLowEmphasisRootDirectory(dir, depth) {
+  return depth === 0 && !["capabilities", "content"].includes(dir.name);
 }
 
 function fileIconClass(path) {

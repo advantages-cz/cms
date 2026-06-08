@@ -1389,6 +1389,16 @@ mark,
   font-weight: 780;
 }
 
+.tree-dir.is-muted-root-dir:not(.active-dir):not(.contains-active) > .tree-toggle .path,
+.tree-dir.is-muted-root-dir:not(.active-dir):not(.contains-active) > .tree-toggle .tree-size {
+  color: var(--muted-soft);
+}
+
+.tree-dir.is-muted-root-dir:not(.active-dir):not(.contains-active) > .tree-toggle .tree-icon,
+.tree-dir.is-muted-root-dir:not(.active-dir):not(.contains-active) > .tree-toggle .tree-caret {
+  opacity: 0.62;
+}
+
 .tree-dir.active-dir > .tree-toggle {
   background: var(--accent-soft);
   box-shadow: inset 3px 0 0 var(--accent-strong);
