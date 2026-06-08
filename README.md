@@ -119,7 +119,7 @@ node --test
 
 ## Limitations
 
-- The CMS caches repository snapshots and hydrated `.md`, `.mdx`, `.html`, and `.htm` contents in browser IndexedDB by branch head SHA and file blob SHA. If the cached head matches the current branch head, startup uses the local snapshot instead of re-downloading the tree or text contents.
+- The CMS caches repository snapshots and hydrated `.md`, `.mdx`, `.html`, and `.htm` contents in browser IndexedDB by branch head SHA and file blob SHA. If the cached head matches the current branch head, startup uses the local snapshot instead of re-downloading the tree or text contents. Hidden root-level technical content that the CMS omits from the tree/search model is also skipped during startup hydration.
 - The CMS loads the repository tree through the Git Trees API when the branch head changes. For very large repositories, GitHub may return a truncated tree.
 - Editing is intentionally limited to Markdown. Other files are browsed or created by automation.
 - Previews show files committed to the branch. The app does not download separate Actions artifact ZIPs.

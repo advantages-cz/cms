@@ -109,12 +109,13 @@ Implemented capabilities:
 - Branch listing and branch creation.
 - Repository tree loading.
 - Persistent IndexedDB repository cache keyed by owner/repo/branch/head SHA, with a cache schema version and stored startup content extension list.
-- Startup content hydration for `.md`, `.mdx`, `.html`, and `.htm` files through the Contents API, reusing cached file content by blob SHA and downloading only changed or missing allowed text files.
+- Startup content hydration for `.md`, `.mdx`, `.html`, and `.htm` files through the Contents API, reusing cached file content by blob SHA and downloading only changed or missing allowed text files that remain visible in the CMS tree/search model.
 - Repository content refresh shows an animated busy status with loaded/total/remaining file counts while startup text contents are being hydrated.
 - After a saved token or login starts repository connection, the welcome/workflow page is replaced by a focused connection status screen; token or repository errors remain visible with retry and change-token actions.
 - Tree browser for repository contents.
 - CMS-oriented tree sorting: root `README.md` opens by default; each level sorts `README.md` first, `rozcestnik.md` second, then regular files, dotfiles, regular folders, and dot-prefixed folders.
 - Root-level muted technical folders and files are hidden from the tree instead of being rendered in a dimmed state.
+- Global search excludes the same hidden root-level technical files and folders that are omitted from the tree, while still allowing `AGENTS.md`.
 - `AGENTS.md` is rendered as a muted technical file in the tree, including at the root level.
 - Markdown front matter titles in the tree when available, hiding the filename when a title exists on both files and folders.
 - Tree files hide size values while directory rows keep file counts.

@@ -915,7 +915,7 @@ async function loadRepositorySnapshot(headSha = "") {
 }
 
 async function hydrateStartupContent(tree, cached) {
-  const startupEntries = tree.tree.filter((entry) => entry.type === "blob" && isStartupContentPath(entry.path));
+  const startupEntries = tree.tree.filter((entry) => entry.type === "blob" && shouldHydrateStartupContentPath(entry.path));
   const cachedTreeBySha = new Map();
   for (const entry of cached?.tree || []) {
     if (entry?.sha && typeof entry.content === "string") {
@@ -964,7 +964,7 @@ async function hydrateStartupContent(tree, cached) {
   return {
     ...tree,
     tree: tree.tree.map((entry) => {
-      if (entry.type !== "blob" || !isStartupContentPath(entry.path) || !contentBySha.has(entry.sha)) {
+      if (entry.type !== "blob" || !shouldHydrateStartupContentPath(entry.path) || !contentBySha.has(entry.sha)) {
         return entry;
       }
       return { ...entry, content: contentBySha.get(entry.sha) };
@@ -978,6 +978,10 @@ function headShaForBranch(branchName) {
 
 function isStartupContentPath(path) {
   return STARTUP_CONTENT_EXTENSIONS.includes(extensionOf(path));
+}
+
+function shouldHydrateStartupContentPath(path) {
+  return isStartupContentPath(path) && isStartupContentVisiblePath(path);
 }
 
 function sameStartupContentExtensions(extensions) {
@@ -4120,6 +4124,7 @@ function searchResults() {
   }
 
   return state.files
+    .filter((file) => isSearchVisibleFile(file))
     .map((file) => searchMatchForFile(file, query))
     .filter(Boolean)
     .sort(compareSearchResults);
@@ -4420,7 +4425,31 @@ function isHiddenRootTreeChild(child, depth) {
   if (child.type === "dir") {
     return isLowEmphasisRootDirectory(child, depth);
   }
-  return child.type === "file" && isLowEmphasisTreeFile(child.path) && !isAgentsPath(child.path);
+  return child.type === "file" && isHiddenRootTechnicalFilePath(child.path);
+}
+
+function isSearchVisibleFile(file) {
+  return isStartupContentVisiblePath(file.path);
+}
+
+function isStartupContentVisiblePath(path) {
+  return !isPathInsideHiddenRootDirectory(path) && !isHiddenRootTechnicalFilePath(path);
+}
+
+function isPathInsideHiddenRootDirectory(path) {
+  const rootSegment = String(path || "").split("/").filter(Boolean)[0] || "";
+  if (!rootSegment || rootSegment === String(path || "")) {
+    return false;
+  }
+  return isLowEmphasisRootDirectory({ name: rootSegment }, 0);
+}
+
+function isHiddenRootTechnicalFilePath(path) {
+  const normalized = String(path || "");
+  if (!normalized || normalized.includes("/")) {
+    return false;
+  }
+  return isLowEmphasisTreeFile(normalized) && !isAgentsPath(normalized);
 }
 
 function isReadmePath(path) {
