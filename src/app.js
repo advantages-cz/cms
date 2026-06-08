@@ -4363,7 +4363,7 @@ function discourseSearchUrl(context = selectedDiscussionContext()) {
   }
   const url = new URL("/search", context.discourseUrl);
   const lookupKey = discussionLookupKeyForSelection();
-  url.searchParams.set("q", lookupKey ? `" ${lookupKey} "` : `"${cmsDocumentUrlForSelection()}"`);
+  url.searchParams.set("q", lookupKey || cmsDocumentUrlForSelection());
   return url.toString();
 }
 
