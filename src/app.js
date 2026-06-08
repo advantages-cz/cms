@@ -2611,7 +2611,9 @@ function renderSearchResult(result) {
 }
 
 function renderTreeNodes(node, depth, forceExpanded = false, changedStatuses = new Map()) {
-  const children = [...node.files, ...node.dirs.values()].sort(compareTreeChildren);
+  const children = [...node.files, ...node.dirs.values()]
+    .filter((child) => !isHiddenRootTreeChild(child, depth))
+    .sort(compareTreeChildren);
   if (!children.length) {
     return "";
   }
@@ -2696,6 +2698,9 @@ function isLowEmphasisRootDirectory(dir, depth) {
 }
 
 function fileIconClass(path) {
+  if (isRozcestnikPath(path)) {
+    return "tree-icon-rozcestnik";
+  }
   if (isReadmePath(path)) {
     return "tree-icon-home";
   }
@@ -2728,6 +2733,10 @@ function fileIconClass(path) {
   return "";
 }
 
+function isRozcestnikPath(path) {
+  return String(path || "").toLowerCase().endsWith("/rozcestnik.md") || String(path || "").toLowerCase() === "rozcestnik.md";
+}
+
 function treeIconSvg(iconClass) {
   const attrs = 'viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"';
   const fileBase = '<path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"></path><path d="M14 2v4a2 2 0 0 0 2 2h4"></path>';
@@ -2736,6 +2745,8 @@ function treeIconSvg(iconClass) {
       '<path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"></path>',
     "tree-icon-home":
       '<path d="m3 10 9-7 9 7"></path><path d="M5 10v10a1 1 0 0 0 1 1h5v-7h2v7h5a1 1 0 0 0 1-1V10"></path>',
+    "tree-icon-rozcestnik":
+      '<path d="M12 3v18"></path><path d="M12 7h5.5a2 2 0 0 0 1.4-.6l1.1-1.1"></path><path d="M12 11H6.5a2 2 0 0 1-1.4-.6L4 9.3"></path><path d="M12 15h4.5a2 2 0 0 1 1.4.6l1.1 1.1"></path><path d="M12 8.5l-2-2"></path><path d="M12 12.5l2-2"></path><path d="M12 16.5l-2 2"></path>',
     "tree-icon-md": `${fileBase}<path d="M8 13v4"></path><path d="M8 13l2 2 2-2"></path><path d="M12 13v4"></path><path d="M16 13v4"></path><path d="M14 15h4"></path>`,
     "tree-icon-html": `${fileBase}<path d="m10 13-2 2 2 2"></path><path d="m14 13 2 2-2 2"></path>`,
     "tree-icon-svg": `${fileBase}<circle cx="12" cy="15" r="3"></circle><path d="M12 12v-2"></path><path d="M9.4 16.5l-1.7 1"></path><path d="M14.6 16.5l1.7 1"></path>`,
@@ -3980,6 +3991,16 @@ function treeChildRank(child) {
     return 2;
   }
   return child.type === "dir" ? 1 : 0;
+}
+
+function isHiddenRootTreeChild(child, depth) {
+  if (depth !== 0) {
+    return false;
+  }
+  if (child.type === "dir") {
+    return isLowEmphasisRootDirectory(child, depth);
+  }
+  return child.type === "file" && isLowEmphasisTreeFile(child.path);
 }
 
 function isReadmePath(path) {

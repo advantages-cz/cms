@@ -1624,6 +1624,26 @@ mark,
   transform: rotate(45deg);
 }
 
+.tree-icon-rozcestnik::before {
+  border-color: #0f766e;
+  box-shadow: inset 0 -3px 0 rgba(15, 118, 110, 0.16);
+}
+
+.tree-icon-rozcestnik::after {
+  content: "";
+  position: absolute;
+  left: 10px;
+  top: 4px;
+  width: 2px;
+  height: 14px;
+  background: #0f766e;
+  border-radius: 999px;
+  box-shadow:
+    -5px 4px 0 0 #0f766e,
+    4px 8px 0 0 #0f766e,
+    -4px 12px 0 0 #0f766e;
+}
+
 .tree-icon-data::before {
   border-color: var(--accent-strong);
   box-shadow: inset 0 -3px 0 rgba(129, 234, 252, 0.25);
@@ -1716,7 +1736,8 @@ mark,
 
 .tree-icon-md,
 .tree-icon-home,
-.tree-icon-data {
+.tree-icon-data,
+.tree-icon-rozcestnik {
   color: var(--accent-strong);
 }
 

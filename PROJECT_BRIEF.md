@@ -114,6 +114,7 @@ Implemented capabilities:
 - After a saved token or login starts repository connection, the welcome/workflow page is replaced by a focused connection status screen; token or repository errors remain visible with retry and change-token actions.
 - Tree browser for repository contents.
 - CMS-oriented tree sorting: root `README.md` opens by default; each level sorts `README.md` first, regular files, dotfiles, regular folders, then dot-prefixed folders.
+- Root-level muted technical folders and files are hidden from the tree instead of being rendered in a dimmed state.
 - Markdown front matter titles in the tree when available, with the filename shown in muted parentheses.
 - Front matter titles and fulltext search are populated from hydrated startup content instead of separate background Git blob reads.
 - Search input rendering is debounced so fast typing is not interrupted by immediate result re-renders.
@@ -161,6 +162,7 @@ Implemented capabilities:
 - Changed-file status colors are shared across automation banners, change lists, and tree indicators. The file tree marks changed files with a dedicated indicator before the file icon, uses local Lucide-style SVG icons for folders and file types, omits redundant extension subtitles, and de-emphasizes miscellaneous technical files.
 - Directory file counts in the tree align in the same right-hand column as file sizes.
 - Changed-file rows in `Změny` use the file path itself as the CMS preview link instead of a separate Preview button, include the same local file-type icons as the tree, and show front matter titles in parentheses as non-link text when available. The Actions tab focuses on workflow runs, while outbound buttons such as PR and GitHub links carry an external-link icon.
+- `rozcestnik.md` uses a dedicated signpost-style icon in the tree and changed-file lists so it stands out from generic Markdown pages.
 
 ## Open Questions
 
@@ -364,6 +366,12 @@ Decision: If no URL selection is present, the CMS opens root `README.md` by defa
 
 Reasoning: Content editors usually need the local landing page or index before implementation folders. This keeps CMS-oriented content near the top without changing repository structure.
 
+### 2026-06-08: Hide Root Muted Tree Entries
+
+Decision: Root-level muted technical folders and files are removed from the tree render instead of being shown in a low-emphasis style.
+
+Reasoning: The muted root items were still adding visual noise even though they were intentionally de-emphasized. Hiding them makes the default repository tree cleaner while keeping deeper non-root files available for browsing.
+
 ### 2026-06-02: Show Front Matter Titles In Tree
 
 Decision: Markdown files can display their front matter `title` in the tree, with the filename in parentheses. The original capped background scan was superseded on 2026-06-08 by startup content hydration and blob-SHA caching.
@@ -393,6 +401,12 @@ Reasoning: GitHub tree and branch reads can briefly lag a Contents write. Guardi
 Decision: Repository refresh now stores the Git tree, head commit SHA, tree SHA, startup content extension list, and hydrated `.md`, `.mdx`, `.html`, and `.htm` contents in IndexedDB. When the cached branch snapshot matches the known branch head SHA and cache version, the CMS applies the local snapshot without downloading the tree or file contents. When the head changes, the CMS refreshes the tree and downloads only allowed startup files whose blob SHA is not already cached.
 
 Reasoning: GitHub API rate limits are tight during token verification and branch startup. Caching by commit and blob SHA avoids repeated tree, title, fulltext, and blob calls while keeping GitHub as the source of truth whenever the branch head changes.
+
+### 2026-06-08: Add Dedicated `rozcestnik.md` Icon
+
+Decision: Give `rozcestnik.md` a dedicated signpost-style icon in the file tree and changed-file lists instead of the default Markdown icon.
+
+Reasoning: The file acts as a navigation hub, so a distinct icon makes its role visible without changing editing, preview, or routing behavior.
 
 ### 2026-06-03: Capture Editor Submit Content From Form Data
 
