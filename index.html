@@ -12,9 +12,28 @@
       content="Static GitHub CMS for editing a private repository through branches, pull requests, and GitHub Actions."
     />
     <title>Adaptivio CMS</title>
-    <link rel="icon" type="image/svg+xml" href="./assets/favicon.svg?v=20260608-234500" />
-    <link rel="manifest" href="./manifest.webmanifest?v=20260608-234500" />
-    <link rel="stylesheet" href="./assets/styles.css?v=20260608-234500" />
+    <script>
+      window.__ASSET_VERSION__ = "20260609-110700";
+      const assetVersion = encodeURIComponent(window.__ASSET_VERSION__);
+      document.write(`
+        <link rel="icon" type="image/svg+xml" href="./assets/favicon.svg?v=${assetVersion}" />
+        <link rel="manifest" href="./manifest.webmanifest?v=${assetVersion}" />
+        <link rel="stylesheet" href="./assets/styles.css?v=${assetVersion}" />
+        <script type="importmap">
+          {
+            "imports": {
+              "app": "./src/app.js?v=${assetVersion}",
+              "editorWorkflow": "./src/editorWorkflow.js?v=${assetVersion}",
+              "github": "./src/github.js?v=${assetVersion}",
+              "i18n": "./src/i18n.js?v=${assetVersion}",
+              "repoCache": "./src/repoCache.js?v=${assetVersion}",
+              "storage": "./src/storage.js?v=${assetVersion}",
+              "utils": "./src/utils.js?v=${assetVersion}"
+            }
+          }
+        <\/script>
+      `);
+    </script>
   </head>
   <body>
     <noscript>
@@ -23,6 +42,8 @@
       </main>
     </noscript>
     <div id="app"></div>
-    <script type="module" src="./src/app.js?v=20260608-234500"></script>
+    <script type="module">
+      import "app";
+    </script>
   </body>
 </html>

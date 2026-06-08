@@ -101,6 +101,8 @@ node --check src/utils.js
 
 After meaningful UI changes, open the local app in the browser and check for console errors. If possible, verify desktop layout behavior because the app shell is expected to fill the viewport without body scrolling.
 
+After every `assets/styles.css` or `src/*.js` change, perform a cache-bust so the browser does not keep serving stale static assets while verifying the update.
+
 ## Documentation Habit
 
 When implementing a meaningful feature or behavior change:

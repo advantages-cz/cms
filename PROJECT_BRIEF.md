@@ -408,9 +408,9 @@ Decision: Tree file rows no longer display file sizes, while directory rows keep
 
 Reasoning: File sizes add visual noise in the tree, but folder counts still help editors gauge structure density at a glance.
 
-Decision: The static cache-busting query string is shared across `index.html` and the JS module import chain.
+Decision: `index.html` owns one shared static asset version string that feeds the stylesheet URL, icon/manifest URLs, and an import map for the local JS module chain.
 
-Reasoning: Browser caching can otherwise keep stale CSS or imported JS modules alive after edits, so a single shared version string keeps the full client bundle in sync.
+Reasoning: Browser caching can otherwise keep stale CSS or imported JS modules alive after edits, and hand-updating multiple `?v=` suffixes is easy to miss. A single shared version string keeps the full client bundle in sync while preserving the no-build static architecture.
 
 ### 2026-06-03: Keep Edited Front Matter Titles Live
 
