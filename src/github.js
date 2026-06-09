@@ -11,6 +11,15 @@ export class GitHubError extends Error {
   }
 }
 
+export class GitHubRequestError extends Error {
+  constructor(message, cause, meta = {}) {
+    super(message);
+    this.name = "GitHubRequestError";
+    this.cause = cause;
+    this.meta = meta;
+  }
+}
+
 export class DiscourseError extends Error {
   constructor(message, response, payload, meta = {}) {
     super(message);
@@ -34,6 +43,7 @@ export class GitHubClient {
   async requestWithMeta(path, options = {}) {
     const url = path.startsWith("http") ? path : `${API_BASE}${path}`;
     const method = options.method || "GET";
+    const requestMeta = { method, path, url };
     const headers = {
       Accept: "application/vnd.github+json",
       "X-GitHub-Api-Version": API_VERSION,
@@ -48,15 +58,20 @@ export class GitHubClient {
       headers["Content-Type"] = "application/json";
     }
 
-    const response = await fetch(url, {
-      cache: "no-store",
-      ...options,
-      headers,
-    });
+    let response;
+    try {
+      response = await fetch(url, {
+        cache: "no-store",
+        ...options,
+        headers,
+      });
+    } catch (error) {
+      throw new GitHubRequestError(error?.message || "GitHub API request failed", error, requestMeta);
+    }
 
     const text = await response.text();
     const payload = parseJson(text);
-    const meta = readResponseMeta(response, { method, path, url });
+    const meta = readResponseMeta(response, requestMeta);
 
     if (!response.ok) {
       const message = payload?.message || response.statusText || "GitHub API request failed";

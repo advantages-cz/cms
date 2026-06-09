@@ -7,7 +7,7 @@ import {
   readSaveFileFormData,
   upsertFileMetadata as upsertFileMetadataState,
 } from "./editorWorkflow.js";
-import { GitHubClient, GitHubError } from "./github.js";
+import { GitHubClient, GitHubError, GitHubRequestError } from "./github.js";
 import { DEFAULT_LANGUAGE, LANGUAGES, normalizeLanguage, translate } from "./i18n.js";
 import {
   loadCachedContents,
@@ -49,6 +49,7 @@ const THEME_MODES = ["auto", "light", "dark"];
 const STARTUP_CONTENT_EXTENSIONS = ["md", "mdx", "html", "htm"];
 const systemDarkQuery = window.matchMedia?.("(prefers-color-scheme: dark)") || null;
 const mobileTreeQuery = window.matchMedia?.("(max-width: 1120px)") || null;
+const standaloneDisplayModeQuery = window.matchMedia?.("(display-mode: standalone)") || null;
 
 const state = {
   publicConfig: {},
@@ -112,7 +113,7 @@ const state = {
   actionPollStartedAt: null,
   allowDefaultBranchEdits: Boolean(settings.allowDefaultBranchEdits),
   dismissedAutomationBannerKey: "",
-  offline: typeof navigator !== "undefined" ? navigator.onLine === false : false,
+  offline: initialOfflineState(),
 };
 
 const ACTION_POLL_INTERVAL_MS = 12000;
@@ -130,6 +131,29 @@ let revealMobileTreeAfterRender = false;
 
 function normalizeTab(tab) {
   return ["files", "changes", "commits", "actions"].includes(tab) ? tab : tab === "review" ? "changes" : "files";
+}
+
+function initialOfflineState() {
+  if (typeof navigator === "undefined") {
+    return false;
+  }
+  return !ignoreNavigatorOfflineState() && navigator.onLine === false;
+}
+
+function ignoreNavigatorOfflineState() {
+  return isIosStandalonePwa();
+}
+
+function isIosStandalonePwa() {
+  if (typeof window === "undefined" || typeof navigator === "undefined") {
+    return false;
+  }
+  const ua = navigator.userAgent || "";
+  const isIos = /iPad|iPhone|iPod/.test(ua) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+  if (!isIos) {
+    return false;
+  }
+  return Boolean(window.navigator.standalone) || Boolean(standaloneDisplayModeQuery?.matches);
 }
 
 const scheduleFilterRender = debounce(() => {
@@ -256,6 +280,9 @@ window.addEventListener("online", () => {
 });
 
 window.addEventListener("offline", () => {
+  if (ignoreNavigatorOfflineState()) {
+    return;
+  }
   enterOfflineMode();
 });
 
@@ -1226,10 +1253,13 @@ async function refreshActions({ keepBusy = false, syncBranch = true } = {}) {
 }
 
 function isOptionalChecksApiError(error) {
+  if (error instanceof GitHubRequestError) {
+    return isChecksApiRequest(error.meta?.path);
+  }
   if (!(error instanceof GitHubError)) {
     return false;
   }
-  return error.status === 403 || error.status === 404;
+  return isChecksApiRequest(error.meta?.path) && (error.status === 403 || error.status === 404);
 }
 
 function startActionPolling() {
@@ -2929,13 +2959,13 @@ function renderDiscussionHeaderActions(context = selectedDiscussionContext()) {
 
 function renderHeaderActionButton(className, action, icon, label) {
   const classes = ["button-with-icon", className].filter(Boolean).join(" ");
-  const disabled = isOfflineBlockedAction(action) ? "disabled" : "";
+  const disabled = state.offline && isOfflineBlockedAction(action) ? "disabled" : "";
   return `<button class="${classes}" type="button" data-action="${action}" ${disabled}>${treeIconSvg(icon)}<span>${escapeHtml(label)}</span></button>`;
 }
 
 function renderIconOnlyActionButton(className, action, icon, label) {
   const classes = ["icon-button", "mobile-action-button", className].filter(Boolean).join(" ");
-  const disabled = isOfflineBlockedAction(action) ? "disabled" : "";
+  const disabled = state.offline && isOfflineBlockedAction(action) ? "disabled" : "";
   return `<button class="${classes}" type="button" data-action="${action}" aria-label="${escapeHtml(label)}" title="${escapeHtml(label)}" ${disabled}>${treeIconSvg(icon)}</button>`;
 }
 
@@ -5448,6 +5478,8 @@ function isOfflineBlockedAction(action) {
   return [
     "start-edit-session",
     "new-edit-branch",
+    "open-discourse-topic",
+    "open-discourse-composer",
     "prepare-pr",
     "create-branch",
     "refresh-actions",
@@ -5522,15 +5554,24 @@ function isOfflineLikeError(error) {
   if (error instanceof GitHubError) {
     return false;
   }
+  if (error instanceof GitHubRequestError && isChecksApiRequest(error.meta?.path)) {
+    return false;
+  }
   const message = String(error?.message || "").toLowerCase();
   return (
-    (typeof navigator !== "undefined" && navigator.onLine === false) ||
-    error instanceof TypeError ||
+    (!ignoreNavigatorOfflineState() && typeof navigator !== "undefined" && navigator.onLine === false) ||
+    error?.name === "AbortError" ||
     message.includes("failed to fetch") ||
     message.includes("networkerror") ||
     message.includes("network request failed") ||
-    message.includes("load failed")
+    message.includes("load failed") ||
+    message.includes("network error") ||
+    message.includes("the internet connection appears to be offline")
   );
+}
+
+function isChecksApiRequest(path) {
+  return String(path || "").includes("/check-runs");
 }
 
 export const __testing = {

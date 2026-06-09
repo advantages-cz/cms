@@ -156,7 +156,9 @@ Implemented capabilities:
 - Mobile files UX uses a slide-over tree sidebar opened from a hamburger button, while desktop keeps the split workbench with a resizable tree pane.
 - Dismissible error and notification messages.
 - Consolidated top workflow toolbar for branch, pull request, and refresh actions, while file-specific edit and discussion actions live in the selected-file header.
-- Discussion links stay available even when the CMS has fallen back to offline mode, because they open plain Discourse URLs and do not depend on GitHub API reachability.
+- In iPhone/iOS PWA standalone mode, offline detection should not rely solely on `navigator.onLine` or the browser `offline` event, because those signals can report false offline states. Prefer switching into offline mode after an actual GitHub/network fetch failure, while still leaving explicit `Refresh` as the reconnect path.
+- Offline detection should only use explicit network indicators such as fetch/network failure messages or browser offline state. Do not treat generic JavaScript `TypeError` exceptions as proof that the device is offline.
+- Checks API failures are optional capability failures, not offline signals. Unsupported or blocked `/check-runs` requests must degrade to Actions-only status without disabling edit mode or switching the CMS into offline mode.
 - User menu in the top toolbar for changing sign-in and logging out.
 - English/Czech localization with English as the default language, UI copy centralized in `src/i18n.js`, and language selectors in both the top toolbar and GitHub sign-in modal.
 - Light, dark, and automatic appearance modes in the top toolbar. Automatic mode follows `prefers-color-scheme`, and the selected preference is stored with other browser-local CMS settings.
