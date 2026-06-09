@@ -5437,8 +5437,6 @@ function isOfflineBlockedAction(action) {
   return [
     "start-edit-session",
     "new-edit-branch",
-    "open-discourse-topic",
-    "open-discourse-composer",
     "prepare-pr",
     "create-branch",
     "refresh-actions",

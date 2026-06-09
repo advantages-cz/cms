@@ -156,6 +156,7 @@ Implemented capabilities:
 - Mobile files UX uses a slide-over tree sidebar opened from a hamburger button, while desktop keeps the split workbench with a resizable tree pane.
 - Dismissible error and notification messages.
 - Consolidated top workflow toolbar for branch, pull request, and refresh actions, while file-specific edit and discussion actions live in the selected-file header.
+- Discussion links stay available even when the CMS has fallen back to offline mode, because they open plain Discourse URLs and do not depend on GitHub API reachability.
 - User menu in the top toolbar for changing sign-in and logging out.
 - English/Czech localization with English as the default language, UI copy centralized in `src/i18n.js`, and language selectors in both the top toolbar and GitHub sign-in modal.
 - Light, dark, and automatic appearance modes in the top toolbar. Automatic mode follows `prefers-color-scheme`, and the selected preference is stored with other browser-local CMS settings.
