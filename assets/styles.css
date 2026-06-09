@@ -1007,11 +1007,6 @@ textarea:focus {
   border-bottom: 1px solid var(--line);
 }
 
-.tab-shell {
-  display: block;
-  min-height: 0;
-}
-
 .tabbar-tabs {
   display: flex;
   gap: 4px;
@@ -3183,6 +3178,13 @@ mark,
     box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--text) 8%, transparent);
   }
 
+  .mobile-tree-toggle svg {
+    width: 18px;
+    height: 18px;
+    stroke: currentColor;
+    stroke-width: 2.2;
+  }
+
   .brand-symbol {
     grid-column: auto;
     grid-row: auto;
@@ -3212,52 +3214,42 @@ mark,
   }
 
   .content {
-    display: grid;
-    grid-auto-rows: min-content;
+    display: block;
     gap: 10px;
     padding: 10px;
-    align-items: stretch;
-  }
-
-  .tab-shell {
-    display: grid;
-    grid-template-columns: 96px minmax(0, 1fr);
-    gap: 10px;
-    min-height: 0;
-    overflow: hidden;
   }
 
   .tabbar {
-    grid-column: 1;
-    display: grid;
-    align-content: start;
+    display: flex;
+    align-items: stretch;
     gap: 8px;
-    margin-bottom: 0;
-    padding-right: 10px;
-    border-right: 1px solid var(--line);
-    border-bottom: 0;
-    overflow: auto;
+    margin-bottom: 10px;
+    padding-right: 0;
+    border-right: 0;
+    border-bottom: 1px solid var(--line);
+    overflow-x: auto;
+    overflow-y: hidden;
   }
 
   .tabbar-tabs {
-    display: grid;
-    width: 100%;
+    display: flex;
+    width: max-content;
     gap: 6px;
   }
 
   .tabbar-tabs button {
-    justify-content: space-between;
-    width: 100%;
-    min-height: 42px;
-    padding: 8px 10px;
+    justify-content: center;
+    width: auto;
+    min-height: 38px;
+    padding: 8px 12px;
     border: 1px solid var(--line);
     border-bottom-width: 1px;
     border-radius: 12px;
     background: var(--surface);
     font-size: 12px;
     line-height: 1.2;
-    text-align: left;
-    white-space: normal;
+    text-align: center;
+    white-space: nowrap;
   }
 
   .tabbar-tabs button.active {
@@ -3266,9 +3258,8 @@ mark,
   }
 
   .tab-content {
-    grid-column: 2;
     min-height: 0;
-    overflow: hidden;
+    overflow: auto;
   }
 
   .panel-header {
@@ -3305,6 +3296,13 @@ mark,
   :root[data-theme="dark"] .mobile-tree-toggle {
     border-color: color-mix(in srgb, white 18%, var(--line-strong));
     background: color-mix(in srgb, var(--surface) 84%, white 16%);
+    color: white;
+  }
+
+  :root[data-theme="dark"] .mobile-tree-toggle:hover,
+  :root[data-theme="dark"] .mobile-tree-toggle:focus-visible,
+  :root[data-theme="dark"] .mobile-tree-toggle[aria-expanded="true"] {
+    background: color-mix(in srgb, var(--surface) 68%, white 32%);
     color: white;
   }
 }
