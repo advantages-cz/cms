@@ -219,12 +219,17 @@ app.addEventListener("click", (event) => {
     return;
   }
 
-  const button = event.target.closest("[data-action]");
-  if (!button) {
+  const target = event.target;
+  if (!(target instanceof Element)) {
+    return;
+  }
+
+  const actionTarget = target.closest("[data-action]");
+  if (!actionTarget) {
     return;
   }
   event.preventDefault();
-  void handleAction(button);
+  void handleAction(actionTarget);
 });
 
 app.addEventListener("change", (event) => {
