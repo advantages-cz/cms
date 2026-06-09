@@ -48,6 +48,7 @@ const MAX_SEARCH_INDEX_BYTES = 256 * 1024;
 const THEME_MODES = ["auto", "light", "dark"];
 const STARTUP_CONTENT_EXTENSIONS = ["md", "mdx", "html", "htm"];
 const systemDarkQuery = window.matchMedia?.("(prefers-color-scheme: dark)") || null;
+const mobileTreeQuery = window.matchMedia?.("(max-width: 1120px)") || null;
 
 const state = {
   publicConfig: {},
@@ -81,6 +82,8 @@ const state = {
   expandedDirs: new Set(),
   treeScrollTop: 0,
   revealSelectedInTree: false,
+  mobileTreeOpen: false,
+  mobileSettingsOpen: false,
   treePaneWidth: normalizeTreePaneWidth(settings.treePaneWidth),
   treePaneResizing: false,
   frontMatterOpen: false,
@@ -122,6 +125,8 @@ let backgroundRenderPending = false;
 let globalSearchTypingTimer = null;
 let globalSearchTyping = false;
 let focusRestoreToken = 0;
+let focusMobileSearchAfterRender = false;
+let revealMobileTreeAfterRender = false;
 
 function normalizeTab(tab) {
   return ["files", "changes", "commits", "actions"].includes(tab) ? tab : tab === "review" ? "changes" : "files";
@@ -236,6 +241,13 @@ window.addEventListener("pointercancel", () => {
 
 window.addEventListener("popstate", () => {
   void restoreSelectionFromLocation();
+});
+
+mobileTreeQuery?.addEventListener?.("change", (event) => {
+  if (!event.matches && state.mobileTreeOpen) {
+    state.mobileTreeOpen = false;
+    render();
+  }
 });
 
 window.addEventListener("online", () => {
@@ -394,7 +406,45 @@ async function handleAction(button) {
 
   if (action === "tab") {
     state.tab = normalizeTab(button.dataset.tab || "files");
+    if (state.tab !== "files") {
+      state.mobileTreeOpen = false;
+    }
     persistSettings();
+    render();
+    return;
+  }
+
+  if (action === "toggle-mobile-tree") {
+    state.mobileTreeOpen = !state.mobileTreeOpen;
+    if (state.mobileTreeOpen) {
+      state.userMenuOpen = false;
+      state.mobileSettingsOpen = false;
+      state.revealSelectedInTree = true;
+      revealMobileTreeAfterRender = true;
+    }
+    render();
+    return;
+  }
+
+  if (action === "open-mobile-search") {
+    state.mobileTreeOpen = true;
+    state.userMenuOpen = false;
+    state.revealSelectedInTree = true;
+    revealMobileTreeAfterRender = true;
+    focusMobileSearchAfterRender = true;
+    render();
+    return;
+  }
+
+  if (action === "close-mobile-tree") {
+    state.mobileTreeOpen = false;
+    state.mobileSettingsOpen = false;
+    render();
+    return;
+  }
+
+  if (action === "toggle-mobile-settings") {
+    state.mobileSettingsOpen = !state.mobileSettingsOpen;
     render();
     return;
   }
@@ -451,6 +501,9 @@ async function handleAction(button) {
 
   if (action === "toggle-user-menu") {
     state.userMenuOpen = !state.userMenuOpen;
+    if (state.userMenuOpen) {
+      state.mobileSettingsOpen = true;
+    }
     render();
     return;
   }
@@ -478,6 +531,7 @@ async function handleAction(button) {
 
   if (action === "select-file") {
     const path = button.dataset.path || "";
+    state.mobileTreeOpen = false;
     await loadFile(path, { navigation: "push" });
     return;
   }
@@ -488,6 +542,7 @@ async function handleAction(button) {
   }
 
   if (action === "open-markdown-dir-link") {
+    state.mobileTreeOpen = false;
     openMarkdownDirectoryLink(button.dataset.path || "");
     return;
   }
@@ -514,6 +569,7 @@ async function handleAction(button) {
 
   if (action === "preview-file") {
     state.tab = "files";
+    state.mobileTreeOpen = false;
     persistSettings();
     await loadFile(button.dataset.path || "", { navigation: "push", revealInTree: true });
     return;
@@ -648,6 +704,9 @@ function handleInput(target) {
 }
 
 function startTreePaneResize(event, handle) {
+  if (mobileTreeQuery?.matches) {
+    return;
+  }
   const workbench = handle.closest(".files-workbench");
   if (!(workbench instanceof HTMLElement)) {
     return;
@@ -2152,9 +2211,42 @@ function render({ treeScrollTop = null } = {}) {
   `;
   restoreTreeScroll();
   revealSelectedTreeRow();
+  revealSelectedMobileTreeRow();
   restoreFocusSnapshot(focusSnapshot);
+  focusMobileSearchInput();
   highlightSearchMatches();
   syncDiscussionEmbed();
+}
+
+function focusMobileSearchInput() {
+  if (!focusMobileSearchAfterRender) {
+    return;
+  }
+  focusMobileSearchAfterRender = false;
+  window.requestAnimationFrame(() => {
+    const input = document.querySelector("#mobile-tree-panel #global-search");
+    if (input instanceof HTMLInputElement) {
+      input.focus({ preventScroll: true });
+      input.select();
+    }
+  });
+}
+
+function revealSelectedMobileTreeRow() {
+  if (!revealMobileTreeAfterRender || !state.mobileTreeOpen || (!state.selectedPath && !state.selectedDir)) {
+    return;
+  }
+  revealMobileTreeAfterRender = false;
+  window.requestAnimationFrame(() => {
+    const list = document.querySelector("#mobile-tree-panel .file-list");
+    const selector = state.selectedPath ? ".tree-file.active" : ".tree-dir.active-dir";
+    const active = list?.querySelector(selector);
+    if (!(list instanceof HTMLElement) || !(active instanceof HTMLElement)) {
+      return;
+    }
+    active.scrollIntoView({ block: "center", inline: "nearest" });
+    state.treeScrollTop = list.scrollTop;
+  });
 }
 
 function renderBusyOverlay() {
@@ -2194,6 +2286,7 @@ function renderTopbar() {
   return `
     <header class="topbar ${modeClass}">
       <div class="brand">
+        ${renderMobileTreeToggle()}
         <img class="brand-symbol" src="./assets/brand/adaptivio-symbol-cerny-rgb.svg" alt="" aria-hidden="true" />
         <div class="brand-copy">
           <h1>Adaptivio CMS</h1>
@@ -2201,12 +2294,57 @@ function renderTopbar() {
           ${state.offline ? `<span class="repo-label">${escapeHtml(t("repo.offlineBadge"))}</span>` : ""}
         </div>
       </div>
+      ${renderMobileTopbarActions()}
       <div class="top-actions">
         ${renderGlobalSearch()}
         ${renderTopbarWorkflowControls()}
         ${renderUserMenu()}
       </div>
     </header>
+  `;
+}
+
+function renderMobileTopbarActions() {
+  if (!state.token || !state.owner || !state.repo || !state.headSha) {
+    return `<div class="mobile-topbar-actions"></div>`;
+  }
+
+  const context = selectedDiscussionContext();
+  const buttons = [
+    renderIconOnlyActionButton("button-quiet", "open-mobile-search", "search", t("search.label")),
+    renderIconOnlyActionButton("button-quiet", "refresh", "refresh", t("toolbar.refreshGithub")),
+  ];
+
+  if (state.selectedPath && canEditSelectedFile()) {
+    if (state.editMode) {
+      buttons.push(renderIconOnlyActionButton("button-secondary", "leave-edit-session", "preview", t("toolbar.backToPreview")));
+    } else {
+      buttons.push(renderIconOnlyActionButton("primary", "start-edit-session", "edit", t("common.edit")));
+    }
+  }
+
+  if (state.selectedPath && !state.editMode && context.supported) {
+    buttons.push(renderIconOnlyActionButton("button-quiet", "open-discourse-topic", "discussion-search", t("discussion.openTopic")));
+    buttons.push(renderIconOnlyActionButton("primary", "open-discourse-composer", "discussion-plus", t("discussion.createTopic")));
+  }
+
+  return `<div class="mobile-topbar-actions">${buttons.join("")}</div>`;
+}
+
+function renderMobileTreeToggle() {
+  if (!state.token || !state.owner || !state.repo || !state.headSha) {
+    return "";
+  }
+
+  return `
+    <button
+      class="icon-button button-quiet mobile-tree-toggle"
+      type="button"
+      data-action="toggle-mobile-tree"
+      aria-label="${escapeHtml(t("files.openSidebar"))}"
+      aria-expanded="${state.mobileTreeOpen ? "true" : "false"}"
+      aria-controls="mobile-tree-panel"
+    >${treeIconSvg("menu")}</button>
   `;
 }
 
@@ -2295,7 +2433,7 @@ function renderUserMenu() {
   `;
 }
 
-function renderTopbarWorkflowControls() {
+function renderTopbarWorkflowControls({ includeRefresh = true } = {}) {
   if (!state.token || !state.owner || !state.repo || !state.headSha) {
     return "";
   }
@@ -2322,7 +2460,7 @@ function renderTopbarWorkflowControls() {
       <span class="status-pill status-sha" title="${t("common.headTitle")}">head ${escapeHtml(shortSha(state.headSha))}</span>
     </div>
     ${prButton}
-    <button class="icon-button button-quiet refresh-button" type="button" data-action="refresh" title="${t("toolbar.refreshGithub")}" aria-label="${t("toolbar.refreshGithub")}">${treeIconSvg("refresh")}</button>
+    ${includeRefresh ? `<button class="icon-button button-quiet refresh-button" type="button" data-action="refresh" title="${t("toolbar.refreshGithub")}" aria-label="${t("toolbar.refreshGithub")}">${treeIconSvg("refresh")}</button>` : ""}
   `;
 }
 
@@ -2649,8 +2787,35 @@ function renderFilesTab() {
   const canDeleteFolder = state.editMode && Boolean(currentDir) && !state.selectedPath && filesInDirectory(currentDir).length > 0;
   return `
     <div class="workbench files-workbench ${state.treePaneResizing ? "is-resizing" : ""}" style="--tree-pane-width: ${state.treePaneWidth}px;">
-      <section class="panel tree-panel">
+      <div class="mobile-tree-backdrop ${state.mobileTreeOpen ? "is-open" : ""}" data-action="close-mobile-tree" aria-hidden="${state.mobileTreeOpen ? "false" : "true"}"></div>
+      <section id="mobile-tree-panel" class="panel tree-panel ${state.mobileTreeOpen ? "mobile-open" : ""}" aria-label="${escapeHtml(t("files.repositoryFiles"))}">
         <div class="panel-body">
+          <div class="mobile-tree-header">
+            <div class="mobile-tree-title">
+              <strong>${escapeHtml(t("tabs.files"))}</strong>
+              <span>${escapeHtml(t("files.repositoryFiles"))}</span>
+            </div>
+            <div class="mobile-tree-header-actions">
+              <button
+                class="icon-button button-quiet mobile-settings-icon"
+                type="button"
+                data-action="toggle-mobile-settings"
+                aria-label="${escapeHtml(t("common.settings"))}"
+                title="${escapeHtml(t("common.settings"))}"
+                aria-expanded="${state.mobileSettingsOpen ? "true" : "false"}"
+              >${treeIconSvg("settings")}</button>
+              <button class="icon-button button-quiet" type="button" data-action="close-mobile-tree" aria-label="${escapeHtml(t("files.closeSidebar"))}">×</button>
+            </div>
+          </div>
+          ${renderGlobalSearch()}
+          ${
+            state.mobileSettingsOpen
+              ? `<div class="mobile-tree-utilities">
+                  ${renderTopbarWorkflowControls({ includeRefresh: false })}
+                  ${renderUserMenu()}
+                </div>`
+              : ""
+          }
           ${
             state.editMode
               ? `<div class="tree-actions">
@@ -2675,7 +2840,9 @@ function renderFilesTab() {
       <section class="panel editor-panel">
         <div class="panel-header">
           <div class="panel-header-main">
-            ${renderSelectedFileHeading()}
+            <div class="panel-heading-wrap">
+              ${renderSelectedFileHeading()}
+            </div>
             <div class="button-row panel-actions">
               ${renderDiscussionHeaderActions()}
               ${state.editor?.dirty ? `<span class="tag warn">${t("files.unsaved")}</span>` : ""}
@@ -2755,6 +2922,12 @@ function renderHeaderActionButton(className, action, icon, label) {
   const classes = ["button-with-icon", className].filter(Boolean).join(" ");
   const disabled = isOfflineBlockedAction(action) ? "disabled" : "";
   return `<button class="${classes}" type="button" data-action="${action}" ${disabled}>${treeIconSvg(icon)}<span>${escapeHtml(label)}</span></button>`;
+}
+
+function renderIconOnlyActionButton(className, action, icon, label) {
+  const classes = ["icon-button", "mobile-action-button", className].filter(Boolean).join(" ");
+  const disabled = isOfflineBlockedAction(action) ? "disabled" : "";
+  return `<button class="${classes}" type="button" data-action="${action}" aria-label="${escapeHtml(label)}" title="${escapeHtml(label)}" ${disabled}>${treeIconSvg(icon)}</button>`;
 }
 
 function canEditSelectedFile() {
@@ -2982,8 +3155,12 @@ function treeIconSvg(iconClass) {
     "tree-icon-code": `${fileBase}<path d="m10 13-2 2 2 2"></path><path d="m14 13 2 2-2 2"></path>`,
     "tree-icon-image": `${fileBase}<circle cx="10" cy="13" r="1"></circle><path d="m8 18 2.4-2.4a1 1 0 0 1 1.4 0L14 17l1-1a1 1 0 0 1 1.4 0L18 18"></path>`,
     discussion: '<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2Z"></path><path d="M8 9h8"></path><path d="M8 13h5"></path>',
+    "discussion-search": '<path d="M4 6h16"></path><path d="M4 12h10"></path><path d="M4 18h7"></path><circle cx="18" cy="17" r="3"></circle>',
+    "discussion-plus": '<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2Z"></path><path d="M12 8v6"></path><path d="M9 11h6"></path>',
     edit: '<path d="M12 20h9"></path><path d="m16.5 3.5 4 4"></path><path d="M3 17.3V21h3.7L18.9 8.8a2.8 2.8 0 1 0-4-4Z"></path>',
     info: '<circle cx="12" cy="12" r="9"></circle><path d="M12 10v6"></path><path d="M12 7.5h.01"></path>',
+    menu: '<path d="M4 7h16"></path><path d="M4 12h16"></path><path d="M4 17h16"></path>',
+    settings: '<circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.7 1.7 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.7 1.7 0 0 0-1.82-.33 1.7 1.7 0 0 0-1 1.54V21a2 2 0 1 1-4 0v-.09a1.7 1.7 0 0 0-1-1.54 1.7 1.7 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.7 1.7 0 0 0 .33-1.82 1.7 1.7 0 0 0-1.54-1H3a2 2 0 1 1 0-4h.09a1.7 1.7 0 0 0 1.54-1 1.7 1.7 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.7 1.7 0 0 0 1.82.33h.01a1.7 1.7 0 0 0 1-1.54V3a2 2 0 1 1 4 0v.09a1.7 1.7 0 0 0 1 1.54 1.7 1.7 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.7 1.7 0 0 0-.33 1.82v.01a1.7 1.7 0 0 0 1.54 1H21a2 2 0 1 1 0 4h-.09a1.7 1.7 0 0 0-1.54 1Z"></path>',
     preview: '<path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6-10-6-10-6Z"></path><circle cx="12" cy="12" r="3"></circle>',
     refresh: '<path d="M21 12a9 9 0 0 1-15.6 6.1L3 16"></path><path d="M3 21v-5h5"></path><path d="M3 12A9 9 0 0 1 18.6 5.9L21 8"></path><path d="M21 3v5h-5"></path>',
     search: '<path d="m21 21-4.34-4.34"></path><circle cx="11" cy="11" r="8"></circle>',

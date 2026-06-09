@@ -28,6 +28,7 @@ export const resources = {
       closeNotification: "Close notification",
       theme: "Theme",
       clear: "Clear",
+      settings: "Settings",
     },
     theme: {
       auto: "Auto",
@@ -180,6 +181,8 @@ export const resources = {
       newFolder: "New Folder",
       deleteFolder: "Delete folder",
       resizeTree: "Resize tree width",
+      openSidebar: "Open file sidebar",
+      closeSidebar: "Close file sidebar",
       editor: "Editor",
       unsaved: "unsaved",
       delete: "Delete",
@@ -373,6 +376,7 @@ export const resources = {
       closeNotification: "Zavřít oznámení",
       theme: "Vzhled",
       clear: "Vymazat",
+      settings: "Nastavení",
     },
     theme: {
       auto: "Automaticky",
@@ -525,6 +529,8 @@ export const resources = {
       newFolder: "New Folder",
       deleteFolder: "Smazat složku",
       resizeTree: "Změnit šířku stromu",
+      openSidebar: "Otevřít postranní panel souborů",
+      closeSidebar: "Zavřít postranní panel souborů",
       editor: "Editor",
       unsaved: "neuloženo",
       delete: "Smazat",

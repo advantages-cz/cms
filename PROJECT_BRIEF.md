@@ -153,6 +153,7 @@ Implemented capabilities:
 - Sandboxed HTML preview with relative image, SVG, and CSS assets inlined from the current branch.
 - Fixed-height application shell with internal scrolling in the tree and preview regions.
 - Resizable file tree width in the files workbench.
+- Mobile files UX uses a slide-over tree sidebar opened from a hamburger button, while desktop keeps the split workbench with a resizable tree pane.
 - Dismissible error and notification messages.
 - Consolidated top workflow toolbar for branch, pull request, and refresh actions, while file-specific edit and discussion actions live in the selected-file header.
 - User menu in the top toolbar for changing sign-in and logging out.
@@ -381,6 +382,12 @@ Reasoning: Authentication is setup work, not primary content work. Keeping it ou
 Decision: The files workbench includes a draggable splitter between the repository tree and preview/editor panel. The chosen tree width is stored in browser settings.
 
 Reasoning: Repository trees and previews need different amounts of space depending on path depth, file names, and review task. A splitter keeps the no-sidebar layout flexible without adding more persistent chrome.
+
+### 2026-06-09: Mobile tree navigation becomes a slide-over sidebar
+
+Decision: On narrow layouts, the repository tree moves into a slide-over sidebar opened from a hamburger button in the top bar and from a compact file-path toggle in the file header. Selecting a file closes the sidebar again, while desktop keeps the existing split-pane tree plus resizer.
+
+Reasoning: On phones and smaller tablets, the side-by-side tree and preview layout wastes space and pushes the actual document preview too far down. A temporary sidebar preserves repository navigation without sacrificing the preview/editor surface.
 
 ### 2026-06-02: Sort Tree For CMS Browsing
 
