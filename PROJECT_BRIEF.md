@@ -399,6 +399,18 @@ Decision: The slide-over tree, hamburger trigger, and mobile tree search belong 
 
 Reasoning: Treating wider desktop or laptop layouts as mobile leaks hamburger-only controls into desktop and makes the tree search appear in the wrong place. Opening the tree by default on phones reduces one extra tap at the start of each session and matches the repository-browsing-first workflow.
 
+### 2026-06-09: Phone landscape uses the mobile shell
+
+Decision: The mobile shell now also activates on coarse-pointer landscape viewports with a height of 500 CSS pixels or less, even when the viewport width is wider than the phone portrait breakpoint.
+
+Reasoning: Modern iPhones in landscape can exceed the width-only mobile breakpoint while still having phone-sized vertical space. Treating those viewports as desktop makes the split layout cramped and hides the slide-over tree/navigation pattern users expect on phones.
+
+### 2026-06-09: Phone landscape prioritizes side rails over top chrome
+
+Decision: In the low-height phone landscape breakpoint, the compact top bar becomes a left-side rail and the section tabs move into their own vertical rail so the preview/editor region keeps as much vertical space as possible.
+
+Reasoning: On phones in landscape, vertical space is the scarcest resource. Moving navigation and action chrome to the side reduces header stacking and keeps the content pane usable without repeated scrolling.
+
 ### 2026-06-02: Sort Tree For CMS Browsing
 
 Decision: If no URL selection is present, the CMS opens root `README.md` by default. Each tree level shows `README.md` first, `rozcestnik.md` second, then regular files, dotfiles, regular folders, and dot-prefixed folders such as `.github`. `README.md` uses a home-style icon.

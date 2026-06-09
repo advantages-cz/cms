@@ -47,8 +47,10 @@ const MIN_PREVIEW_PANE_WIDTH = 360;
 const MAX_SEARCH_INDEX_BYTES = 256 * 1024;
 const THEME_MODES = ["auto", "light", "dark"];
 const STARTUP_CONTENT_EXTENSIONS = ["md", "mdx", "html", "htm"];
+const MOBILE_LAYOUT_MEDIA_QUERY =
+  "(max-width: 700px), (hover: none) and (pointer: coarse) and (orientation: landscape) and (max-height: 500px)";
 const systemDarkQuery = window.matchMedia?.("(prefers-color-scheme: dark)") || null;
-const mobileTreeQuery = window.matchMedia?.("(max-width: 700px)") || null;
+const mobileTreeQuery = window.matchMedia?.(MOBILE_LAYOUT_MEDIA_QUERY) || null;
 const standaloneDisplayModeQuery = window.matchMedia?.("(display-mode: standalone)") || null;
 
 const state = {
@@ -268,10 +270,18 @@ window.addEventListener("popstate", () => {
 });
 
 mobileTreeQuery?.addEventListener?.("change", (event) => {
-  if (!event.matches && state.mobileTreeOpen) {
-    state.mobileTreeOpen = false;
+  if (event.matches) {
+    state.mobileTreeOpen = state.tab === "files";
+    state.mobileSettingsOpen = false;
     render();
+    return;
   }
+
+  if (state.mobileTreeOpen) {
+    state.mobileTreeOpen = false;
+  }
+  state.mobileSettingsOpen = false;
+  render();
 });
 
 window.addEventListener("online", () => {
