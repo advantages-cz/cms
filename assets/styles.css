@@ -2981,12 +2981,25 @@ mark,
     height: 100dvh;
     border-radius: 0;
     box-shadow: 0 24px 48px rgba(17, 17, 17, 0.2);
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
     transform: translateX(-104%);
-    transition: transform 180ms ease;
+    transition:
+      transform 180ms ease,
+      opacity 120ms ease,
+      visibility 0s linear 180ms;
   }
 
   .tree-panel.mobile-open {
+    opacity: 1;
+    visibility: visible;
+    pointer-events: auto;
     transform: translateX(0);
+    transition:
+      transform 180ms ease,
+      opacity 120ms ease,
+      visibility 0s linear 0s;
   }
 
   .tree-panel .panel-body {

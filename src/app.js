@@ -2344,7 +2344,7 @@ function renderTopbar() {
     <header class="topbar ${modeClass}">
       <div class="brand">
         ${renderMobileTreeToggle()}
-        <img class="brand-symbol" src="./assets/brand/adaptivio-symbol-cerny-rgb.svg" alt="" aria-hidden="true" />
+        <img class="brand-symbol" src="./assets/brand/adaptivio/adaptivio-symbol-cerny-rgb.svg" alt="" aria-hidden="true" />
         <div class="brand-copy">
           <h1>Adaptivio CMS</h1>
           <span class="repo-label">${escapeHtml(repoLabel)}</span>
