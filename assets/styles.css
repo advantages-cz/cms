@@ -3126,8 +3126,12 @@ mark,
 }
 
 @media (hover: none) and (pointer: coarse) and (orientation: landscape) and (max-height: 500px) {
+  :root {
+    --landscape-rail-width: 84px;
+  }
+
   .app-shell {
-    grid-template-columns: 84px minmax(0, 1fr);
+    grid-template-columns: var(--landscape-rail-width) minmax(0, 1fr);
     grid-template-rows: minmax(0, 1fr);
   }
 
@@ -3272,9 +3276,17 @@ mark,
   }
 
   .tree-panel {
-    width: min(360px, 46vw);
+    inset: 0 auto 0 var(--landscape-rail-width);
+    left: var(--landscape-rail-width);
+    width: min(360px, calc(100vw - var(--landscape-rail-width)));
     max-width: 100%;
+    z-index: 40;
     border-right: 1px solid var(--line);
+  }
+
+  .mobile-tree-backdrop.is-open {
+    inset: 0 0 0 var(--landscape-rail-width);
+    z-index: 39;
   }
 
   :root[data-theme="dark"] .mobile-tree-toggle {

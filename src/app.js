@@ -452,13 +452,19 @@ async function handleAction(button) {
   }
 
   if (action === "toggle-mobile-tree") {
-    state.mobileTreeOpen = !state.mobileTreeOpen;
+    if (state.tab !== "files") {
+      state.tab = "files";
+      state.mobileTreeOpen = true;
+    } else {
+      state.mobileTreeOpen = !state.mobileTreeOpen;
+    }
     if (state.mobileTreeOpen) {
       state.userMenuOpen = false;
       state.mobileSettingsOpen = false;
       state.revealSelectedInTree = true;
       revealMobileTreeAfterRender = true;
     }
+    persistSettings();
     render();
     return;
   }
