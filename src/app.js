@@ -48,7 +48,7 @@ const MAX_SEARCH_INDEX_BYTES = 256 * 1024;
 const THEME_MODES = ["auto", "light", "dark"];
 const STARTUP_CONTENT_EXTENSIONS = ["md", "mdx", "html", "htm"];
 const systemDarkQuery = window.matchMedia?.("(prefers-color-scheme: dark)") || null;
-const mobileTreeQuery = window.matchMedia?.("(max-width: 1120px)") || null;
+const mobileTreeQuery = window.matchMedia?.("(max-width: 700px)") || null;
 const standaloneDisplayModeQuery = window.matchMedia?.("(display-mode: standalone)") || null;
 
 const state = {
@@ -83,7 +83,7 @@ const state = {
   expandedDirs: new Set(),
   treeScrollTop: 0,
   revealSelectedInTree: false,
-  mobileTreeOpen: false,
+  mobileTreeOpen: Boolean(mobileTreeQuery?.matches),
   mobileSettingsOpen: false,
   treePaneWidth: normalizeTreePaneWidth(settings.treePaneWidth),
   treePaneResizing: false,
@@ -829,6 +829,8 @@ async function connectRepository({ silent = false } = {}) {
     exitOfflineMode();
     state.connectionError = "";
     state.user = null;
+    state.mobileTreeOpen = state.tab === "files" && Boolean(mobileTreeQuery?.matches);
+    state.mobileSettingsOpen = false;
     await state.client.getRepository(state.owner, state.repo);
     const userResult = await state.client.getAuthenticatedUser().catch(() => null);
     state.user = userResult;
@@ -2371,7 +2373,7 @@ function renderMobileTopbarActions() {
 }
 
 function renderMobileTreeToggle() {
-  if (!state.token || !state.owner || !state.repo || !state.headSha) {
+  if (!mobileTreeQuery?.matches || !state.token || !state.owner || !state.repo || !state.headSha) {
     return "";
   }
 
@@ -2846,7 +2848,7 @@ function renderFilesTab() {
               <button class="icon-button button-quiet" type="button" data-action="close-mobile-tree" aria-label="${escapeHtml(t("files.closeSidebar"))}">×</button>
             </div>
           </div>
-          ${renderGlobalSearch({ id: "mobile-global-search", mobile: true })}
+          ${mobileTreeQuery?.matches ? renderGlobalSearch({ id: "mobile-global-search", mobile: true }) : ""}
           ${
             state.mobileSettingsOpen
               ? `<div class="mobile-tree-utilities">

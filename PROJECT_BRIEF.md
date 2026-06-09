@@ -154,6 +154,7 @@ Implemented capabilities:
 - Fixed-height application shell with internal scrolling in the tree and preview regions.
 - Resizable file tree width in the files workbench.
 - Mobile files UX uses a slide-over tree sidebar opened from a hamburger button, while desktop keeps the split workbench with a resizable tree pane.
+- On mobile, the files tab opens with the tree sidebar already visible after the app connects so repository navigation is the default first view.
 - Dismissible error and notification messages.
 - Consolidated top workflow toolbar for branch, pull request, and refresh actions, while file-specific edit and discussion actions live in the selected-file header.
 - In iPhone/iOS PWA standalone mode, offline detection should not rely solely on `navigator.onLine` or the browser `offline` event, because those signals can report false offline states. Prefer switching into offline mode after an actual GitHub/network fetch failure, while still leaving explicit `Refresh` as the reconnect path.
@@ -391,6 +392,12 @@ Reasoning: Repository trees and previews need different amounts of space dependi
 Decision: On narrow layouts, the repository tree moves into a slide-over sidebar opened from a hamburger button in the top bar and from a compact file-path toggle in the file header. Selecting a file closes the sidebar again, while desktop keeps the existing split-pane tree plus resizer.
 
 Reasoning: On phones and smaller tablets, the side-by-side tree and preview layout wastes space and pushes the actual document preview too far down. A temporary sidebar preserves repository navigation without sacrificing the preview/editor surface.
+
+### 2026-06-09: Mobile tree defaults stay mobile-only and open on connect
+
+Decision: The slide-over tree, hamburger trigger, and mobile tree search belong only to the phone-width breakpoint. On mobile connections into the files tab, the tree sidebar should start open so the first post-login view is repository navigation instead of an empty preview-first state.
+
+Reasoning: Treating wider desktop or laptop layouts as mobile leaks hamburger-only controls into desktop and makes the tree search appear in the wrong place. Opening the tree by default on phones reduces one extra tap at the start of each session and matches the repository-browsing-first workflow.
 
 ### 2026-06-02: Sort Tree For CMS Browsing
 
