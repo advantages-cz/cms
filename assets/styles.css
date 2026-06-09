@@ -3134,6 +3134,22 @@ mark,
 }
 
 @media (hover: none) and (pointer: coarse) and (orientation: landscape) and (max-height: 500px) {
+  .app-shell.has-fixed-landscape-tree {
+    grid-template-columns: minmax(260px, 34vw) minmax(0, 1fr);
+    grid-template-rows: auto minmax(0, 1fr);
+  }
+
+  .app-shell.has-fixed-landscape-tree .topbar {
+    grid-column: 2;
+    grid-row: 1;
+  }
+
+  .app-shell.has-fixed-landscape-tree .layout {
+    grid-column: 2;
+    grid-row: 2;
+    min-height: 0;
+  }
+
   .topbar {
     gap: 8px;
     padding: 8px 10px;
@@ -3180,10 +3196,21 @@ mark,
     display: none;
   }
 
-  .files-workbench {
-    grid-template-columns: minmax(260px, 34vw) minmax(0, 1fr);
-    gap: 8px;
-    align-items: stretch;
+  .app-shell.has-fixed-landscape-tree .files-workbench {
+    grid-template-columns: 1fr;
+    gap: 0;
+    min-height: 100%;
+  }
+
+  .app-shell.has-fixed-landscape-tree .tree-panel {
+    position: fixed;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    width: min(260px, 34vw);
+    z-index: 20;
+    border-radius: 0;
+    border-right: 1px solid var(--line);
   }
 
   .tree-panel {
@@ -3210,7 +3237,7 @@ mark,
     display: none;
   }
 
-  .mobile-tree-header {
+  .app-shell.has-fixed-landscape-tree .mobile-tree-header {
     padding-top: 0;
   }
 

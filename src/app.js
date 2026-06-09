@@ -134,6 +134,10 @@ let focusRestoreToken = 0;
 let focusMobileSearchAfterRender = false;
 let revealMobileTreeAfterRender = false;
 
+function hasFixedLandscapeTree() {
+  return Boolean(fixedLandscapeTreeQuery?.matches && state.tab === "files");
+}
+
 function normalizeTab(tab) {
   return ["files", "changes", "commits", "actions"].includes(tab) ? tab : tab === "review" ? "changes" : "files";
 }
@@ -2254,7 +2258,7 @@ function render({ treeScrollTop = null } = {}) {
   }
   const focusSnapshot = captureFocusSnapshot();
   app.innerHTML = `
-    <div class="app-shell ${state.busy ? "loading" : ""}">
+    <div class="app-shell ${state.busy ? "loading" : ""} ${hasFixedLandscapeTree() ? "has-fixed-landscape-tree" : ""}">
       ${renderTopbar()}
       <div class="layout">
         <main class="content">${renderContent()}</main>
@@ -2274,6 +2278,10 @@ function render({ treeScrollTop = null } = {}) {
 }
 
 function focusMobileSearchInput({ immediate = false } = {}) {
+  if (fixedLandscapeTreeQuery?.matches) {
+    focusMobileSearchAfterRender = false;
+    return;
+  }
   if (!immediate && !focusMobileSearchAfterRender) {
     return;
   }
