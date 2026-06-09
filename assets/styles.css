@@ -3134,144 +3134,61 @@ mark,
 }
 
 @media (hover: none) and (pointer: coarse) and (orientation: landscape) and (max-height: 500px) {
-  .app-shell.has-fixed-landscape-tree {
-    grid-template-columns: minmax(260px, 34vw) minmax(0, 1fr);
-    grid-template-rows: auto minmax(0, 1fr);
-  }
-
-  .app-shell.has-fixed-landscape-tree .topbar {
-    grid-column: 2;
-    grid-row: 1;
-  }
-
-  .app-shell.has-fixed-landscape-tree .layout {
-    grid-column: 2;
-    grid-row: 2;
-    min-height: 0;
-  }
-
-  .topbar {
-    gap: 8px;
-    padding: 8px 10px;
-  }
-
-  .brand {
-    grid-template-columns: 44px 26px minmax(0, 1fr);
-    gap: 8px;
-  }
-
-  .mobile-tree-toggle {
-    width: 44px;
-    min-height: 44px;
-    height: 44px;
-    align-self: center;
-    border-color: var(--line-strong);
-    background: var(--surface);
-    color: var(--text);
-    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--text) 8%, transparent);
-  }
-
-  .mobile-tree-toggle svg {
-    width: 22px;
-    height: 22px;
-    stroke: currentColor;
-    stroke-width: 2.2;
-  }
-
-  .brand-symbol {
-    width: 28px;
-    height: 28px;
-  }
-
-  .brand h1 {
-    font-size: 13px;
-  }
-
-  .mobile-topbar-actions {
-    gap: 8px;
-  }
-
+  .topbar,
+  .tabbar,
   .mobile-tree-backdrop,
-  .mobile-tree-toggle {
-    display: none;
-  }
-
-  .app-shell.has-fixed-landscape-tree .files-workbench {
-    grid-template-columns: 1fr;
-    gap: 0;
-    min-height: 100%;
-  }
-
-  .app-shell.has-fixed-landscape-tree .tree-panel {
-    position: fixed;
-    top: 0;
-    left: 0;
-    bottom: 0;
-    width: min(260px, 34vw);
-    z-index: 20;
-    border-radius: 0;
-    border-right: 1px solid var(--line);
-  }
-
-  .tree-panel {
-    position: static;
-    inset: auto;
-    left: auto;
-    width: auto;
-    height: 100%;
-    max-width: none;
-    border-radius: var(--radius-sm);
-    box-shadow: none;
-    opacity: 1;
-    visibility: visible;
-    pointer-events: auto;
-    transform: none;
-    transition: none;
-  }
-
-  .tree-panel .panel-body {
-    padding-top: 8px;
-  }
-
-  .tree-splitter {
-    display: none;
-  }
-
-  .app-shell.has-fixed-landscape-tree .mobile-tree-header {
-    padding-top: 0;
-  }
-
+  .tree-panel,
+  .tree-splitter,
+  .banner,
+  .connection-status,
   .panel-header {
-    padding: 6px 8px;
+    display: none !important;
   }
 
-  .panel-header-main {
-    gap: 8px;
+  .app-shell {
+    grid-template-rows: minmax(0, 1fr);
   }
 
-  .selected-file-heading-row {
-    gap: 6px;
-  }
-
-  .selected-file-heading h2 {
-    font-size: 12px;
-    line-height: 1.25;
-  }
-
-  .tree-panel {
+  .layout,
+  .content,
+  .tab-content,
+  .workbench,
+  .files-workbench,
+  .editor-panel,
+  .panel,
+  .panel-body,
+  .browse-preview,
+  .markdown-preview,
+  .preview-full {
     min-height: 0;
+    height: 100%;
   }
 
-  :root[data-theme="dark"] .mobile-tree-toggle {
-    border-color: color-mix(in srgb, white 18%, var(--line-strong));
-    background: color-mix(in srgb, var(--surface) 84%, white 16%);
-    color: white;
+  .content,
+  .panel-body,
+  .editor-panel .panel-body {
+    padding: 0;
   }
 
-  :root[data-theme="dark"] .mobile-tree-toggle:hover,
-  :root[data-theme="dark"] .mobile-tree-toggle:focus-visible,
-  :root[data-theme="dark"] .mobile-tree-toggle[aria-expanded="true"] {
-    background: color-mix(in srgb, var(--surface) 68%, white 32%);
-    color: white;
+  .content {
+    overflow: hidden;
+  }
+
+  .tab-content {
+    overflow: auto;
+  }
+
+  .files-workbench,
+  .workbench {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0;
+  }
+
+  .panel,
+  .editor-panel {
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
   }
 }

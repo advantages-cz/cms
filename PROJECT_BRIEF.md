@@ -417,6 +417,12 @@ Decision: In the low-height phone landscape breakpoint, the Files tab uses a per
 
 Reasoning: The slide-over mobile tree introduced too much state and animation complexity in cramped landscape viewports. Keeping the tree fixed in the Files workspace removes the sidebar toggle path entirely and makes navigation, scrolling, and tab switching more stable.
 
+### 2026-06-09: Phone landscape becomes content-only
+
+Decision: In the low-height phone landscape breakpoint, navigation chrome is hidden entirely and the app shows only the active tab's content surface.
+
+Reasoning: Landscape on phones is primarily a reading and previewing posture. Removing the top bar, tabs, tree, and related chrome avoids fragile mobile navigation states and maximizes usable content area.
+
 ### 2026-06-09: Service worker shell cache must track asset version bumps
 
 Decision: Whenever the static shell asset version changes in `index.html`, the service worker precache manifest and cache name must be bumped in lockstep so installed PWAs and cached sessions do not continue serving stale JS or CSS.
