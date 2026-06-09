@@ -431,8 +431,8 @@ async function handleAction(button) {
     state.userMenuOpen = false;
     state.revealSelectedInTree = true;
     revealMobileTreeAfterRender = true;
-    focusMobileSearchAfterRender = true;
     render();
+    focusMobileSearchInput({ immediate: true });
     return;
   }
 
@@ -683,7 +683,7 @@ async function handleChange(target) {
 }
 
 function handleInput(target) {
-  if (target.id === "global-search" && target instanceof HTMLInputElement) {
+  if ((target.id === "global-search" || target.id === "mobile-global-search") && target instanceof HTMLInputElement) {
     state.pathFilter = target.value;
     globalSearchTyping = true;
     window.clearTimeout(globalSearchTypingTimer);
@@ -2218,18 +2218,23 @@ function render({ treeScrollTop = null } = {}) {
   syncDiscussionEmbed();
 }
 
-function focusMobileSearchInput() {
-  if (!focusMobileSearchAfterRender) {
+function focusMobileSearchInput({ immediate = false } = {}) {
+  if (!immediate && !focusMobileSearchAfterRender) {
     return;
   }
   focusMobileSearchAfterRender = false;
-  window.requestAnimationFrame(() => {
-    const input = document.querySelector("#mobile-tree-panel #global-search");
+  const run = () => {
+    const input = document.querySelector("#mobile-global-search");
     if (input instanceof HTMLInputElement) {
       input.focus({ preventScroll: true });
-      input.select();
+      input.setSelectionRange(input.value.length, input.value.length);
     }
-  });
+  };
+  if (immediate) {
+    run();
+    return;
+  }
+  window.requestAnimationFrame(run);
 }
 
 function revealSelectedMobileTreeRow() {
@@ -2348,16 +2353,16 @@ function renderMobileTreeToggle() {
   `;
 }
 
-function renderGlobalSearch() {
+function renderGlobalSearch({ id = "global-search", mobile = false } = {}) {
   if (!state.token || !state.owner || !state.repo || !state.headSha) {
     return "";
   }
 
   return `
-    <div class="global-search" role="search">
-      <span class="sr-only" id="global-search-label">${t("search.label")}</span>
+    <div class="global-search${mobile ? " global-search-mobile" : ""}" role="search">
+      <span class="sr-only" id="${escapeHtml(`${id}-label`)}">${t("search.label")}</span>
       <span class="global-search-icon" aria-hidden="true">${treeIconSvg("search")}</span>
-      <input id="global-search" value="${escapeHtml(state.pathFilter)}" aria-labelledby="global-search-label" placeholder="${t("search.placeholder")}" autocomplete="off" />
+      <input id="${escapeHtml(id)}" value="${escapeHtml(state.pathFilter)}" aria-labelledby="${escapeHtml(`${id}-label`)}" placeholder="${t("search.placeholder")}" autocomplete="off" />
       ${state.pathFilter ? `<button class="global-search-clear" type="button" data-action="clear-global-search" aria-label="${t("search.clear")}"><span aria-hidden="true">×</span></button>` : ""}
     </div>
   `;
@@ -2807,7 +2812,7 @@ function renderFilesTab() {
               <button class="icon-button button-quiet" type="button" data-action="close-mobile-tree" aria-label="${escapeHtml(t("files.closeSidebar"))}">×</button>
             </div>
           </div>
-          ${renderGlobalSearch()}
+          ${renderGlobalSearch({ id: "mobile-global-search", mobile: true })}
           ${
             state.mobileSettingsOpen
               ? `<div class="mobile-tree-utilities">
