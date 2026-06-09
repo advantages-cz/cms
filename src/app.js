@@ -431,6 +431,7 @@ async function handleAction(button) {
     state.userMenuOpen = false;
     state.revealSelectedInTree = true;
     revealMobileTreeAfterRender = true;
+    focusMobileSearchAfterRender = true;
     render();
     focusMobileSearchInput({ immediate: true });
     return;
@@ -685,6 +686,9 @@ async function handleChange(target) {
 function handleInput(target) {
   if ((target.id === "global-search" || target.id === "mobile-global-search") && target instanceof HTMLInputElement) {
     state.pathFilter = target.value;
+    if (target.id === "mobile-global-search") {
+      focusMobileSearchAfterRender = true;
+    }
     globalSearchTyping = true;
     window.clearTimeout(globalSearchTypingTimer);
     globalSearchTypingTimer = window.setTimeout(() => {
@@ -5310,17 +5314,10 @@ function restoreFocusSnapshot(snapshot) {
   if (!snapshot?.id) {
     return;
   }
-
-  focusRestoreToken += 1;
-  const token = focusRestoreToken;
-  window.requestAnimationFrame(() => {
-    if (token !== focusRestoreToken) {
-      return;
-    }
-
+  const restore = () => {
     const target = document.getElementById(snapshot.id);
     if (!(target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement || target instanceof HTMLSelectElement)) {
-      return;
+      return false;
     }
 
     target.focus({ preventScroll: true });
@@ -5332,6 +5329,20 @@ function restoreFocusSnapshot(snapshot) {
     ) {
       target.setSelectionRange(snapshot.selectionStart, snapshot.selectionEnd);
     }
+    return true;
+  };
+
+  if (restore()) {
+    return;
+  }
+
+  focusRestoreToken += 1;
+  const token = focusRestoreToken;
+  window.requestAnimationFrame(() => {
+    if (token !== focusRestoreToken) {
+      return;
+    }
+    restore();
   });
 }
 
