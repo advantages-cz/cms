@@ -411,6 +411,12 @@ Decision: In the low-height phone landscape breakpoint, the compact top bar beco
 
 Reasoning: On phones in landscape, vertical space is the scarcest resource. Moving navigation and action chrome to the side reduces header stacking and keeps the content pane usable without repeated scrolling.
 
+### 2026-06-09: Service worker shell cache must track asset version bumps
+
+Decision: Whenever the static shell asset version changes in `index.html`, the service worker precache manifest and cache name must be bumped in lockstep so installed PWAs and cached sessions do not continue serving stale JS or CSS.
+
+Reasoning: The CMS is often used as an installed app on mobile. If the service worker keeps older precached asset URLs, browsers can mix a newer HTML shell with older scripts or styles, leading to tap-target mismatches and layout regressions that do not match the current source tree.
+
 ### 2026-06-02: Sort Tree For CMS Browsing
 
 Decision: If no URL selection is present, the CMS opens root `README.md` by default. Each tree level shows `README.md` first, `rozcestnik.md` second, then regular files, dotfiles, regular folders, and dot-prefixed folders such as `.github`. `README.md` uses a home-style icon.
