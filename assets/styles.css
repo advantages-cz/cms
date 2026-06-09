@@ -3175,6 +3175,45 @@ mark,
     gap: 8px;
   }
 
+  .mobile-tree-backdrop,
+  .mobile-tree-toggle {
+    display: none;
+  }
+
+  .files-workbench {
+    grid-template-columns: minmax(260px, 34vw) minmax(0, 1fr);
+    gap: 8px;
+    align-items: stretch;
+  }
+
+  .tree-panel {
+    position: static;
+    inset: auto;
+    left: auto;
+    width: auto;
+    height: 100%;
+    max-width: none;
+    border-radius: var(--radius-sm);
+    box-shadow: none;
+    opacity: 1;
+    visibility: visible;
+    pointer-events: auto;
+    transform: none;
+    transition: none;
+  }
+
+  .tree-panel .panel-body {
+    padding-top: 8px;
+  }
+
+  .tree-splitter {
+    display: none;
+  }
+
+  .mobile-tree-header {
+    padding-top: 0;
+  }
+
   .panel-header {
     padding: 6px 8px;
   }
@@ -3193,9 +3232,7 @@ mark,
   }
 
   .tree-panel {
-    left: 0;
-    inset: 0 auto 0 0;
-    width: min(420px, 82vw);
+    min-height: 0;
   }
 
   :root[data-theme="dark"] .mobile-tree-toggle {

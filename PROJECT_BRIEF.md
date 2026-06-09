@@ -411,6 +411,12 @@ Decision: In the low-height phone landscape breakpoint, the compact top bar beco
 
 Reasoning: On phones in landscape, vertical space is the scarcest resource. Moving navigation and action chrome to the side reduces header stacking and keeps the content pane usable without repeated scrolling.
 
+### 2026-06-09: Phone landscape files view keeps the tree pinned open
+
+Decision: In the low-height phone landscape breakpoint, the Files tab uses a permanently visible left tree pane instead of a hamburger-triggered slide-over sidebar.
+
+Reasoning: The slide-over mobile tree introduced too much state and animation complexity in cramped landscape viewports. Keeping the tree fixed in the Files workspace removes the sidebar toggle path entirely and makes navigation, scrolling, and tab switching more stable.
+
 ### 2026-06-09: Service worker shell cache must track asset version bumps
 
 Decision: Whenever the static shell asset version changes in `index.html`, the service worker precache manifest and cache name must be bumped in lockstep so installed PWAs and cached sessions do not continue serving stale JS or CSS.

@@ -49,8 +49,11 @@ const THEME_MODES = ["auto", "light", "dark"];
 const STARTUP_CONTENT_EXTENSIONS = ["md", "mdx", "html", "htm"];
 const MOBILE_LAYOUT_MEDIA_QUERY =
   "(max-width: 700px), (hover: none) and (pointer: coarse) and (orientation: landscape) and (max-height: 500px)";
+const FIXED_LANDSCAPE_TREE_MEDIA_QUERY =
+  "(hover: none) and (pointer: coarse) and (orientation: landscape) and (max-height: 500px)";
 const systemDarkQuery = window.matchMedia?.("(prefers-color-scheme: dark)") || null;
 const mobileTreeQuery = window.matchMedia?.(MOBILE_LAYOUT_MEDIA_QUERY) || null;
+const fixedLandscapeTreeQuery = window.matchMedia?.(FIXED_LANDSCAPE_TREE_MEDIA_QUERY) || null;
 const standaloneDisplayModeQuery = window.matchMedia?.("(display-mode: standalone)") || null;
 
 const state = {
@@ -2389,7 +2392,7 @@ function renderMobileTopbarActions() {
 }
 
 function renderMobileTreeToggle() {
-  if (!mobileTreeQuery?.matches || !state.token || !state.owner || !state.repo || !state.headSha) {
+  if (!mobileTreeQuery?.matches || fixedLandscapeTreeQuery?.matches || !state.token || !state.owner || !state.repo || !state.headSha) {
     return "";
   }
 
@@ -2845,7 +2848,7 @@ function renderFilesTab() {
   return `
     <div class="workbench files-workbench ${state.treePaneResizing ? "is-resizing" : ""}" style="--tree-pane-width: ${state.treePaneWidth}px;">
       <div class="mobile-tree-backdrop ${state.mobileTreeOpen ? "is-open" : ""}" data-action="close-mobile-tree" aria-hidden="${state.mobileTreeOpen ? "false" : "true"}"></div>
-      <section id="mobile-tree-panel" class="panel tree-panel ${state.mobileTreeOpen ? "mobile-open" : ""}" aria-label="${escapeHtml(t("files.repositoryFiles"))}">
+      <section id="mobile-tree-panel" class="panel tree-panel ${state.mobileTreeOpen || fixedLandscapeTreeQuery?.matches ? "mobile-open" : ""}" aria-label="${escapeHtml(t("files.repositoryFiles"))}">
         <div class="panel-body">
           <div class="mobile-tree-header">
             <div class="mobile-tree-title">
@@ -2861,7 +2864,7 @@ function renderFilesTab() {
                 title="${escapeHtml(t("common.settings"))}"
                 aria-expanded="${state.mobileSettingsOpen ? "true" : "false"}"
               >${treeIconSvg("settings")}</button>
-              <button class="icon-button button-quiet" type="button" data-action="close-mobile-tree" aria-label="${escapeHtml(t("files.closeSidebar"))}">×</button>
+              ${fixedLandscapeTreeQuery?.matches ? "" : `<button class="icon-button button-quiet" type="button" data-action="close-mobile-tree" aria-label="${escapeHtml(t("files.closeSidebar"))}">×</button>`}
             </div>
           </div>
           ${mobileTreeQuery?.matches ? renderGlobalSearch({ id: "mobile-global-search", mobile: true }) : ""}
