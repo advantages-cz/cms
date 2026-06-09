@@ -528,6 +528,12 @@ Decision: The pre-filled Discourse topic body now renders the CMS document refer
 
 Reasoning: Keeping the reference and lookup token in one sentence makes the topic body easier to scan while preserving exact-key discovery for `Open discussion`.
 
+### 2026-06-09: Keep Cached Browse Mode Working Offline
+
+Decision: When GitHub API calls fail because the browser is offline or the network disappears, the CMS now falls back to the cached snapshot for the current branch, keeps browse/preview working from local cache where possible, and blocks edit mode, branch switching, PR creation, Actions refreshes, workflow reruns, and other API-driven actions until the user explicitly clicks `Refresh`.
+
+Reasoning: The app already stores repository snapshots and hydrated text content locally. Reusing that cache prevents a transient network loss from collapsing the whole CMS session, while explicit refresh keeps GitHub as the source of truth before any new write or branch-level workflow action resumes.
+
 ## Update Protocol
 
 When the project changes, update this document in the same commit as the related code or configuration change.

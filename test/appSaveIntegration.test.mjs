@@ -135,7 +135,7 @@ test("save workflow renders submitted editor content before async refreshes", as
 
   await __testing.saveCurrentFile({ message: "CMS: update page", content: edited });
 
-  const firstBusyRender = renderedHtml.find((html) => html.includes("loading"));
+  const firstBusyRender = renderedHtml.find((html) => html.includes('class="busy-overlay"'));
   assert.ok(firstBusyRender, "expected busy render");
   assert.match(firstBusyRender, /title: New/);
   assert.match(firstBusyRender, /Edited/);
@@ -230,6 +230,7 @@ test("save workflow keeps submitted editor content after the full async chain", 
     "putFile",
     "listTree",
     "getContent",
+    "getContent",
     "getCheckRuns",
     "getWorkflowRuns",
     "listPullRequests",
@@ -306,7 +307,7 @@ test("save workflow reloads saved file from the commit SHA instead of a stale br
 
   await __testing.saveCurrentFile({ message: "CMS: update page", content: edited });
 
-  assert.deepEqual(contentRefs, ["cms/test", "commit-sha"]);
+  assert.deepEqual(contentRefs, ["cms/test", "commit-sha", "commit-sha"]);
   assert.equal(state.editor.content, edited);
   assert.equal(state.editor.baseContent, edited);
   assert.equal(state.editor.sha, "new-sha");
@@ -391,7 +392,7 @@ test("save workflow retries 409 with cache-busted content SHA", async () => {
 
   assert.equal(state.connectionError, "");
   assert.deepEqual(putShas, ["stale-sha", "fresh-sha"]);
-  assert.deepEqual(contentOptions.map((options) => Boolean(options.cacheBust)), [false, true, true]);
+  assert.deepEqual(contentOptions.map((options) => Boolean(options.cacheBust)), [false, true, false, true]);
   assert.equal(state.editor.content, edited);
   assert.equal(state.editor.sha, "saved-sha");
 });

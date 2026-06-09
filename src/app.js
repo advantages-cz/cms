@@ -6,16 +6,16 @@ import {
   prepareEditorForSave,
   readSaveFileFormData,
   upsertFileMetadata as upsertFileMetadataState,
-} from "editorWorkflow";
-import { GitHubClient, GitHubError } from "github";
-import { DEFAULT_LANGUAGE, LANGUAGES, normalizeLanguage, translate } from "i18n";
+} from "./editorWorkflow.js";
+import { GitHubClient, GitHubError } from "./github.js";
+import { DEFAULT_LANGUAGE, LANGUAGES, normalizeLanguage, translate } from "./i18n.js";
 import {
   loadCachedContents,
   loadRepositoryCache,
   saveCachedContent,
   saveRepositoryCache,
-} from "repoCache";
-import { clearToken, loadLastSave, loadSettings, loadToken, saveLastSave, saveSettings, saveToken } from "storage";
+} from "./repoCache.js";
+import { clearToken, loadLastSave, loadSettings, loadToken, saveLastSave, saveSettings, saveToken } from "./storage.js";
 import {
   blobFromBase64,
   classifyConclusion,
@@ -33,7 +33,7 @@ import {
   mimeForPath,
   shortSha,
   textToBase64,
-} from "utils";
+} from "./utils.js";
 
 const app = document.querySelector("#app");
 const settings = loadSettings();
@@ -109,6 +109,7 @@ const state = {
   actionPollStartedAt: null,
   allowDefaultBranchEdits: Boolean(settings.allowDefaultBranchEdits),
   dismissedAutomationBannerKey: "",
+  offline: typeof navigator !== "undefined" ? navigator.onLine === false : false,
 };
 
 const ACTION_POLL_INTERVAL_MS = 12000;
@@ -235,6 +236,15 @@ window.addEventListener("pointercancel", () => {
 
 window.addEventListener("popstate", () => {
   void restoreSelectionFromLocation();
+});
+
+window.addEventListener("online", () => {
+  state.offline = false;
+  render();
+});
+
+window.addEventListener("offline", () => {
+  enterOfflineMode();
 });
 
 window.addEventListener("keydown", (event) => {
@@ -390,7 +400,12 @@ async function handleAction(button) {
   }
 
   if (action === "refresh") {
-    await refreshRepositoryData({ preserveSelection: true });
+    exitOfflineMode();
+    if (state.headSha) {
+      await refreshRepositoryData({ preserveSelection: true });
+    } else {
+      await connectRepository({ silent: true });
+    }
     return;
   }
 
@@ -413,6 +428,9 @@ async function handleAction(button) {
   }
 
   if (action === "refresh-actions") {
+    if (guardOfflineAction()) {
+      return;
+    }
     await refreshActions();
     syncActionPollingWithStatus();
     render();
@@ -508,6 +526,9 @@ async function handleAction(button) {
   }
 
   if (action === "open-modal") {
+    if (["create-text-file", "create-folder", "create-pr"].includes(button.dataset.modal || "") && guardOfflineAction()) {
+      return;
+    }
     if (["create-text-file", "create-folder"].includes(button.dataset.modal || "") && !state.editMode) {
       toast(t("edit.startFirst"), "warn");
       return;
@@ -529,6 +550,9 @@ async function handleAction(button) {
   }
 
   if (action === "prepare-pr") {
+    if (guardOfflineAction()) {
+      return;
+    }
     state.modal = { type: "create-pr" };
     render();
     return;
@@ -562,6 +586,11 @@ async function handleAction(button) {
 
 async function handleChange(target) {
   if (target.id === "branch-select" && target instanceof HTMLSelectElement) {
+    if (state.offline) {
+      target.value = state.branch;
+      render();
+      return;
+    }
     if (state.editor?.dirty && !window.confirm(t("files.switchBranchConfirm"))) {
       target.value = state.branch;
       return;
@@ -707,6 +736,7 @@ async function connectRepository({ silent = false } = {}) {
   }
 
   await withBusy(t("repo.connecting"), async () => {
+    exitOfflineMode();
     state.connectionError = "";
     state.user = null;
     await state.client.getRepository(state.owner, state.repo);
@@ -886,7 +916,7 @@ async function refreshRepositoryData({ keepBusy = false, preserveSelection = fal
     assertConnected();
     const previousPath = preserveSelection && !state.editor?.dirty ? state.selectedPath : "";
     const previousDir = preserveSelection ? state.selectedDir : "";
-    const tree = await loadRepositorySnapshot(knownHeadSha);
+    const tree = await loadRepositorySnapshot(knownHeadSha, { allowOfflineCache: state.offline });
     revokePreviewUrls();
     state.editor = null;
     state.preview = null;
@@ -925,7 +955,9 @@ async function refreshRepositoryData({ keepBusy = false, preserveSelection = fal
 async function refreshRepositoryTree({ keepBusy = false, expectedHeadSha = "" } = {}) {
   const run = async () => {
     assertConnected();
-    const tree = await loadRepositorySnapshot(expectedHeadSha || headShaForBranch(state.branch));
+    const tree = await loadRepositorySnapshot(expectedHeadSha || headShaForBranch(state.branch), {
+      allowOfflineCache: state.offline,
+    });
     if (expectedHeadSha && tree.headSha !== expectedHeadSha) {
       return;
     }
@@ -940,9 +972,18 @@ async function refreshRepositoryTree({ keepBusy = false, expectedHeadSha = "" } 
   }
 }
 
-async function loadRepositorySnapshot(headSha = "") {
+async function loadRepositorySnapshot(headSha = "", { allowOfflineCache = false } = {}) {
   const cached = await loadRepositoryCache(state.owner, state.repo, state.branch).catch(() => null);
   if (cached && headSha && cached.headSha === headSha && sameStartupContentExtensions(cached.startupContentExtensions)) {
+    return {
+      headSha: cached.headSha,
+      treeSha: cached.treeSha || "",
+      truncated: Boolean(cached.truncated),
+      tree: cached.tree || [],
+      cacheHit: true,
+    };
+  }
+  if (cached && allowOfflineCache) {
     return {
       headSha: cached.headSha,
       treeSha: cached.treeSha || "",
@@ -1301,6 +1342,9 @@ function setFrontMatterTitleDraft(path, title) {
 }
 
 async function startEditSession({ forceNewBranch = false } = {}) {
+  if (guardOfflineAction()) {
+    return;
+  }
   if (state.editor?.dirty) {
     toast(t("edit.dirty"), "warn");
     return;
@@ -1414,6 +1458,9 @@ async function loadTextContentForEntry(entry) {
   if (cached.has(entry.sha)) {
     return cached.get(entry.sha);
   }
+  if (state.offline) {
+    throw new Error(t("repo.offlineContentUnavailable"));
+  }
   const content = await state.client.getContent(state.owner, state.repo, entry.path, state.headSha || state.branch);
   if (Array.isArray(content) || content.type !== "file") {
     throw new Error(t("files.selectedMissing"));
@@ -1480,7 +1527,7 @@ async function refreshSelectedPreview() {
       return;
     }
 
-    await loadFile(state.selectedPath, { keepBusy: true, syncLatest: true });
+    await loadFile(state.selectedPath, { keepBusy: true, syncLatest: !state.offline });
   });
 }
 
@@ -1496,6 +1543,14 @@ async function buildPreview(entry, textContent = "") {
   }
 
   if (isImagePath(path) || isPdfPath(path)) {
+    if (state.offline) {
+      state.preview = {
+        kind: "unsupported",
+        path,
+        text: t("repo.offlineBinaryPreviewUnavailable"),
+      };
+      return;
+    }
     const blobData = await state.client.getBlob(state.owner, state.repo, entry.sha);
     const blob = blobFromBase64(blobData.content || "", mime);
     const url = trackPreviewUrl(URL.createObjectURL(blob));
@@ -1516,6 +1571,9 @@ async function buildPreview(entry, textContent = "") {
 }
 
 async function inlineHtmlPreviewAssets(html, htmlPath) {
+  if (state.offline) {
+    return html;
+  }
   const assetRefs = collectHtmlAssetRefs(html);
   const replacements = new Map();
 
@@ -1721,6 +1779,9 @@ async function prepareCurrentFileForSave({ cacheBust = false } = {}) {
 }
 
 async function createTextFile(form, data) {
+  if (guardOfflineAction()) {
+    return;
+  }
   const name = normalizeMarkdownFileName(String(data.get("name") || ""));
   const dir = currentDirectoryPath();
   const path = joinPath(dir, name);
@@ -1763,6 +1824,9 @@ async function createTextFile(form, data) {
 }
 
 async function createFolder(data) {
+  if (guardOfflineAction()) {
+    return;
+  }
   const name = normalizePathPart(String(data.get("name") || ""));
   const parentDir = currentDirectoryPath();
   const dirPath = joinPath(parentDir, name);
@@ -1803,6 +1867,9 @@ async function createFolder(data) {
 }
 
 async function deleteSelectedFile() {
+  if (guardOfflineAction()) {
+    return;
+  }
   if (!state.selectedPath || !state.editor) {
     toast(t("files.selectFileToDelete"), "warn");
     return;
@@ -1851,6 +1918,9 @@ async function deleteSelectedFile() {
 }
 
 async function deleteSelectedFolder() {
+  if (guardOfflineAction()) {
+    return;
+  }
   const dir = currentDirectoryPath();
   if (!dir) {
     toast(t("files.needFolderName"), "warn");
@@ -1919,6 +1989,9 @@ async function deleteSelectedFolder() {
 }
 
 async function createBranch(rawName) {
+  if (guardOfflineAction()) {
+    return;
+  }
   const name = normalizeBranchName(rawName);
   if (!name) {
     toast(t("edit.needBranchName"), "warn");
@@ -1998,6 +2071,9 @@ function upsertBranchOption(branchName) {
 }
 
 async function createPullRequest(data) {
+  if (guardOfflineAction()) {
+    return;
+  }
   if (state.branch === state.defaultBranch) {
     toast(t("pr.defaultBranch"), "warn");
     return;
@@ -2026,6 +2102,9 @@ async function createPullRequest(data) {
 }
 
 async function loadAnnotations(checkRunId) {
+  if (guardOfflineAction()) {
+    return;
+  }
   if (!checkRunId) {
     return;
   }
@@ -2037,6 +2116,9 @@ async function loadAnnotations(checkRunId) {
 }
 
 async function rerunWorkflow(runId) {
+  if (guardOfflineAction()) {
+    return;
+  }
   if (!runId) {
     return;
   }
@@ -2116,6 +2198,7 @@ function renderTopbar() {
         <div class="brand-copy">
           <h1>Adaptivio CMS</h1>
           <span class="repo-label">${escapeHtml(repoLabel)}</span>
+          ${state.offline ? `<span class="repo-label">${escapeHtml(t("repo.offlineBadge"))}</span>` : ""}
         </div>
       </div>
       <div class="top-actions">
@@ -2223,18 +2306,19 @@ function renderTopbarWorkflowControls() {
   const branchKind = state.branch === state.defaultBranch ? t("toolbar.protectedBranch") : t("toolbar.workingBranch");
   const branchClass = state.branch === state.defaultBranch ? "branch-default" : "branch-working";
   const hasChanges = changedFileCount() > 0;
+  const prDisabled = state.offline ? "disabled" : "";
   const prButton = state.branch === state.defaultBranch
     ? ""
     : state.pullRequest
       ? `<button class="button-secondary external-link-button" type="button" data-action="open-link" data-url="${escapeHtml(state.pullRequest.html_url)}">PR #${state.pullRequest.number}</button>`
       : hasChanges
-        ? `<button class="primary" type="button" data-action="prepare-pr">${t("common.createPr")}</button>`
+        ? `<button class="primary" type="button" data-action="prepare-pr" ${prDisabled}>${t("common.createPr")}</button>`
         : "";
 
   return `
     <div class="branch-control">
       <span class="status-pill ${branchClass}">${branchKind}</span>
-      <select id="branch-select" class="top-branch-select" aria-label="${t("toolbar.currentBranch")}">${branchOptions}</select>
+      <select id="branch-select" class="top-branch-select" aria-label="${t("toolbar.currentBranch")}" ${state.offline ? "disabled" : ""}>${branchOptions}</select>
       <span class="status-pill status-sha" title="${t("common.headTitle")}">head ${escapeHtml(shortSha(state.headSha))}</span>
     </div>
     ${prButton}
@@ -2299,6 +2383,13 @@ function renderConnectionStatus() {
 }
 
 function renderConnectionError() {
+  if (state.offline) {
+    return `
+      <div class="banner warn">
+        <span>${escapeHtml(t("repo.offlineBanner"))}</span>
+      </div>
+    `;
+  }
   return state.connectionError
     ? `
       <div class="banner danger dismissible">
@@ -2566,10 +2657,11 @@ function renderFilesTab() {
                   <div class="current-dir">${t("files.currentFolder", { dir: "" })}<span class="path">${escapeHtml(currentDir || "/")}</span></div>
                   <div class="button-row">
                     <button type="button" data-action="open-modal" data-modal="create-text-file">${t("files.newMarkdown")}</button>
-                    <button type="button" data-action="open-modal" data-modal="create-folder">${t("files.newFolder")}</button>
+                    <button type="button" data-action="open-modal" data-modal="create-text-file" ${state.offline ? "disabled" : ""}>${t("files.newMarkdown")}</button>
+                    <button type="button" data-action="open-modal" data-modal="create-folder" ${state.offline ? "disabled" : ""}>${t("files.newFolder")}</button>
                     ${
                       canDeleteFolder
-                        ? `<button class="danger" type="button" data-action="delete-folder">${t("files.deleteFolder")}</button>`
+                        ? `<button class="danger" type="button" data-action="delete-folder" ${state.offline ? "disabled" : ""}>${t("files.deleteFolder")}</button>`
                         : ""
                     }
                   </div>
@@ -2589,7 +2681,7 @@ function renderFilesTab() {
               ${state.editor?.dirty ? `<span class="tag warn">${t("files.unsaved")}</span>` : ""}
               ${
                 state.editMode && state.selectedPath
-                  ? `<button class="danger" type="button" data-action="delete-file">${t("files.delete")}</button>`
+                  ? `<button class="danger" type="button" data-action="delete-file" ${state.offline ? "disabled" : ""}>${t("files.delete")}</button>`
                   : ""
               }
             </div>
@@ -2661,7 +2753,8 @@ function renderDiscussionHeaderActions(context = selectedDiscussionContext()) {
 
 function renderHeaderActionButton(className, action, icon, label) {
   const classes = ["button-with-icon", className].filter(Boolean).join(" ");
-  return `<button class="${classes}" type="button" data-action="${action}">${treeIconSvg(icon)}<span>${escapeHtml(label)}</span></button>`;
+  const disabled = isOfflineBlockedAction(action) ? "disabled" : "";
+  return `<button class="${classes}" type="button" data-action="${action}" ${disabled}>${treeIconSvg(icon)}<span>${escapeHtml(label)}</span></button>`;
 }
 
 function canEditSelectedFile() {
@@ -3536,7 +3629,7 @@ function renderActionsTab() {
     <section class="panel">
       <div class="panel-header">
         <h2>${t("actions.branchRuns")}</h2>
-        <button type="button" data-action="refresh-actions">${t("common.refresh")}</button>
+        <button type="button" data-action="refresh-actions" ${state.offline ? "disabled" : ""}>${t("common.refresh")}</button>
       </div>
       <div class="panel-body">${renderWorkflowRuns()}</div>
     </section>
@@ -3606,7 +3699,7 @@ function renderCheckRuns() {
                 ${annotations.length ? renderAnnotations(annotations) : ""}
               </div>
               <div class="button-row">
-                <button type="button" data-action="load-annotations" data-check-id="${run.id}">${t("actions.annotations")}</button>
+                <button type="button" data-action="load-annotations" data-check-id="${run.id}" ${state.offline ? "disabled" : ""}>${t("actions.annotations")}</button>
                 <button class="external-link-button" type="button" data-action="open-link" data-url="${escapeHtml(run.html_url)}">${t("common.github")}</button>
               </div>
             </div>
@@ -3638,7 +3731,7 @@ function renderWorkflowRuns() {
                 </div>
               </div>
               <div class="button-row">
-                <button type="button" data-action="rerun-workflow" data-run-id="${run.id}">${t("actions.rerun")}</button>
+                <button type="button" data-action="rerun-workflow" data-run-id="${run.id}" ${state.offline ? "disabled" : ""}>${t("actions.rerun")}</button>
                 <button class="external-link-button" type="button" data-action="open-link" data-url="${escapeHtml(run.html_url)}">${t("common.github")}</button>
               </div>
             </div>
@@ -5068,6 +5161,9 @@ function assertConnected() {
 
 function assertCanWrite() {
   assertConnected();
+  if (state.offline) {
+    throw new Error(t("repo.offlineWriteBlocked"));
+  }
   if (!state.editMode) {
     throw new Error(t("edit.startFirst"));
   }
@@ -5086,8 +5182,12 @@ async function withBusy(label, task) {
   try {
     await task();
   } catch (error) {
-    state.connectionError = formatError(error);
-    toast(state.connectionError, "danger");
+    if (await maybeEnterOfflineMode(error)) {
+      state.connectionError = "";
+    } else {
+      state.connectionError = formatError(error);
+      toast(state.connectionError, "danger");
+    }
   } finally {
     state.busy = false;
     state.busyLabel = "";
@@ -5151,10 +5251,103 @@ function resetChecksApiState() {
   state.checksApiUnavailable = false;
 }
 
+function isOfflineBlockedAction(action) {
+  return [
+    "start-edit-session",
+    "new-edit-branch",
+    "open-discourse-topic",
+    "open-discourse-composer",
+    "prepare-pr",
+    "create-branch",
+    "refresh-actions",
+    "load-annotations",
+    "rerun-workflow",
+    "delete-file",
+    "delete-folder",
+  ].includes(action);
+}
+
+function guardOfflineAction() {
+  if (!state.offline) {
+    return false;
+  }
+  render();
+  return true;
+}
+
+async function maybeEnterOfflineMode(error) {
+  if (!isOfflineLikeError(error)) {
+    return false;
+  }
+  return enterOfflineMode(error);
+}
+
+async function enterOfflineMode(error = null) {
+  state.offline = true;
+  stopActionPolling();
+  const applied = await restoreOfflineSnapshot();
+  if (!applied && !state.headSha) {
+    state.connectionError = error ? formatError(error) : t("repo.offlineNoCache");
+  }
+  render();
+  return applied;
+}
+
+function exitOfflineMode() {
+  state.offline = false;
+}
+
+async function restoreOfflineSnapshot() {
+  if (!state.owner || !state.repo || !state.branch) {
+    return false;
+  }
+  const cached = await loadRepositoryCache(state.owner, state.repo, state.branch).catch(() => null);
+  if (!cached) {
+    return false;
+  }
+  applyRepositoryTree({
+    headSha: cached.headSha,
+    treeSha: cached.treeSha || "",
+    truncated: Boolean(cached.truncated),
+    tree: cached.tree || [],
+  });
+  state.lastSave = loadLastSave(state.owner, state.repo, state.branch);
+  state.editMode = false;
+  state.pullRequest = null;
+  state.pullFiles = [];
+  state.pullCommits = [];
+  state.compare = null;
+  state.externalCompare = null;
+  state.checkRuns = [];
+  state.checkRunsError = "";
+  state.workflowRuns = [];
+  state.annotations = {};
+  state.branches = state.branches.length ? state.branches : [{ name: state.branch, commit: { sha: cached.headSha } }];
+  upsertBranchOption(state.branch);
+  return true;
+}
+
+function isOfflineLikeError(error) {
+  if (error instanceof GitHubError) {
+    return false;
+  }
+  const message = String(error?.message || "").toLowerCase();
+  return (
+    (typeof navigator !== "undefined" && navigator.onLine === false) ||
+    error instanceof TypeError ||
+    message.includes("failed to fetch") ||
+    message.includes("networkerror") ||
+    message.includes("network request failed") ||
+    message.includes("load failed")
+  );
+}
+
 export const __testing = {
   state,
   saveCurrentFile,
   serializeSelectionFragment,
+  enterOfflineMode,
+  restoreOfflineSnapshot,
 };
 
 function summarizeTokenProbeError(error) {

@@ -1,5 +1,14 @@
 {
   "type": "module",
+  "imports": {
+    "app": "./src/app.js",
+    "editorWorkflow": "./src/editorWorkflow.js",
+    "github": "./src/github.js",
+    "i18n": "./src/i18n.js",
+    "repoCache": "./src/repoCache.js",
+    "storage": "./src/storage.js",
+    "utils": "./src/utils.js"
+  },
   "scripts": {
     "test": "node --test"
   }
