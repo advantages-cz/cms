@@ -2528,12 +2528,14 @@ function renderContent() {
     ${renderConnectionError()}
     ${renderWorkflowBanners()}
     ${state.treeTruncated ? `<p class="banner warn">${t("repo.treeTruncated")}</p>` : ""}
-    ${renderTabs()}
-    <div class="tab-content tab-content-${escapeHtml(state.tab)}">
-      ${state.tab === "files" ? renderFilesTab() : ""}
-      ${state.tab === "changes" ? renderChangesTab() : ""}
-      ${state.tab === "commits" ? renderCommitsTab() : ""}
-      ${state.tab === "actions" ? renderActionsTab() : ""}
+    <div class="tab-shell">
+      ${renderTabs()}
+      <div class="tab-content tab-content-${escapeHtml(state.tab)}">
+        ${state.tab === "files" ? renderFilesTab() : ""}
+        ${state.tab === "changes" ? renderChangesTab() : ""}
+        ${state.tab === "commits" ? renderCommitsTab() : ""}
+        ${state.tab === "actions" ? renderActionsTab() : ""}
+      </div>
     </div>
   `;
 }
