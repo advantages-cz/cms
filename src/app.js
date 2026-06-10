@@ -133,7 +133,7 @@ let globalSearchTyping = false;
 let focusRestoreToken = 0;
 let focusMobileSearchAfterRender = false;
 let revealMobileTreeAfterRender = false;
-let pendingExpandedDirectoryRevealPath = "";
+let pendingDirectoryToggleScroll = null;
 let previewScrollSyncTimer = 0;
 let pendingPreviewScrollRestore = null;
 let lastContentOnlyLandscape = isContentOnlyLandscape();
@@ -2397,7 +2397,7 @@ function render({ treeScrollTop = null } = {}) {
   `;
   restoreTreeScroll();
   revealSelectedTreeRow();
-  revealExpandedDirectoryChildren();
+  restoreDirectoryToggleScroll();
   revealSelectedMobileTreeRow();
   restoreFocusSnapshot(focusSnapshot);
   focusMobileSearchInput();
@@ -5458,7 +5458,15 @@ async function restoreSelectionFromLocation({ keepBusy = false } = {}) {
 
 function toggleDirectory(path, { navigation = "" } = {}) {
   const preservedTreeScrollTop = currentTreeScrollTop();
+  const list = activeTreeListElement();
+  const dirToggle = list?.querySelector(`.tree-toggle[data-path="${cssEscape(path)}"]`);
   const expanding = !state.expandedDirs.has(path);
+  let viewportOffset = 12;
+  if (list instanceof HTMLElement && dirToggle instanceof HTMLElement) {
+    const listRect = list.getBoundingClientRect();
+    const dirRect = dirToggle.getBoundingClientRect();
+    viewportOffset = Math.max(12, Math.round(dirRect.top - listRect.top));
+  }
   state.selectedPath = "";
   state.selectedDir = path;
   state.revealSelectedInTree = false;
@@ -5471,7 +5479,7 @@ function toggleDirectory(path, { navigation = "" } = {}) {
   } else {
     state.expandedDirs.add(path);
   }
-  pendingExpandedDirectoryRevealPath = expanding ? path : "";
+  pendingDirectoryToggleScroll = { path, expanding, viewportOffset };
   persistSettings();
   if (navigation) {
     updateBrowserNavigation({ mode: navigation });
@@ -5551,13 +5559,13 @@ function revealSelectedTreeRow() {
   });
 }
 
-function revealExpandedDirectoryChildren() {
-  if (!pendingExpandedDirectoryRevealPath) {
+function restoreDirectoryToggleScroll() {
+  if (!pendingDirectoryToggleScroll) {
     return;
   }
 
-  const path = pendingExpandedDirectoryRevealPath;
-  pendingExpandedDirectoryRevealPath = "";
+  const pending = pendingDirectoryToggleScroll;
+  pendingDirectoryToggleScroll = null;
   window.requestAnimationFrame(() => {
     const list = activeTreeListElement();
     if (!(list instanceof HTMLElement)) {
@@ -5565,9 +5573,18 @@ function revealExpandedDirectoryChildren() {
     }
 
     const toggles = [...list.querySelectorAll(".tree-toggle[data-path]")];
-    const dirToggle = toggles.find((toggle) => toggle instanceof HTMLElement && toggle.dataset.path === path);
-    const dirRow = dirToggle?.closest(".tree-dir");
-    if (!(dirRow instanceof HTMLElement)) {
+    const dirToggle = toggles.find((toggle) => toggle instanceof HTMLElement && toggle.dataset.path === pending.path);
+    if (!(dirToggle instanceof HTMLElement)) {
+      return;
+    }
+
+    const listRect = list.getBoundingClientRect();
+    const dirRect = dirToggle.getBoundingClientRect();
+    const padding = 12;
+    list.scrollTop += dirRect.top - (listRect.top + pending.viewportOffset);
+
+    if (!pending.expanding) {
+      state.treeScrollTop = list.scrollTop;
       return;
     }
 
@@ -5576,25 +5593,28 @@ function revealExpandedDirectoryChildren() {
         return false;
       }
       const nodePath = node.dataset.path || "";
-      return Boolean(nodePath) && nodePath !== path && nodePath.startsWith(`${path}/`);
+      return Boolean(nodePath) && nodePath !== pending.path && nodePath.startsWith(`${pending.path}/`);
     });
     if (!descendants.length) {
       state.treeScrollTop = list.scrollTop;
       return;
     }
 
-    const listRect = list.getBoundingClientRect();
-    const dirRect = dirRow.getBoundingClientRect();
+    const alignedDirRect = dirToggle.getBoundingClientRect();
     const lastRect = descendants[descendants.length - 1].getBoundingClientRect();
-    const padding = 12;
-    const fitsBelow = lastRect.bottom <= listRect.bottom - padding;
-    const dirVisibleTop = dirRect.top >= listRect.top + padding;
-    if (fitsBelow && dirVisibleTop) {
+    const availableBottom = listRect.bottom - padding;
+    if (lastRect.bottom <= availableBottom) {
       state.treeScrollTop = list.scrollTop;
       return;
     }
 
-    list.scrollTop += dirRect.top - (listRect.top + padding);
+    const subtreeHeight = lastRect.bottom - alignedDirRect.top;
+    const viewportHeight = list.clientHeight - padding * 2;
+    if (subtreeHeight > viewportHeight) {
+      list.scrollTop += pending.viewportOffset - padding;
+    } else {
+      list.scrollTop += lastRect.bottom - availableBottom;
+    }
     state.treeScrollTop = list.scrollTop;
   });
 }
@@ -5617,6 +5637,13 @@ function activeTreeListElement() {
   }
   const fallbackList = document.querySelector(".file-list");
   return fallbackList instanceof HTMLElement ? fallbackList : null;
+}
+
+function cssEscape(value) {
+  if (window.CSS?.escape) {
+    return window.CSS.escape(String(value));
+  }
+  return String(value).replace(/["\\]/g, "\\$&");
 }
 
 function currentPreviewScrollTop() {
