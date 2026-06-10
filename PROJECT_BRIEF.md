@@ -583,9 +583,15 @@ Reasoning: The app already stores repository snapshots and hydrated text content
 
 ### 2026-06-10: iPhone Landscape Links Use Touch-Friendly Activation
 
-Decision: Rendered internal Markdown links now also activate from a `pointerup` fallback path, and preview links explicitly opt into `touch-action: manipulation`.
+Decision: Rendered internal Markdown links now also activate from touch-friendly fallback handlers, preview links explicitly opt into `touch-action: manipulation`, and the browser history state stores the preview scroll offset for back/forward restoration.
 
-Reasoning: On iPhone-sized coarse-pointer landscape viewports, taps inside the scrollable preview can intermittently fail to produce a reliable delegated `click` event. Handling the link on `pointerup` and disabling double-tap gesture ambiguity makes internal preview navigation more consistent without changing desktop behavior or preview sandboxing.
+Reasoning: On iPhone-sized coarse-pointer landscape viewports, taps inside the scrollable preview can intermittently fail to produce a reliable delegated `click` event, and browser swipe-back otherwise returns to the file URL without restoring the reader's position in the document. Handling touch activation earlier and persisting preview scroll in history makes internal preview navigation and back navigation behave more like a native reading surface without changing desktop behavior or preview sandboxing.
+
+### 2026-06-10: Phone Landscape Reuses The Portrait Mobile Interaction Model
+
+Decision: The low-height phone landscape breakpoint no longer switches into a separate content-only interaction mode. It now reuses the same mobile shell behavior as portrait, including the hamburger-triggered tree sidebar, visible top chrome, and the same scroll/navigation model, while keeping only the compact mobile sizing adjustments.
+
+Reasoning: The landscape-only interaction branch introduced different DOM visibility, scroll containers, and navigation behavior from portrait, which made bugs harder to reason about and fix. Reusing one mobile interaction model keeps iPhone portrait and landscape behavior aligned while preserving the smaller-screen layout tuning that landscape still needs.
 
 ### 2026-06-10: Expose The PWA Under The AVDS App Name
 

@@ -49,11 +49,8 @@ const THEME_MODES = ["auto", "light", "dark"];
 const STARTUP_CONTENT_EXTENSIONS = ["md", "mdx", "html", "htm"];
 const MOBILE_LAYOUT_MEDIA_QUERY =
   "(max-width: 700px), (hover: none) and (pointer: coarse) and (orientation: landscape) and (max-height: 500px)";
-const FIXED_LANDSCAPE_TREE_MEDIA_QUERY =
-  "(hover: none) and (pointer: coarse) and (orientation: landscape) and (max-height: 500px)";
 const systemDarkQuery = window.matchMedia?.("(prefers-color-scheme: dark)") || null;
 const mobileTreeQuery = window.matchMedia?.(MOBILE_LAYOUT_MEDIA_QUERY) || null;
-const fixedLandscapeTreeQuery = window.matchMedia?.(FIXED_LANDSCAPE_TREE_MEDIA_QUERY) || null;
 const standaloneDisplayModeQuery = window.matchMedia?.("(display-mode: standalone)") || null;
 
 const state = {
@@ -93,6 +90,7 @@ const state = {
   treePaneWidth: normalizeTreePaneWidth(settings.treePaneWidth),
   treePaneResizing: false,
   frontMatterOpen: false,
+  previewScrollTop: 0,
   editor: null,
   preview: null,
   previewUrls: [],
@@ -133,10 +131,8 @@ let globalSearchTyping = false;
 let focusRestoreToken = 0;
 let focusMobileSearchAfterRender = false;
 let revealMobileTreeAfterRender = false;
-
-function hasFixedLandscapeTree() {
-  return Boolean(fixedLandscapeTreeQuery?.matches && state.tab === "files");
-}
+let previewScrollSyncFrame = 0;
+let pendingPreviewScrollRestore = null;
 
 function normalizeTab(tab) {
   return ["files", "changes", "commits", "actions"].includes(tab) ? tab : tab === "review" ? "changes" : "files";
@@ -245,7 +241,7 @@ app.addEventListener("click", (event) => {
 
 app.addEventListener("pointerup", (event) => {
   const target = event.target;
-  if (!(target instanceof Element) || event.pointerType === "mouse" || event.button !== 0 || event.ctrlKey || event.metaKey || event.altKey || event.shiftKey) {
+  if (!(target instanceof Element) || event.pointerType === "mouse" || event.ctrlKey || event.metaKey || event.altKey || event.shiftKey) {
     return;
   }
 
@@ -260,6 +256,28 @@ app.addEventListener("pointerup", (event) => {
   event.preventDefault();
   void handleAction(actionTarget);
 });
+
+app.addEventListener(
+  "touchend",
+  (event) => {
+    const target = event.target;
+    if (!(target instanceof Element)) {
+      return;
+    }
+
+    const actionTarget = target.closest(
+      "a[data-action='open-markdown-link'], a[data-action='open-markdown-dir-link'], a[data-action='missing-markdown-link']",
+    );
+    if (!(actionTarget instanceof HTMLElement) || !app.contains(actionTarget) || consumeRecentlyHandledTouchAction(actionTarget)) {
+      return;
+    }
+
+    rememberHandledTouchAction(actionTarget);
+    event.preventDefault();
+    void handleAction(actionTarget);
+  },
+  { passive: false },
+);
 
 app.addEventListener("change", (event) => {
   const target = event.target;
@@ -276,6 +294,19 @@ app.addEventListener("input", (event) => {
   }
   handleInput(target);
 });
+
+app.addEventListener(
+  "scroll",
+  (event) => {
+    const target = event.target;
+    if (!(target instanceof HTMLElement) || !target.matches(".markdown-preview, .preview-code")) {
+      return;
+    }
+    state.previewScrollTop = target.scrollTop;
+    schedulePreviewScrollSync();
+  },
+  true,
+);
 
 app.addEventListener("keydown", (event) => {
   const target = event.target;
@@ -1561,6 +1592,8 @@ async function loadFile(path, { keepBusy = false, syncLatest = false, navigation
 
     state.selectedPath = path;
     state.selectedDir = directoryOfPath(path);
+    state.previewScrollTop = 0;
+    pendingPreviewScrollRestore = 0;
     expandPathToFile(path);
     state.revealSelectedInTree = state.revealSelectedInTree || revealInTree;
     state.editor = {
@@ -2315,7 +2348,7 @@ function render({ treeScrollTop = null } = {}) {
   }
   const focusSnapshot = captureFocusSnapshot();
   app.innerHTML = `
-    <div class="app-shell ${state.busy ? "loading" : ""} ${hasFixedLandscapeTree() ? "has-fixed-landscape-tree" : ""}">
+    <div class="app-shell ${state.busy ? "loading" : ""}">
       ${renderTopbar()}
       <div class="layout">
         <main class="content">${renderContent()}</main>
@@ -2331,14 +2364,11 @@ function render({ treeScrollTop = null } = {}) {
   restoreFocusSnapshot(focusSnapshot);
   focusMobileSearchInput();
   highlightSearchMatches();
+  restorePreviewScroll();
   syncDiscussionEmbed();
 }
 
 function focusMobileSearchInput({ immediate = false } = {}) {
-  if (fixedLandscapeTreeQuery?.matches) {
-    focusMobileSearchAfterRender = false;
-    return;
-  }
   if (!immediate && !focusMobileSearchAfterRender) {
     return;
   }
@@ -2457,7 +2487,7 @@ function renderMobileTopbarActions() {
 }
 
 function renderMobileTreeToggle() {
-  if (!mobileTreeQuery?.matches || fixedLandscapeTreeQuery?.matches || !state.token || !state.owner || !state.repo || !state.headSha) {
+  if (!mobileTreeQuery?.matches || !state.token || !state.owner || !state.repo || !state.headSha) {
     return "";
   }
 
@@ -2913,7 +2943,7 @@ function renderFilesTab() {
   return `
     <div class="workbench files-workbench ${state.treePaneResizing ? "is-resizing" : ""}" style="--tree-pane-width: ${state.treePaneWidth}px;">
       <div class="mobile-tree-backdrop ${state.mobileTreeOpen ? "is-open" : ""}" data-action="close-mobile-tree" aria-hidden="${state.mobileTreeOpen ? "false" : "true"}"></div>
-      <section id="mobile-tree-panel" class="panel tree-panel ${state.mobileTreeOpen || fixedLandscapeTreeQuery?.matches ? "mobile-open" : ""}" aria-label="${escapeHtml(t("files.repositoryFiles"))}">
+      <section id="mobile-tree-panel" class="panel tree-panel ${state.mobileTreeOpen ? "mobile-open" : ""}" aria-label="${escapeHtml(t("files.repositoryFiles"))}">
         <div class="panel-body">
           <div class="mobile-tree-header">
             <div class="mobile-tree-title">
@@ -2929,7 +2959,7 @@ function renderFilesTab() {
                 title="${escapeHtml(t("common.settings"))}"
                 aria-expanded="${state.mobileSettingsOpen ? "true" : "false"}"
               >${treeIconSvg("settings")}</button>
-              ${fixedLandscapeTreeQuery?.matches ? "" : `<button class="icon-button button-quiet" type="button" data-action="close-mobile-tree" aria-label="${escapeHtml(t("files.closeSidebar"))}">×</button>`}
+              <button class="icon-button button-quiet" type="button" data-action="close-mobile-tree" aria-label="${escapeHtml(t("files.closeSidebar"))}">×</button>
             </div>
           </div>
           ${mobileTreeQuery?.matches ? renderGlobalSearch({ id: "mobile-global-search", mobile: true }) : ""}
@@ -5230,14 +5260,26 @@ function updateBrowserNavigation({ mode = "replace" } = {}) {
     url.searchParams.delete("dir");
   }
 
+  const nextState = {
+    branch: state.branch,
+    path: state.selectedPath,
+    dir: state.selectedDir,
+    previewScrollTop: normalizePreviewScrollTop(currentPreviewScrollTop()),
+  };
   const next = `${url.pathname}${url.search}${url.hash}`;
   const current = `${window.location.pathname}${window.location.search}${window.location.hash}`;
-  if (next === current) {
+  const currentState = window.history.state || {};
+  const stateUnchanged =
+    currentState.branch === nextState.branch &&
+    currentState.path === nextState.path &&
+    currentState.dir === nextState.dir &&
+    normalizePreviewScrollTop(currentState.previewScrollTop) === nextState.previewScrollTop;
+  if (next === current && stateUnchanged) {
     return;
   }
 
   const method = mode === "push" ? "pushState" : "replaceState";
-  window.history[method]({ branch: state.branch, path: state.selectedPath, dir: state.selectedDir }, "", url);
+  window.history[method](nextState, "", url);
 }
 
 async function restoreSelectionFromLocation({ keepBusy = false } = {}) {
@@ -5249,12 +5291,15 @@ async function restoreSelectionFromLocation({ keepBusy = false } = {}) {
   const nextBranch = navigation.branch || state.branch;
   const nextPath = navigation.path;
   const nextDir = nextPath ? "" : navigation.dir;
+  const nextPreviewScrollTop = normalizePreviewScrollTop(window.history.state?.previewScrollTop);
   const changed =
     nextBranch !== state.branch ||
     nextPath !== state.selectedPath ||
     nextDir !== (state.selectedPath ? "" : state.selectedDir);
 
   if (!changed) {
+    applyPendingPreviewScrollRestore(nextPreviewScrollTop);
+    render();
     return;
   }
 
@@ -5288,6 +5333,7 @@ async function restoreSelectionFromLocation({ keepBusy = false } = {}) {
 
       if (nextPath) {
         await loadFile(nextPath, { keepBusy: true, revealInTree: true });
+        applyPendingPreviewScrollRestore(nextPreviewScrollTop);
         return;
       }
 
@@ -5295,6 +5341,8 @@ async function restoreSelectionFromLocation({ keepBusy = false } = {}) {
       state.selectedPath = "";
       state.editor = null;
       state.preview = null;
+      state.previewScrollTop = nextPreviewScrollTop;
+      pendingPreviewScrollRestore = nextPreviewScrollTop;
       if (nextDir && directoryExists(nextDir)) {
         state.selectedDir = nextDir;
         expandPathToDir(nextDir);
@@ -5326,6 +5374,8 @@ function toggleDirectory(path, { navigation = "" } = {}) {
   state.selectedDir = path;
   state.editor = null;
   state.preview = null;
+  state.previewScrollTop = 0;
+  pendingPreviewScrollRestore = 0;
   if (state.expandedDirs.has(path)) {
     state.expandedDirs.delete(path);
   } else {
@@ -5343,6 +5393,8 @@ function selectDirectory(path, { navigation = "", revealInTree = false } = {}) {
   state.selectedDir = path;
   state.editor = null;
   state.preview = null;
+  state.previewScrollTop = 0;
+  pendingPreviewScrollRestore = 0;
   expandPathToDir(path);
   state.revealSelectedInTree = state.revealSelectedInTree || revealInTree;
   persistSettings();
@@ -5410,6 +5462,52 @@ function revealSelectedTreeRow() {
 function currentTreeScrollTop() {
   const list = document.querySelector(".file-list");
   return list instanceof HTMLElement ? list.scrollTop : state.treeScrollTop;
+}
+
+function currentPreviewScrollTop() {
+  const preview = document.querySelector(".markdown-preview, .preview-code");
+  return preview instanceof HTMLElement ? preview.scrollTop : state.previewScrollTop;
+}
+
+function schedulePreviewScrollSync() {
+  if (previewScrollSyncFrame) {
+    return;
+  }
+  previewScrollSyncFrame = window.requestAnimationFrame(() => {
+    previewScrollSyncFrame = 0;
+    if (!state.selectedPath || restoringBrowserNavigation || !state.owner || !state.repo) {
+      return;
+    }
+    state.previewScrollTop = currentPreviewScrollTop();
+    updateBrowserNavigation({ mode: "replace" });
+  });
+}
+
+function applyPendingPreviewScrollRestore(value) {
+  state.previewScrollTop = value;
+  pendingPreviewScrollRestore = value;
+}
+
+function restorePreviewScroll() {
+  if (pendingPreviewScrollRestore === null) {
+    return;
+  }
+
+  const targetScrollTop = pendingPreviewScrollRestore;
+  pendingPreviewScrollRestore = null;
+  window.requestAnimationFrame(() => {
+    const preview = document.querySelector(".markdown-preview, .preview-code");
+    if (!(preview instanceof HTMLElement)) {
+      return;
+    }
+    preview.scrollTop = targetScrollTop;
+    state.previewScrollTop = preview.scrollTop;
+  });
+}
+
+function normalizePreviewScrollTop(value) {
+  const number = Number(value);
+  return Number.isFinite(number) && number > 0 ? Math.round(number) : 0;
 }
 
 function captureFocusSnapshot() {
