@@ -1594,8 +1594,14 @@ mark,
   border-bottom: 0;
 }
 
-.tree-row:hover {
-  background: rgba(129, 234, 252, 0.18);
+@media (hover: hover) and (pointer: fine) {
+  .tree-row:hover {
+    background: rgba(129, 234, 252, 0.18);
+  }
+
+  .tree-toggle:hover {
+    background: rgba(129, 234, 252, 0.18);
+  }
 }
 
 .tree-row.active {
@@ -1659,10 +1665,6 @@ mark,
   padding: 3px 9px 3px calc(9px + (var(--depth, 0) * 18px));
   background: transparent;
   text-align: left;
-}
-
-.tree-toggle:hover {
-  background: rgba(129, 234, 252, 0.18);
 }
 
 .tree-toggle::before,

@@ -265,6 +265,10 @@ function syncViewportModeLayout() {
   const enteringContentOnly = contentOnly && !lastContentOnlyLandscape;
   if (contentOnly !== lastContentOnlyLandscape) {
     lastContentOnlyLandscape = contentOnly;
+    if (state.selectedPath || state.selectedDir) {
+      state.revealSelectedInTree = true;
+      revealMobileTreeAfterRender = state.mobileTreeOpen;
+    }
     if (enteringContentOnly) {
       state.previewScrollTop = 0;
       pendingPreviewScrollRestore = null;
