@@ -145,13 +145,6 @@ function isContentOnlyLandscape() {
   return Boolean(contentOnlyLandscapeQuery?.matches);
 }
 
-function eventTargetElement(target) {
-  if (target instanceof Element) {
-    return target;
-  }
-  return target instanceof Node ? target.parentElement : null;
-}
-
 function initialOfflineState() {
   if (typeof navigator === "undefined") {
     return false;
@@ -220,8 +213,7 @@ function syncThemeColor() {
 }
 
 app.addEventListener("submit", (event) => {
-  const target = eventTargetElement(event.target);
-  const form = target?.closest("form[data-form]");
+  const form = event.target.closest("form[data-form]");
   if (!form) {
     return;
   }
@@ -230,14 +222,14 @@ app.addEventListener("submit", (event) => {
 });
 
 app.addEventListener("click", (event) => {
-  const target = eventTargetElement(event.target);
-  if (target instanceof HTMLElement && target.classList.contains("modal-backdrop")) {
+  if (event.target instanceof HTMLElement && event.target.classList.contains("modal-backdrop")) {
     event.preventDefault();
     state.modal = null;
     render();
     return;
   }
 
+  const target = event.target;
   if (!(target instanceof Element)) {
     return;
   }
@@ -255,7 +247,7 @@ app.addEventListener("click", (event) => {
 });
 
 app.addEventListener("pointerup", (event) => {
-  const target = eventTargetElement(event.target);
+  const target = event.target;
   if (!(target instanceof Element) || event.pointerType === "mouse" || event.ctrlKey || event.metaKey || event.altKey || event.shiftKey) {
     return;
   }
@@ -275,7 +267,7 @@ app.addEventListener("pointerup", (event) => {
 app.addEventListener(
   "touchend",
   (event) => {
-    const target = eventTargetElement(event.target);
+    const target = event.target;
     if (!(target instanceof Element)) {
       return;
     }
@@ -295,7 +287,7 @@ app.addEventListener(
 );
 
 app.addEventListener("change", (event) => {
-  const target = eventTargetElement(event.target);
+  const target = event.target;
   if (!(target instanceof HTMLElement)) {
     return;
   }
@@ -303,7 +295,7 @@ app.addEventListener("change", (event) => {
 });
 
 app.addEventListener("input", (event) => {
-  const target = eventTargetElement(event.target);
+  const target = event.target;
   if (!(target instanceof HTMLElement)) {
     return;
   }
@@ -324,7 +316,7 @@ app.addEventListener(
 );
 
 app.addEventListener("keydown", (event) => {
-  const target = eventTargetElement(event.target);
+  const target = event.target;
   if (!(target instanceof HTMLElement) || target.dataset.resize !== "tree-pane") {
     return;
   }
@@ -332,8 +324,7 @@ app.addEventListener("keydown", (event) => {
 });
 
 app.addEventListener("pointerdown", (event) => {
-  const target = eventTargetElement(event.target);
-  const handle = target?.closest("[data-resize='tree-pane']");
+  const handle = event.target.closest("[data-resize='tree-pane']");
   if (!handle) {
     return;
   }
@@ -380,9 +371,7 @@ mobileTreeQuery?.addEventListener?.("change", (event) => {
 
 contentOnlyLandscapeQuery?.addEventListener?.("change", (event) => {
   if (event.matches) {
-    state.mobileTreeOpen = false;
-    state.mobileSettingsOpen = false;
-    render();
+    enterContentOnlyLandscapeMode();
     return;
   }
 
@@ -390,6 +379,13 @@ contentOnlyLandscapeQuery?.addEventListener?.("change", (event) => {
     state.mobileTreeOpen = true;
   }
   render();
+});
+
+window.visualViewport?.addEventListener?.("resize", () => {
+  if (!isContentOnlyLandscape()) {
+    return;
+  }
+  enterContentOnlyLandscapeMode({ deferRender: true });
 });
 
 window.addEventListener("online", () => {
@@ -1737,6 +1733,29 @@ let lastHandledTouchAction = {
   element: null,
   time: 0,
 };
+
+function resetHandledTouchAction() {
+  lastHandledTouchAction = { element: null, time: 0 };
+}
+
+function enterContentOnlyLandscapeMode({ deferRender = false } = {}) {
+  state.mobileTreeOpen = false;
+  state.mobileSettingsOpen = false;
+  resetHandledTouchAction();
+  render();
+  if (!deferRender) {
+    return;
+  }
+  window.requestAnimationFrame(() => {
+    window.requestAnimationFrame(() => {
+      if (!isContentOnlyLandscape()) {
+        return;
+      }
+      resetHandledTouchAction();
+      render();
+    });
+  });
+}
 
 function rememberHandledTouchAction(element) {
   lastHandledTouchAction = {
