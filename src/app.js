@@ -182,6 +182,7 @@ const scheduleFilterRender = debounce(() => {
 const scheduleEditorMetadataRender = debounce(() => render(), 160);
 
 applyTheme();
+syncViewportHeightVar();
 registerServiceWorker();
 void init();
 
@@ -210,6 +211,14 @@ function syncThemeColor() {
     return;
   }
   meta.setAttribute("content", document.documentElement.dataset.theme === "dark" ? "#111315" : "#f6f7f8");
+}
+
+function syncViewportHeightVar() {
+  const viewportHeight = window.visualViewport?.height || window.innerHeight;
+  if (!viewportHeight) {
+    return;
+  }
+  document.documentElement.style.setProperty("--app-viewport-height", `${Math.round(viewportHeight)}px`);
 }
 
 app.addEventListener("submit", (event) => {
@@ -320,10 +329,12 @@ mobileTreeQuery?.addEventListener?.("change", (event) => {
 });
 
 window.addEventListener("resize", () => {
+  syncViewportHeightVar();
   scheduleLandscapeViewportSettle();
 });
 
 window.visualViewport?.addEventListener?.("resize", () => {
+  syncViewportHeightVar();
   scheduleLandscapeViewportSettle();
 });
 

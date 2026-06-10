@@ -31,6 +31,7 @@
   --radius: 8px;
   --radius-sm: 6px;
   --toolbar-height: 48px;
+  --app-viewport-height: 100dvh;
   --mono: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
   --sans: Matter, Arial, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 }
@@ -2771,7 +2772,7 @@ mark,
   }
 
   .app-shell {
-    height: 100dvh;
+    height: var(--app-viewport-height);
     min-height: 0;
     overflow: hidden;
   }
@@ -2993,7 +2994,7 @@ mark,
     inset: 0 auto 0 0;
     left: 0;
     z-index: 30;
-    height: 100dvh;
+    height: var(--app-viewport-height);
     border-radius: 0;
     box-shadow: 0 24px 48px rgba(17, 17, 17, 0.2);
     opacity: 0;
