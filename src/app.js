@@ -5362,7 +5362,8 @@ function updateBrowserNavigation({ mode = "replace" } = {}) {
     return;
   }
 
-  const method = mode === "push" ? "pushState" : "replaceState";
+  const shouldPush = mode === "push" && Boolean(state.selectedPath);
+  const method = shouldPush ? "pushState" : "replaceState";
   window.history[method](nextState, "", url);
   if (state.selectedPath) {
     historyNavigationSeeded = true;
@@ -5583,7 +5584,7 @@ function restoreDirectoryToggleScroll() {
 
     if (!pending.expanding) {
       const dirRect = dirToggle.getBoundingClientRect();
-      list.scrollTop += dirRect.top - (listRect.top + pending.viewportOffset);
+      list.scrollTop = Math.max(0, list.scrollTop + dirRect.top - (listRect.top + pending.viewportOffset));
       state.treeScrollTop = list.scrollTop;
       return;
     }
@@ -5597,7 +5598,7 @@ function restoreDirectoryToggleScroll() {
     });
     if (!descendants.length) {
       const dirRect = dirToggle.getBoundingClientRect();
-      list.scrollTop += dirRect.top - (listRect.top + pending.viewportOffset);
+      list.scrollTop = Math.max(0, list.scrollTop + dirRect.top - (listRect.top + pending.viewportOffset));
       state.treeScrollTop = list.scrollTop;
       return;
     }
@@ -5606,13 +5607,13 @@ function restoreDirectoryToggleScroll() {
     const availableBottom = listRect.bottom - padding;
     if (lastRect.bottom <= availableBottom) {
       const dirRect = dirToggle.getBoundingClientRect();
-      list.scrollTop += dirRect.top - (listRect.top + pending.viewportOffset);
+      list.scrollTop = Math.max(0, list.scrollTop + dirRect.top - (listRect.top + pending.viewportOffset));
       state.treeScrollTop = list.scrollTop;
       return;
     }
 
     const dirRect = dirToggle.getBoundingClientRect();
-    list.scrollTop += dirRect.top - (listRect.top + padding);
+    list.scrollTop = Math.max(0, list.scrollTop + dirRect.top - (listRect.top + padding));
     state.treeScrollTop = list.scrollTop;
   });
 }
