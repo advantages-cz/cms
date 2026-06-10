@@ -137,6 +137,8 @@ let previewScrollSyncTimer = 0;
 let pendingPreviewScrollRestore = null;
 let lastContentOnlyLandscape = isContentOnlyLandscape();
 let suppressPreviewScrollSyncUntil = 0;
+let historyNavigationSeeded = false;
+let swallowingHistoryGuardPop = false;
 
 function normalizeTab(tab) {
   return ["files", "changes", "commits", "actions"].includes(tab) ? tab : tab === "review" ? "changes" : "files";
@@ -368,7 +370,11 @@ window.addEventListener("pointercancel", () => {
   finishTreePaneResize();
 });
 
-window.addEventListener("popstate", () => {
+window.addEventListener("popstate", (event) => {
+  if (event.state?.cmsHistoryGuard) {
+    swallowHistoryGuardPop();
+    return;
+  }
   void restoreSelectionFromLocation();
 });
 
@@ -994,6 +1000,7 @@ async function connectRepository({ silent = false } = {}) {
     await refreshRepositoryData({ keepBusy: true, knownHeadSha: headShaForBranch(state.branch) });
     await restoreSelectionFromLocation({ keepBusy: true });
     await selectDefaultRootReadme({ keepBusy: true });
+    ensureHistoryNavigationGuard();
     updateBrowserNavigation({ mode: "replace" });
     await checkTokenAccess({ keepBusy: true });
     if (!silent) {
@@ -5276,6 +5283,37 @@ function navigationFromLocation() {
   };
 }
 
+function currentHistoryNavigationState() {
+  return {
+    branch: state.branch,
+    path: state.selectedPath,
+    dir: state.selectedDir,
+    previewScrollTop: normalizePreviewScrollTop(currentPreviewScrollTop()),
+  };
+}
+
+function swallowHistoryGuardPop() {
+  if (swallowingHistoryGuardPop) {
+    return;
+  }
+  swallowingHistoryGuardPop = true;
+  window.history.pushState(currentHistoryNavigationState(), "", window.location.href);
+  window.setTimeout(() => {
+    swallowingHistoryGuardPop = false;
+  }, 0);
+}
+
+function ensureHistoryNavigationGuard() {
+  if (!state.owner || !state.repo || historyNavigationSeeded) {
+    return;
+  }
+
+  const current = currentHistoryNavigationState();
+  window.history.replaceState({ ...current, cmsHistoryGuard: true }, "", window.location.href);
+  window.history.pushState(current, "", window.location.href);
+  historyNavigationSeeded = true;
+}
+
 async function selectDefaultRootReadme({ keepBusy = false } = {}) {
   const navigation = navigationFromLocation();
   if (navigation.path || navigation.dir || state.selectedPath || state.selectedDir) {
@@ -5314,12 +5352,7 @@ function updateBrowserNavigation({ mode = "replace" } = {}) {
     url.searchParams.delete("dir");
   }
 
-  const nextState = {
-    branch: state.branch,
-    path: state.selectedPath,
-    dir: state.selectedDir,
-    previewScrollTop: normalizePreviewScrollTop(currentPreviewScrollTop()),
-  };
+  const nextState = currentHistoryNavigationState();
   const next = `${url.pathname}${url.search}${url.hash}`;
   const current = `${window.location.pathname}${window.location.search}${window.location.hash}`;
   const currentState = window.history.state || {};
@@ -5334,6 +5367,7 @@ function updateBrowserNavigation({ mode = "replace" } = {}) {
 
   const method = mode === "push" ? "pushState" : "replaceState";
   window.history[method](nextState, "", url);
+  historyNavigationSeeded = true;
 }
 
 async function restoreSelectionFromLocation({ keepBusy = false } = {}) {

@@ -581,6 +581,12 @@ Decision: When the viewport switches between portrait mobile and the dedicated l
 
 Reasoning: A plain scroll position restore is not stable across orientation-driven layout changes because the tree viewport height and row positions change. Re-revealing the active row keeps navigation anchored to the current document, and removing coarse-pointer hover styling avoids sticky tap highlights that looked like random selection state on phones.
 
+### 2026-06-10: Keep One Guard Entry At The Bottom Of CMS History
+
+Decision: Browser file-navigation history now seeds a single guard entry beneath the current CMS location. Back and swipe-back still move through real CMS file and folder selections, but the last back step is absorbed inside the app instead of immediately escaping to the previous browser page.
+
+Reasoning: Editorial navigation should keep native browser history behavior between repository selections, not disable swipe-back globally. The bug appeared only when the CMS-specific history stack was already exhausted, so a single sentinel entry fixes the false extra back step without changing normal touch scrolling or gesture behavior elsewhere.
+
 ## Update Protocol
 
 When the project changes, update this document in the same commit as the related code or configuration change.
