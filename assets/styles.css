@@ -1596,11 +1596,11 @@ mark,
 }
 
 @media (hover: hover) and (pointer: fine) {
-  .tree-row:hover {
+  .tree-browser .tree-row:hover:not(:disabled) {
     background: rgba(129, 234, 252, 0.18);
   }
 
-  .tree-toggle:hover {
+  .tree-browser .tree-toggle:hover:not(:disabled) {
     background: rgba(129, 234, 252, 0.18);
   }
 }
@@ -1679,9 +1679,16 @@ mark,
 }
 
 @media (hover: none) and (pointer: coarse) {
-  .tree-file:active,
-  .tree-toggle:active {
+  .tree-browser .tree-file:not(.active):hover:not(:disabled),
+  .tree-browser .tree-file:not(.active):active:not(:disabled),
+  .tree-browser .tree-dir:not(.active-dir) > .tree-toggle:hover:not(:disabled),
+  .tree-browser .tree-dir:not(.active-dir) > .tree-toggle:active:not(:disabled) {
     background: transparent;
+    transform: none;
+  }
+
+  .tree-browser .tree-file.active:active:not(:disabled),
+  .tree-browser .tree-dir.active-dir > .tree-toggle:active:not(:disabled) {
     transform: none;
   }
 }
