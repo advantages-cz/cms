@@ -587,6 +587,12 @@ Decision: External links opened from the CMS, including Discourse discussion act
 
 Reasoning: On iOS, `_blank` navigations initiated from a standalone PWA are typically pushed into Safari. Reusing the current browsing context gives the system a better chance to hand the destination URL to another installed web app, which keeps cross-PWA workflows such as CMS-to-Discourse launches closer to native app behavior.
 
+### 2026-06-10: iPhone Landscape Links Use Touch-Friendly Activation
+
+Decision: Rendered internal Markdown links now also activate from a `pointerup` fallback path, and preview links explicitly opt into `touch-action: manipulation`.
+
+Reasoning: On iPhone-sized coarse-pointer landscape viewports, taps inside the scrollable preview can intermittently fail to produce a reliable delegated `click` event. Handling the link on `pointerup` and disabling double-tap gesture ambiguity makes internal preview navigation more consistent without changing desktop behavior or preview sandboxing.
+
 ### 2026-06-10: Expose The PWA Under The AVDS App Name
 
 Decision: The installed PWA now advertises `AVDS` as both its manifest name and short name, and the application metadata description is `Adaptivio Value Delivery System – knihovna Adaptivia`.

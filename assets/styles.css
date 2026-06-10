@@ -2138,6 +2138,8 @@ mark,
   text-decoration: underline;
   text-decoration-thickness: 1px;
   text-underline-offset: 3px;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: rgba(0, 0, 0, 0.08);
 }
 
 .markdown-preview blockquote {

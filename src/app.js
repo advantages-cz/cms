@@ -242,6 +242,28 @@ app.addEventListener("click", (event) => {
   if (!actionTarget) {
     return;
   }
+  if (consumeRecentlyHandledTouchAction(actionTarget)) {
+    event.preventDefault();
+    return;
+  }
+  event.preventDefault();
+  void handleAction(actionTarget);
+});
+
+app.addEventListener("pointerup", (event) => {
+  const target = event.target;
+  if (!(target instanceof Element) || event.pointerType === "mouse" || event.button !== 0 || event.ctrlKey || event.metaKey || event.altKey || event.shiftKey) {
+    return;
+  }
+
+  const actionTarget = target.closest(
+    "a[data-action='open-markdown-link'], a[data-action='open-markdown-dir-link'], a[data-action='missing-markdown-link']",
+  );
+  if (!(actionTarget instanceof HTMLElement) || !app.contains(actionTarget)) {
+    return;
+  }
+
+  rememberHandledTouchAction(actionTarget);
   event.preventDefault();
   void handleAction(actionTarget);
 });
@@ -1647,6 +1669,29 @@ function scrollMarkdownAnchor(anchor) {
 
 function attrEscape(value) {
   return String(value).replace(/["\\]/g, "\\$&");
+}
+
+let lastHandledTouchAction = {
+  element: null,
+  time: 0,
+};
+
+function rememberHandledTouchAction(element) {
+  lastHandledTouchAction = {
+    element,
+    time: Date.now(),
+  };
+}
+
+function consumeRecentlyHandledTouchAction(element) {
+  const isRecent =
+    lastHandledTouchAction.element === element &&
+    Date.now() - lastHandledTouchAction.time < 1200;
+  if (!isRecent) {
+    return false;
+  }
+  lastHandledTouchAction = { element: null, time: 0 };
+  return true;
 }
 
 async function refreshSelectedPreview() {
