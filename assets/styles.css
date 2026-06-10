@@ -151,8 +151,8 @@ a:hover {
   inset: 0;
   display: grid;
   grid-template-rows: auto 1fr;
-  width: 100vw;
-  height: 100dvh;
+  width: 100%;
+  height: var(--app-viewport-height);
   min-height: 0;
   overflow: hidden;
 }
