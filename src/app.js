@@ -135,6 +135,7 @@ let focusMobileSearchAfterRender = false;
 let revealMobileTreeAfterRender = false;
 let previewScrollSyncTimer = 0;
 let pendingPreviewScrollRestore = null;
+let lastContentOnlyLandscape = isContentOnlyLandscape();
 
 function normalizeTab(tab) {
   return ["files", "changes", "commits", "actions"].includes(tab) ? tab : tab === "review" ? "changes" : "files";
@@ -218,6 +219,31 @@ function syncViewportHeightVar() {
     return;
   }
   document.documentElement.style.setProperty("--app-viewport-height", `${Math.round(viewportHeight)}px`);
+}
+
+function resetContentOnlyScrollState() {
+  window.requestAnimationFrame(() => {
+    const tabContent = document.querySelector(".content-only-tab, .tab-content");
+    if (tabContent instanceof HTMLElement) {
+      tabContent.scrollTop = 0;
+    }
+
+    const preview = document.querySelector(".markdown-preview, .preview-code");
+    if (preview instanceof HTMLElement && preview.scrollTop < 2) {
+      preview.scrollTop = 0;
+    }
+  });
+}
+
+function syncViewportModeLayout() {
+  const contentOnly = isContentOnlyLandscape();
+  if (contentOnly !== lastContentOnlyLandscape) {
+    lastContentOnlyLandscape = contentOnly;
+    render();
+  }
+  if (contentOnly) {
+    resetContentOnlyScrollState();
+  }
 }
 
 app.addEventListener("submit", (event) => {
@@ -327,12 +353,25 @@ mobileTreeQuery?.addEventListener?.("change", (event) => {
   render();
 });
 
+contentOnlyLandscapeQuery?.addEventListener?.("change", () => {
+  syncViewportModeLayout();
+});
+
 window.addEventListener("resize", () => {
   syncViewportHeightVar();
+  syncViewportModeLayout();
 });
 
 window.visualViewport?.addEventListener?.("resize", () => {
   syncViewportHeightVar();
+  syncViewportModeLayout();
+});
+
+window.addEventListener("orientationchange", () => {
+  window.setTimeout(() => {
+    syncViewportHeightVar();
+    syncViewportModeLayout();
+  }, 80);
 });
 
 window.addEventListener("online", () => {
