@@ -399,30 +399,6 @@ Decision: The slide-over tree, hamburger trigger, and mobile tree search belong 
 
 Reasoning: Treating wider desktop or laptop layouts as mobile leaks hamburger-only controls into desktop and makes the tree search appear in the wrong place. Opening the tree by default on phones reduces one extra tap at the start of each session and matches the repository-browsing-first workflow.
 
-### 2026-06-09: Phone landscape uses the mobile shell
-
-Decision: The mobile shell now also activates on coarse-pointer landscape viewports with a height of 500 CSS pixels or less, even when the viewport width is wider than the phone portrait breakpoint.
-
-Reasoning: Modern iPhones in landscape can exceed the width-only mobile breakpoint while still having phone-sized vertical space. Treating those viewports as desktop makes the split layout cramped and hides the slide-over tree/navigation pattern users expect on phones.
-
-### 2026-06-09: Phone landscape prioritizes side rails over top chrome
-
-Decision: In the low-height phone landscape breakpoint, the compact top bar becomes a left-side rail and the section tabs move into their own vertical rail so the preview/editor region keeps as much vertical space as possible.
-
-Reasoning: On phones in landscape, vertical space is the scarcest resource. Moving navigation and action chrome to the side reduces header stacking and keeps the content pane usable without repeated scrolling.
-
-### 2026-06-09: Phone landscape files view keeps the tree pinned open
-
-Decision: In the low-height phone landscape breakpoint, the Files tab uses a permanently visible left tree pane instead of a hamburger-triggered slide-over sidebar.
-
-Reasoning: The slide-over mobile tree introduced too much state and animation complexity in cramped landscape viewports. Keeping the tree fixed in the Files workspace removes the sidebar toggle path entirely and makes navigation, scrolling, and tab switching more stable.
-
-### 2026-06-09: Phone landscape becomes content-only
-
-Decision: In the low-height phone landscape breakpoint, navigation chrome is hidden entirely and the app shows only the active tab's content surface.
-
-Reasoning: Landscape on phones is primarily a reading and previewing posture. Removing the top bar, tabs, tree, and related chrome avoids fragile mobile navigation states and maximizes usable content area.
-
 ### 2026-06-09: Service worker shell cache must track asset version bumps
 
 Decision: Whenever the static shell asset version changes in `index.html`, the service worker precache manifest and cache name must be bumped in lockstep so installed PWAs and cached sessions do not continue serving stale JS or CSS.
@@ -583,15 +559,15 @@ Reasoning: The app already stores repository snapshots and hydrated text content
 
 ### 2026-06-10: iPhone Landscape Links Use Touch-Friendly Activation
 
-Decision: Rendered internal Markdown links now also activate from touch-friendly fallback handlers, preview links explicitly opt into `touch-action: manipulation`, and the browser history state stores the preview scroll offset for back/forward restoration.
+Decision: Preview links explicitly opt into `touch-action: manipulation`, and the browser history state stores the preview scroll offset for back/forward restoration.
 
-Reasoning: On iPhone-sized coarse-pointer landscape viewports, taps inside the scrollable preview can intermittently fail to produce a reliable delegated `click` event, and browser swipe-back otherwise returns to the file URL without restoring the reader's position in the document. Handling touch activation earlier and persisting preview scroll in history makes internal preview navigation and back navigation behave more like a native reading surface without changing desktop behavior or preview sandboxing.
+Reasoning: On iPhone-sized coarse-pointer landscape viewports, taps inside the scrollable preview are sensitive to gesture interpretation, and browser swipe-back otherwise returns to the file URL without restoring the reader's position in the document. Opting clickable preview elements into direct manipulation behavior and persisting preview scroll in history makes navigation feel more like a native reading surface without changing preview sandboxing.
 
-### 2026-06-10: Phone Landscape Reuses The Portrait Mobile Interaction Model
+### 2026-06-10: Phone Landscape Uses One Dedicated Content-Only Breakpoint
 
-Decision: The low-height phone landscape breakpoint no longer switches into a separate content-only interaction mode. It now reuses the same mobile shell behavior as portrait, including the hamburger-triggered tree sidebar, visible top chrome, and the same scroll/navigation model, while keeping only the compact mobile sizing adjustments.
+Decision: Phone landscape is handled by one dedicated low-height coarse-pointer breakpoint. That breakpoint hides application chrome and shows only the active content surface, while portrait phones keep the regular mobile shell. JavaScript should treat landscape content-only as a render/layout concern only: no alternate click pipeline, no extra touch-specific link handlers, and no landscape-only tree state machine beyond omitting hidden tree DOM.
 
-Reasoning: The landscape-only interaction branch introduced different DOM visibility, scroll containers, and navigation behavior from portrait, which made bugs harder to reason about and fix. Reusing one mobile interaction model keeps iPhone portrait and landscape behavior aligned while preserving the smaller-screen layout tuning that landscape still needs.
+Reasoning: The earlier landscape evolution stacked multiple ideas on top of each other, including side rails, pinned trees, content-only chrome, and touch-specific navigation workarounds. Keeping one explicit CSS breakpoint and minimizing JS branching reduces historical sediment and makes future bugs easier to localize.
 
 ### 2026-06-10: Expose The PWA Under The AVDS App Name
 

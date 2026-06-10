@@ -49,8 +49,7 @@ const THEME_MODES = ["auto", "light", "dark"];
 const STARTUP_CONTENT_EXTENSIONS = ["md", "mdx", "html", "htm"];
 const CONTENT_ONLY_LANDSCAPE_MEDIA_QUERY =
   "(hover: none) and (pointer: coarse) and (orientation: landscape) and (max-height: 500px)";
-const MOBILE_LAYOUT_MEDIA_QUERY =
-  `(max-width: 700px), ${CONTENT_ONLY_LANDSCAPE_MEDIA_QUERY}`;
+const MOBILE_LAYOUT_MEDIA_QUERY = "(max-width: 700px)";
 const systemDarkQuery = window.matchMedia?.("(prefers-color-scheme: dark)") || null;
 const mobileTreeQuery = window.matchMedia?.(MOBILE_LAYOUT_MEDIA_QUERY) || null;
 const contentOnlyLandscapeQuery = window.matchMedia?.(CONTENT_ONLY_LANDSCAPE_MEDIA_QUERY) || null;
@@ -305,12 +304,6 @@ window.addEventListener("popstate", () => {
 });
 
 mobileTreeQuery?.addEventListener?.("change", (event) => {
-  if (isContentOnlyLandscape()) {
-    state.mobileTreeOpen = false;
-    state.mobileSettingsOpen = false;
-    render();
-    return;
-  }
   if (event.matches) {
     state.mobileTreeOpen = state.tab === "files";
     state.mobileSettingsOpen = false;
@@ -323,25 +316,6 @@ mobileTreeQuery?.addEventListener?.("change", (event) => {
   }
   state.mobileSettingsOpen = false;
   render();
-});
-
-contentOnlyLandscapeQuery?.addEventListener?.("change", (event) => {
-  if (event.matches) {
-    enterContentOnlyLandscapeMode();
-    return;
-  }
-
-  if (mobileTreeQuery?.matches && state.tab === "files") {
-    state.mobileTreeOpen = true;
-  }
-  render();
-});
-
-window.visualViewport?.addEventListener?.("resize", () => {
-  if (!isContentOnlyLandscape()) {
-    return;
-  }
-  enterContentOnlyLandscapeMode({ deferRender: true });
 });
 
 window.addEventListener("online", () => {
@@ -1683,23 +1657,6 @@ function scrollMarkdownAnchor(anchor) {
 
 function attrEscape(value) {
   return String(value).replace(/["\\]/g, "\\$&");
-}
-
-function enterContentOnlyLandscapeMode({ deferRender = false } = {}) {
-  state.mobileTreeOpen = false;
-  state.mobileSettingsOpen = false;
-  render();
-  if (!deferRender) {
-    return;
-  }
-  window.requestAnimationFrame(() => {
-    window.requestAnimationFrame(() => {
-      if (!isContentOnlyLandscape()) {
-        return;
-      }
-      render();
-    });
-  });
 }
 
 async function refreshSelectedPreview() {

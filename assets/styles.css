@@ -2765,7 +2765,7 @@ mark,
   }
 }
 
-@media (max-width: 700px), (hover: none) and (pointer: coarse) and (orientation: landscape) and (max-height: 500px) {
+@media (max-width: 700px) {
   body {
     overflow: hidden;
   }
