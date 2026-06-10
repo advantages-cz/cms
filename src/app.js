@@ -169,13 +169,6 @@ function openExternalUrl(url) {
   if (!url) {
     return;
   }
-  // iOS standalone PWAs often force `_blank` navigations into Safari.
-  // Reusing the top-level browsing context gives the OS a chance to hand off
-  // the target URL to another installed web app instead.
-  if (isIosStandalonePwa()) {
-    window.location.assign(url);
-    return;
-  }
   window.open(url, "_blank", "noopener,noreferrer");
 }
 
