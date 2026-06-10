@@ -213,14 +213,11 @@ function syncThemeColor() {
 }
 
 function syncViewportHeightVar() {
-  const viewport = window.visualViewport;
-  const viewportHeight = viewport?.height || window.innerHeight;
+  const viewportHeight = window.visualViewport?.height || window.innerHeight;
   if (!viewportHeight) {
     return;
   }
   document.documentElement.style.setProperty("--app-viewport-height", `${Math.round(viewportHeight)}px`);
-  document.documentElement.style.setProperty("--app-viewport-offset-top", `${Math.round(viewport?.offsetTop || 0)}px`);
-  document.documentElement.style.setProperty("--app-viewport-offset-left", `${Math.round(viewport?.offsetLeft || 0)}px`);
 }
 
 app.addEventListener("submit", (event) => {
@@ -336,17 +333,6 @@ window.addEventListener("resize", () => {
 
 window.visualViewport?.addEventListener?.("resize", () => {
   syncViewportHeightVar();
-});
-
-window.visualViewport?.addEventListener?.("scroll", () => {
-  syncViewportHeightVar();
-});
-
-window.addEventListener("orientationchange", () => {
-  syncViewportHeightVar();
-  window.setTimeout(() => {
-    syncViewportHeightVar();
-  }, 80);
 });
 
 window.addEventListener("online", () => {
