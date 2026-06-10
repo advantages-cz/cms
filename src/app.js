@@ -5579,11 +5579,11 @@ function restoreDirectoryToggleScroll() {
     }
 
     const listRect = list.getBoundingClientRect();
-    const dirRect = dirToggle.getBoundingClientRect();
     const padding = 12;
-    list.scrollTop += dirRect.top - (listRect.top + pending.viewportOffset);
 
     if (!pending.expanding) {
+      const dirRect = dirToggle.getBoundingClientRect();
+      list.scrollTop += dirRect.top - (listRect.top + pending.viewportOffset);
       state.treeScrollTop = list.scrollTop;
       return;
     }
@@ -5596,25 +5596,23 @@ function restoreDirectoryToggleScroll() {
       return Boolean(nodePath) && nodePath !== pending.path && nodePath.startsWith(`${pending.path}/`);
     });
     if (!descendants.length) {
+      const dirRect = dirToggle.getBoundingClientRect();
+      list.scrollTop += dirRect.top - (listRect.top + pending.viewportOffset);
       state.treeScrollTop = list.scrollTop;
       return;
     }
 
-    const alignedDirRect = dirToggle.getBoundingClientRect();
     const lastRect = descendants[descendants.length - 1].getBoundingClientRect();
     const availableBottom = listRect.bottom - padding;
     if (lastRect.bottom <= availableBottom) {
+      const dirRect = dirToggle.getBoundingClientRect();
+      list.scrollTop += dirRect.top - (listRect.top + pending.viewportOffset);
       state.treeScrollTop = list.scrollTop;
       return;
     }
 
-    const subtreeHeight = lastRect.bottom - alignedDirRect.top;
-    const viewportHeight = list.clientHeight - padding * 2;
-    if (subtreeHeight > viewportHeight) {
-      list.scrollTop += pending.viewportOffset - padding;
-    } else {
-      list.scrollTop += lastRect.bottom - availableBottom;
-    }
+    const dirRect = dirToggle.getBoundingClientRect();
+    list.scrollTop += dirRect.top - (listRect.top + padding);
     state.treeScrollTop = list.scrollTop;
   });
 }
