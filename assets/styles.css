@@ -3195,6 +3195,14 @@ mark,
     padding: 0;
   }
 
+  .content-only-surface,
+  .content-only-surface .browse-preview {
+    display: grid;
+    grid-template-rows: minmax(0, 1fr);
+    min-height: 0;
+    height: 100%;
+  }
+
   .files-workbench,
   .workbench {
     grid-template-columns: minmax(0, 1fr);
@@ -3207,5 +3215,20 @@ mark,
     border-radius: 0;
     background: transparent;
     box-shadow: none;
+  }
+
+  .markdown-preview,
+  .preview-frame,
+  .preview-object,
+  .preview-image,
+  .preview-code {
+    border: 0;
+    border-radius: 0;
+  }
+
+  .markdown-preview {
+    padding-inline: 0;
+    padding-block: 0 12px;
+    background: transparent;
   }
 }
