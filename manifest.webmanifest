@@ -1,7 +1,7 @@
 {
-  "name": "Adaptivio CMS",
-  "short_name": "CMS",
-  "description": "Static GitHub CMS for editing a private repository through branches, pull requests, and GitHub Actions.",
+  "name": "AVDS",
+  "short_name": "AVDS",
+  "description": "Adaptivio Value Delivery System – knihovna Adaptivia",
   "start_url": "./?source=pwa",
   "scope": "./",
   "display": "standalone",

@@ -581,6 +581,18 @@ Decision: When GitHub API calls fail because the browser is offline or the netwo
 
 Reasoning: The app already stores repository snapshots and hydrated text content locally. Reusing that cache prevents a transient network loss from collapsing the whole CMS session, while explicit refresh keeps GitHub as the source of truth before any new write or branch-level workflow action resumes.
 
+### 2026-06-10: Use Same-Window External Navigation In iOS Standalone PWA Mode
+
+Decision: External links opened from the CMS, including Discourse discussion actions, now use same-window top-level navigation when the CMS runs as an iOS standalone PWA instead of calling `window.open(..., "_blank")`.
+
+Reasoning: On iOS, `_blank` navigations initiated from a standalone PWA are typically pushed into Safari. Reusing the current browsing context gives the system a better chance to hand the destination URL to another installed web app, which keeps cross-PWA workflows such as CMS-to-Discourse launches closer to native app behavior.
+
+### 2026-06-10: Expose The PWA Under The AVDS App Name
+
+Decision: The installed PWA now advertises `AVDS` as both its manifest name and short name, and the application metadata description is `Adaptivio Value Delivery System – knihovna Adaptivia`.
+
+Reasoning: The CMS is being presented to end users as part of the AVDS product surface, so the install name and PWA description should match the product identity users see on their home screen and in installation prompts.
+
 ## Update Protocol
 
 When the project changes, update this document in the same commit as the related code or configuration change.

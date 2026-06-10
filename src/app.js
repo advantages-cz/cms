@@ -165,6 +165,20 @@ function isIosStandalonePwa() {
   return Boolean(window.navigator.standalone) || Boolean(standaloneDisplayModeQuery?.matches);
 }
 
+function openExternalUrl(url) {
+  if (!url) {
+    return;
+  }
+  // iOS standalone PWAs often force `_blank` navigations into Safari.
+  // Reusing the top-level browsing context gives the OS a chance to hand off
+  // the target URL to another installed web app instead.
+  if (isIosStandalonePwa()) {
+    window.location.assign(url);
+    return;
+  }
+  window.open(url, "_blank", "noopener,noreferrer");
+}
+
 const scheduleFilterRender = debounce(() => {
   globalSearchTyping = false;
   render();
@@ -673,7 +687,7 @@ async function handleAction(button) {
   if (action === "open-link") {
     const url = button.dataset.url;
     if (url) {
-      window.open(url, "_blank", "noopener,noreferrer");
+      openExternalUrl(url);
     }
     return;
   }
@@ -4709,7 +4723,7 @@ function openDiscourseComposer() {
     toast(t("discussion.needsDiscourseUrl"), "warn");
     return;
   }
-  window.open(context.composerUrl, "_blank", "noopener,noreferrer");
+  openExternalUrl(context.composerUrl);
 }
 
 function discourseSearchUrl(context = selectedDiscussionContext()) {
@@ -4728,7 +4742,7 @@ function openDiscourseSearch() {
     toast(t("discussion.needsDiscourseUrl"), "warn");
     return;
   }
-  window.open(context.searchUrl, "_blank", "noopener,noreferrer");
+  openExternalUrl(context.searchUrl);
 }
 
 function searchResults() {
