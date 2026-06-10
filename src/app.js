@@ -47,10 +47,13 @@ const MIN_PREVIEW_PANE_WIDTH = 360;
 const MAX_SEARCH_INDEX_BYTES = 256 * 1024;
 const THEME_MODES = ["auto", "light", "dark"];
 const STARTUP_CONTENT_EXTENSIONS = ["md", "mdx", "html", "htm"];
+const CONTENT_ONLY_LANDSCAPE_MEDIA_QUERY =
+  "(hover: none) and (pointer: coarse) and (orientation: landscape) and (max-height: 500px)";
 const MOBILE_LAYOUT_MEDIA_QUERY =
-  "(max-width: 700px), (hover: none) and (pointer: coarse) and (orientation: landscape) and (max-height: 500px)";
+  `(max-width: 700px), ${CONTENT_ONLY_LANDSCAPE_MEDIA_QUERY}`;
 const systemDarkQuery = window.matchMedia?.("(prefers-color-scheme: dark)") || null;
 const mobileTreeQuery = window.matchMedia?.(MOBILE_LAYOUT_MEDIA_QUERY) || null;
+const contentOnlyLandscapeQuery = window.matchMedia?.(CONTENT_ONLY_LANDSCAPE_MEDIA_QUERY) || null;
 const standaloneDisplayModeQuery = window.matchMedia?.("(display-mode: standalone)") || null;
 
 const state = {
@@ -131,11 +134,15 @@ let globalSearchTyping = false;
 let focusRestoreToken = 0;
 let focusMobileSearchAfterRender = false;
 let revealMobileTreeAfterRender = false;
-let previewScrollSyncFrame = 0;
+let previewScrollSyncTimer = 0;
 let pendingPreviewScrollRestore = null;
 
 function normalizeTab(tab) {
   return ["files", "changes", "commits", "actions"].includes(tab) ? tab : tab === "review" ? "changes" : "files";
+}
+
+function isContentOnlyLandscape() {
+  return Boolean(contentOnlyLandscapeQuery?.matches);
 }
 
 function initialOfflineState() {
@@ -342,6 +349,12 @@ window.addEventListener("popstate", () => {
 });
 
 mobileTreeQuery?.addEventListener?.("change", (event) => {
+  if (isContentOnlyLandscape()) {
+    state.mobileTreeOpen = false;
+    state.mobileSettingsOpen = false;
+    render();
+    return;
+  }
   if (event.matches) {
     state.mobileTreeOpen = state.tab === "files";
     state.mobileSettingsOpen = false;
@@ -353,6 +366,20 @@ mobileTreeQuery?.addEventListener?.("change", (event) => {
     state.mobileTreeOpen = false;
   }
   state.mobileSettingsOpen = false;
+  render();
+});
+
+contentOnlyLandscapeQuery?.addEventListener?.("change", (event) => {
+  if (event.matches) {
+    state.mobileTreeOpen = false;
+    state.mobileSettingsOpen = false;
+    render();
+    return;
+  }
+
+  if (mobileTreeQuery?.matches && state.tab === "files") {
+    state.mobileTreeOpen = true;
+  }
   render();
 });
 
@@ -2940,9 +2967,13 @@ function commitCount() {
 function renderFilesTab() {
   const currentDir = currentDirectoryPath();
   const canDeleteFolder = state.editMode && Boolean(currentDir) && !state.selectedPath && filesInDirectory(currentDir).length > 0;
+  const contentOnly = isContentOnlyLandscape();
   return `
     <div class="workbench files-workbench ${state.treePaneResizing ? "is-resizing" : ""}" style="--tree-pane-width: ${state.treePaneWidth}px;">
-      <div class="mobile-tree-backdrop ${state.mobileTreeOpen ? "is-open" : ""}" data-action="close-mobile-tree" aria-hidden="${state.mobileTreeOpen ? "false" : "true"}"></div>
+      ${
+        contentOnly
+          ? ""
+          : `<div class="mobile-tree-backdrop ${state.mobileTreeOpen ? "is-open" : ""}" data-action="close-mobile-tree" aria-hidden="${state.mobileTreeOpen ? "false" : "true"}"></div>
       <section id="mobile-tree-panel" class="panel tree-panel ${state.mobileTreeOpen ? "mobile-open" : ""}" aria-label="${escapeHtml(t("files.repositoryFiles"))}">
         <div class="panel-body">
           <div class="mobile-tree-header">
@@ -2991,7 +3022,8 @@ function renderFilesTab() {
           ${renderFileList()}
         </div>
       </section>
-      <div class="tree-splitter" role="separator" aria-orientation="vertical" aria-label="${t("files.resizeTree")}" aria-valuemin="${MIN_TREE_PANE_WIDTH}" aria-valuenow="${state.treePaneWidth}" tabindex="0" data-resize="tree-pane"></div>
+      <div class="tree-splitter" role="separator" aria-orientation="vertical" aria-label="${t("files.resizeTree")}" aria-valuemin="${MIN_TREE_PANE_WIDTH}" aria-valuenow="${state.treePaneWidth}" tabindex="0" data-resize="tree-pane"></div>`
+      }
       <section class="panel editor-panel">
         <div class="panel-header">
           <div class="panel-header-main">
@@ -5470,17 +5502,15 @@ function currentPreviewScrollTop() {
 }
 
 function schedulePreviewScrollSync() {
-  if (previewScrollSyncFrame) {
-    return;
-  }
-  previewScrollSyncFrame = window.requestAnimationFrame(() => {
-    previewScrollSyncFrame = 0;
+  window.clearTimeout(previewScrollSyncTimer);
+  previewScrollSyncTimer = window.setTimeout(() => {
+    previewScrollSyncTimer = 0;
     if (!state.selectedPath || restoringBrowserNavigation || !state.owner || !state.repo) {
       return;
     }
     state.previewScrollTop = currentPreviewScrollTop();
     updateBrowserNavigation({ mode: "replace" });
-  });
+  }, 180);
 }
 
 function applyPendingPreviewScrollRestore(value) {
