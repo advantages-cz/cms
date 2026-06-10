@@ -134,7 +134,6 @@ let focusRestoreToken = 0;
 let focusMobileSearchAfterRender = false;
 let revealMobileTreeAfterRender = false;
 let previewScrollSyncTimer = 0;
-let landscapeViewportSettleTimer = 0;
 let pendingPreviewScrollRestore = null;
 
 function normalizeTab(tab) {
@@ -330,12 +329,10 @@ mobileTreeQuery?.addEventListener?.("change", (event) => {
 
 window.addEventListener("resize", () => {
   syncViewportHeightVar();
-  scheduleLandscapeViewportSettle();
 });
 
 window.visualViewport?.addEventListener?.("resize", () => {
   syncViewportHeightVar();
-  scheduleLandscapeViewportSettle();
 });
 
 window.addEventListener("online", () => {
@@ -5490,36 +5487,6 @@ function restorePreviewScroll() {
 function normalizePreviewScrollTop(value) {
   const number = Number(value);
   return Number.isFinite(number) && number > 0 ? Math.round(number) : 0;
-}
-
-function scheduleLandscapeViewportSettle() {
-  window.clearTimeout(landscapeViewportSettleTimer);
-  landscapeViewportSettleTimer = window.setTimeout(() => {
-    landscapeViewportSettleTimer = 0;
-    if (!isContentOnlyLandscape()) {
-      return;
-    }
-    state.mobileTreeOpen = false;
-    state.mobileSettingsOpen = false;
-    render();
-    window.requestAnimationFrame(() => {
-      window.requestAnimationFrame(() => {
-        forcePreviewReflow();
-      });
-    });
-  }, 220);
-}
-
-function forcePreviewReflow() {
-  const preview = document.querySelector(".markdown-preview, .preview-code, .preview-frame, .preview-object");
-  if (!(preview instanceof HTMLElement)) {
-    return;
-  }
-  const display = preview.style.display;
-  preview.style.display = "none";
-  void preview.offsetHeight;
-  preview.style.display = display;
-  void preview.offsetHeight;
 }
 
 function captureFocusSnapshot() {

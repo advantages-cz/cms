@@ -3173,6 +3173,8 @@ mark,
   }
 
   .app-shell {
+    position: relative;
+    inset: auto;
     grid-template-rows: minmax(0, 1fr);
   }
 
