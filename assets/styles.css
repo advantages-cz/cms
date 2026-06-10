@@ -2942,6 +2942,19 @@ mark,
     padding: 12px;
   }
 
+  .tab-content,
+  .workbench,
+  .files-workbench,
+  .editor-panel,
+  .panel,
+  .panel-body,
+  .browse-preview,
+  .markdown-preview,
+  .preview-full {
+    min-height: 0;
+    height: 100%;
+  }
+
   .tabbar {
     overflow-x: auto;
     margin-bottom: 12px;
@@ -3137,5 +3150,65 @@ mark,
     padding-inline: 0;
     padding-block: 0 12px;
     background: transparent;
+  }
+}
+
+@media (hover: none) and (pointer: coarse) and (orientation: landscape) and (max-height: 500px) {
+  .topbar,
+  .tabbar,
+  .mobile-tree-backdrop,
+  .tree-panel,
+  .tree-splitter,
+  .banner,
+  .connection-status,
+  .panel-header {
+    display: none !important;
+  }
+
+  .app-shell {
+    grid-template-rows: minmax(0, 1fr);
+  }
+
+  .layout,
+  .content,
+  .tab-content,
+  .workbench,
+  .files-workbench,
+  .editor-panel,
+  .panel,
+  .panel-body,
+  .browse-preview,
+  .markdown-preview,
+  .preview-full {
+    min-height: 0;
+    height: 100%;
+  }
+
+  .content,
+  .panel-body,
+  .editor-panel .panel-body {
+    padding: 0;
+  }
+
+  .content {
+    overflow: hidden;
+  }
+
+  .tab-content {
+    overflow: auto;
+  }
+
+  .files-workbench,
+  .workbench {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0;
+  }
+
+  .panel,
+  .editor-panel {
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
   }
 }
