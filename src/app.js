@@ -2306,9 +2306,10 @@ function render({ treeScrollTop = null } = {}) {
     state.treeScrollTop = treeScrollTop;
   }
   const focusSnapshot = captureFocusSnapshot();
+  const contentOnly = isContentOnlyLandscape();
   app.innerHTML = `
     <div class="app-shell ${state.busy ? "loading" : ""}">
-      ${renderTopbar()}
+      ${contentOnly ? "" : renderTopbar()}
       <div class="layout">
         <main class="content">${renderContent()}</main>
       </div>
@@ -2587,18 +2588,35 @@ function renderContent() {
     return renderConnectionStatus();
   }
 
+  if (isContentOnlyLandscape()) {
+    return `<div class="tab-content tab-content-${escapeHtml(state.tab)} content-only-tab">${renderActiveTabContent({ contentOnly: true })}</div>`;
+  }
+
   return `
     ${renderConnectionError()}
     ${renderWorkflowBanners()}
     ${state.treeTruncated ? `<p class="banner warn">${t("repo.treeTruncated")}</p>` : ""}
     ${renderTabs()}
     <div class="tab-content tab-content-${escapeHtml(state.tab)}">
-      ${state.tab === "files" ? renderFilesTab() : ""}
-      ${state.tab === "changes" ? renderChangesTab() : ""}
-      ${state.tab === "commits" ? renderCommitsTab() : ""}
-      ${state.tab === "actions" ? renderActionsTab() : ""}
+      ${renderActiveTabContent()}
     </div>
   `;
+}
+
+function renderActiveTabContent({ contentOnly = false } = {}) {
+  if (state.tab === "files") {
+    return renderFilesTab({ contentOnly });
+  }
+  if (state.tab === "changes") {
+    return renderChangesTab();
+  }
+  if (state.tab === "commits") {
+    return renderCommitsTab();
+  }
+  if (state.tab === "actions") {
+    return renderActionsTab();
+  }
+  return "";
 }
 
 function renderConnectionStatus() {
@@ -2896,14 +2914,16 @@ function commitCount() {
   return commitsForBranch().length;
 }
 
-function renderFilesTab() {
+function renderFilesTab({ contentOnly = false } = {}) {
   const currentDir = currentDirectoryPath();
   const canDeleteFolder = state.editMode && Boolean(currentDir) && !state.selectedPath && filesInDirectory(currentDir).length > 0;
-  const contentOnly = isContentOnlyLandscape();
+  if (contentOnly) {
+    return `<section class="content-only-surface">${renderEditor()}</section>`;
+  }
   return `
     <div class="workbench files-workbench ${state.treePaneResizing ? "is-resizing" : ""}" style="--tree-pane-width: ${state.treePaneWidth}px;">
       ${
-        contentOnly
+        isContentOnlyLandscape()
           ? ""
           : `<div class="mobile-tree-backdrop ${state.mobileTreeOpen ? "is-open" : ""}" data-action="close-mobile-tree" aria-hidden="${state.mobileTreeOpen ? "false" : "true"}"></div>
       <section id="mobile-tree-panel" class="panel tree-panel ${state.mobileTreeOpen ? "mobile-open" : ""}" aria-label="${escapeHtml(t("files.repositoryFiles"))}">

@@ -613,6 +613,12 @@ a:hover {
   overflow: auto;
 }
 
+.content-only-tab,
+.content-only-surface {
+  min-height: 0;
+  height: 100%;
+}
+
 .tab-content-files {
   overflow: hidden;
 }
