@@ -587,6 +587,10 @@ Decision: Expanding or collapsing a directory preserves the current tree scroll 
 
 Reasoning: The app renders separate mobile and desktop tree containers, so restoring scroll against the first generic tree list in the DOM can jump the visible tree back to the top. Targeting the active panel keeps folder toggling spatially stable.
 
+Decision: When expanding a directory would push part of its revealed subtree below the visible tree viewport, the CMS scrolls the tree so the expanded directory sits at the top of the panel. If the full revealed subtree already fits, the current scroll position is preserved.
+
+Reasoning: Editors need to see the newly revealed children immediately after expansion. Anchoring the expanded directory to the top only when needed keeps the tree stable for short folders while making deep folders usable without a second manual scroll.
+
 ### 2026-06-10: Keep One Guard Entry At The Bottom Of CMS History
 
 Decision: Browser file-navigation history now seeds a single guard entry beneath the current CMS location. Back and swipe-back still move through real CMS file and folder selections, but the last back step is absorbed inside the app instead of immediately escaping to the previous browser page.

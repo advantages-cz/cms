@@ -133,6 +133,7 @@ let globalSearchTyping = false;
 let focusRestoreToken = 0;
 let focusMobileSearchAfterRender = false;
 let revealMobileTreeAfterRender = false;
+let pendingExpandedDirectoryRevealPath = "";
 let previewScrollSyncTimer = 0;
 let pendingPreviewScrollRestore = null;
 let lastContentOnlyLandscape = isContentOnlyLandscape();
@@ -2396,6 +2397,7 @@ function render({ treeScrollTop = null } = {}) {
   `;
   restoreTreeScroll();
   revealSelectedTreeRow();
+  revealExpandedDirectoryChildren();
   revealSelectedMobileTreeRow();
   restoreFocusSnapshot(focusSnapshot);
   focusMobileSearchInput();
@@ -5456,17 +5458,20 @@ async function restoreSelectionFromLocation({ keepBusy = false } = {}) {
 
 function toggleDirectory(path, { navigation = "" } = {}) {
   const preservedTreeScrollTop = currentTreeScrollTop();
+  const expanding = !state.expandedDirs.has(path);
   state.selectedPath = "";
   state.selectedDir = path;
+  state.revealSelectedInTree = false;
   state.editor = null;
   state.preview = null;
   state.previewScrollTop = 0;
   pendingPreviewScrollRestore = 0;
-  if (state.expandedDirs.has(path)) {
+  if (!expanding) {
     state.expandedDirs.delete(path);
   } else {
     state.expandedDirs.add(path);
   }
+  pendingExpandedDirectoryRevealPath = expanding ? path : "";
   persistSettings();
   if (navigation) {
     updateBrowserNavigation({ mode: navigation });
@@ -5526,7 +5531,7 @@ function revealSelectedTreeRow() {
   }
 
   window.requestAnimationFrame(() => {
-    const list = document.querySelector(".file-list");
+    const list = activeTreeListElement();
     const active = list?.querySelector(state.selectedPath ? ".tree-file.active" : ".tree-dir.active-dir");
     if (!(list instanceof HTMLElement) || !(active instanceof HTMLElement)) {
       state.revealSelectedInTree = false;
@@ -5543,6 +5548,54 @@ function revealSelectedTreeRow() {
     }
     state.treeScrollTop = list.scrollTop;
     state.revealSelectedInTree = false;
+  });
+}
+
+function revealExpandedDirectoryChildren() {
+  if (!pendingExpandedDirectoryRevealPath) {
+    return;
+  }
+
+  const path = pendingExpandedDirectoryRevealPath;
+  pendingExpandedDirectoryRevealPath = "";
+  window.requestAnimationFrame(() => {
+    const list = activeTreeListElement();
+    if (!(list instanceof HTMLElement)) {
+      return;
+    }
+
+    const toggles = [...list.querySelectorAll(".tree-toggle[data-path]")];
+    const dirToggle = toggles.find((toggle) => toggle instanceof HTMLElement && toggle.dataset.path === path);
+    const dirRow = dirToggle?.closest(".tree-dir");
+    if (!(dirRow instanceof HTMLElement)) {
+      return;
+    }
+
+    const descendants = [...list.querySelectorAll("[data-path]")].filter((node) => {
+      if (!(node instanceof HTMLElement)) {
+        return false;
+      }
+      const nodePath = node.dataset.path || "";
+      return Boolean(nodePath) && nodePath !== path && nodePath.startsWith(`${path}/`);
+    });
+    if (!descendants.length) {
+      state.treeScrollTop = list.scrollTop;
+      return;
+    }
+
+    const listRect = list.getBoundingClientRect();
+    const dirRect = dirRow.getBoundingClientRect();
+    const lastRect = descendants[descendants.length - 1].getBoundingClientRect();
+    const padding = 12;
+    const fitsBelow = lastRect.bottom <= listRect.bottom - padding;
+    const dirVisibleTop = dirRect.top >= listRect.top + padding;
+    if (fitsBelow && dirVisibleTop) {
+      state.treeScrollTop = list.scrollTop;
+      return;
+    }
+
+    list.scrollTop += dirRect.top - (listRect.top + padding);
+    state.treeScrollTop = list.scrollTop;
   });
 }
 
