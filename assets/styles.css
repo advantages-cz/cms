@@ -3267,7 +3267,7 @@ mark,
 
   .markdown-preview {
     padding-inline: 0;
-    padding-block: 0 12px;
+    padding-block: 4px 16px;
     background: transparent;
   }
 }
