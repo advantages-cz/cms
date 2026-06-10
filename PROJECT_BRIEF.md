@@ -575,6 +575,12 @@ Decision: The installed PWA now advertises `AVDS` as both its manifest name and 
 
 Reasoning: The CMS is being presented to end users as part of the AVDS product surface, so the install name and PWA description should match the product identity users see on their home screen and in installation prompts.
 
+### 2026-06-10: Tree Reveal Must Survive Orientation Changes
+
+Decision: When the viewport switches between portrait mobile and the dedicated landscape content-only mode, the files tree now re-reveals the currently selected file or directory after the next render instead of only restoring the previous raw `scrollTop`. Touch-only devices also no longer apply persistent tree-row hover styling.
+
+Reasoning: A plain scroll position restore is not stable across orientation-driven layout changes because the tree viewport height and row positions change. Re-revealing the active row keeps navigation anchored to the current document, and removing coarse-pointer hover styling avoids sticky tap highlights that looked like random selection state on phones.
+
 ## Update Protocol
 
 When the project changes, update this document in the same commit as the related code or configuration change.
