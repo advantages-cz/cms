@@ -1572,6 +1572,7 @@ mark,
   padding: 6px 0;
   border-color: var(--line);
   background: var(--surface-preview);
+  touch-action: pan-y;
 }
 
 .tree-row {
@@ -1665,6 +1666,24 @@ mark,
   padding: 3px 9px 3px calc(9px + (var(--depth, 0) * 18px));
   background: transparent;
   text-align: left;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.tree-file {
+  -webkit-tap-highlight-color: transparent;
+  touch-action: pan-y;
+}
+
+.tree-toggle {
+  touch-action: pan-y;
+}
+
+@media (hover: none) and (pointer: coarse) {
+  .tree-file:active,
+  .tree-toggle:active {
+    background: transparent;
+    transform: none;
+  }
 }
 
 .tree-toggle::before,
