@@ -3157,6 +3157,7 @@ mark,
     padding-inline: 0;
     padding-block: 0 12px;
     background: transparent;
+    -webkit-overflow-scrolling: touch;
   }
 }
 

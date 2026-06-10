@@ -565,7 +565,7 @@ Reasoning: On iPhone-sized coarse-pointer landscape viewports, taps inside the s
 
 ### 2026-06-10: Phone Landscape Uses One Dedicated Content-Only Breakpoint
 
-Decision: Phone landscape is handled by one dedicated low-height coarse-pointer breakpoint. That breakpoint hides application chrome and shows only the active content surface, while portrait phones keep the regular mobile shell. JavaScript should treat landscape content-only as a render/layout concern only: no alternate click pipeline, no extra touch-specific link handlers, and no landscape-only tree state machine beyond omitting hidden tree DOM.
+Decision: Phone landscape is handled by one dedicated low-height coarse-pointer breakpoint. That breakpoint hides application chrome and shows only the active content surface, while portrait phones keep the regular mobile shell. JavaScript treats landscape content-only as a render/layout concern only: no alternate click pipeline, no extra touch-specific link handlers, and no landscape-only tree state machine beyond omitting hidden tree DOM. On entry to content-only landscape, the app also clears stale outer scroll positions and suppresses immediate preview scroll-history restoration so iOS rotation cannot leave the reader surface offset or locked.
 
 Reasoning: The earlier landscape evolution stacked multiple ideas on top of each other, including side rails, pinned trees, content-only chrome, and touch-specific navigation workarounds. Keeping one explicit CSS breakpoint and minimizing JS branching reduces historical sediment and makes future bugs easier to localize.
 

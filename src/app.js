@@ -136,6 +136,7 @@ let revealMobileTreeAfterRender = false;
 let previewScrollSyncTimer = 0;
 let pendingPreviewScrollRestore = null;
 let lastContentOnlyLandscape = isContentOnlyLandscape();
+let suppressPreviewScrollSyncUntil = 0;
 
 function normalizeTab(tab) {
   return ["files", "changes", "commits", "actions"].includes(tab) ? tab : tab === "review" ? "changes" : "files";
@@ -221,28 +222,57 @@ function syncViewportHeightVar() {
   document.documentElement.style.setProperty("--app-viewport-height", `${Math.round(viewportHeight)}px`);
 }
 
-function resetContentOnlyScrollState() {
-  window.requestAnimationFrame(() => {
-    const tabContent = document.querySelector(".content-only-tab, .tab-content");
-    if (tabContent instanceof HTMLElement) {
-      tabContent.scrollTop = 0;
-    }
+function resetContentOnlyScrollState({ resetPreview = false } = {}) {
+  suppressPreviewScrollSyncUntil = window.performance.now() + 600;
+  const reset = () => {
+    window.scrollTo?.(0, 0);
+    document.documentElement.scrollTop = 0;
+    document.documentElement.scrollLeft = 0;
+    document.body.scrollTop = 0;
+    document.body.scrollLeft = 0;
 
-    const preview = document.querySelector(".markdown-preview, .preview-code");
-    if (preview instanceof HTMLElement && preview.scrollTop < 2) {
-      preview.scrollTop = 0;
+    document
+      .querySelectorAll(
+        "#app, .app-shell, .layout, .content, .tab-content, .content-only-surface, .browse-preview, .editor-panel, .panel, .panel-body",
+      )
+      .forEach((element) => {
+        if (element instanceof HTMLElement) {
+          element.scrollTop = 0;
+          element.scrollLeft = 0;
+        }
+      });
+
+    if (resetPreview) {
+      const preview = document.querySelector(".markdown-preview, .preview-code");
+      if (preview instanceof HTMLElement) {
+        preview.scrollTop = 0;
+        preview.scrollLeft = 0;
+      }
+      state.previewScrollTop = 0;
+      pendingPreviewScrollRestore = null;
     }
+  };
+
+  reset();
+  window.requestAnimationFrame(reset);
+  [80, 180, 320].forEach((delay) => {
+    window.setTimeout(reset, delay);
   });
 }
 
 function syncViewportModeLayout() {
   const contentOnly = isContentOnlyLandscape();
+  const enteringContentOnly = contentOnly && !lastContentOnlyLandscape;
   if (contentOnly !== lastContentOnlyLandscape) {
     lastContentOnlyLandscape = contentOnly;
+    if (enteringContentOnly) {
+      state.previewScrollTop = 0;
+      pendingPreviewScrollRestore = null;
+    }
     render();
   }
   if (contentOnly) {
-    resetContentOnlyScrollState();
+    resetContentOnlyScrollState({ resetPreview: enteringContentOnly });
   }
 }
 
@@ -5493,7 +5523,13 @@ function schedulePreviewScrollSync() {
   window.clearTimeout(previewScrollSyncTimer);
   previewScrollSyncTimer = window.setTimeout(() => {
     previewScrollSyncTimer = 0;
-    if (!state.selectedPath || restoringBrowserNavigation || !state.owner || !state.repo) {
+    if (
+      !state.selectedPath ||
+      restoringBrowserNavigation ||
+      !state.owner ||
+      !state.repo ||
+      (isContentOnlyLandscape() && window.performance.now() < suppressPreviewScrollSyncUntil)
+    ) {
       return;
     }
     state.previewScrollTop = currentPreviewScrollTop();
@@ -5508,6 +5544,12 @@ function applyPendingPreviewScrollRestore(value) {
 
 function restorePreviewScroll() {
   if (pendingPreviewScrollRestore === null) {
+    return;
+  }
+
+  if (isContentOnlyLandscape()) {
+    pendingPreviewScrollRestore = null;
+    state.previewScrollTop = 0;
     return;
   }
 
