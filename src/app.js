@@ -1000,7 +1000,6 @@ async function connectRepository({ silent = false } = {}) {
     await refreshRepositoryData({ keepBusy: true, knownHeadSha: headShaForBranch(state.branch) });
     await restoreSelectionFromLocation({ keepBusy: true });
     await selectDefaultRootReadme({ keepBusy: true });
-    ensureHistoryNavigationGuard();
     updateBrowserNavigation({ mode: "replace" });
     await checkTokenAccess({ keepBusy: true });
     if (!silent) {
@@ -5303,17 +5302,6 @@ function swallowHistoryGuardPop() {
   }, 0);
 }
 
-function ensureHistoryNavigationGuard() {
-  if (!state.owner || !state.repo || historyNavigationSeeded) {
-    return;
-  }
-
-  const current = currentHistoryNavigationState();
-  window.history.replaceState({ ...current, cmsHistoryGuard: true }, "", window.location.href);
-  window.history.pushState(current, "", window.location.href);
-  historyNavigationSeeded = true;
-}
-
 async function selectDefaultRootReadme({ keepBusy = false } = {}) {
   const navigation = navigationFromLocation();
   if (navigation.path || navigation.dir || state.selectedPath || state.selectedDir) {
@@ -5365,9 +5353,18 @@ function updateBrowserNavigation({ mode = "replace" } = {}) {
     return;
   }
 
+  if (!historyNavigationSeeded && state.selectedPath) {
+    window.history.replaceState({ ...nextState, cmsHistoryGuard: true }, "", url);
+    window.history.pushState(nextState, "", url);
+    historyNavigationSeeded = true;
+    return;
+  }
+
   const method = mode === "push" ? "pushState" : "replaceState";
   window.history[method](nextState, "", url);
-  historyNavigationSeeded = true;
+  if (state.selectedPath) {
+    historyNavigationSeeded = true;
+  }
 }
 
 async function restoreSelectionFromLocation({ keepBusy = false } = {}) {
