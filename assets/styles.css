@@ -3169,14 +3169,11 @@ mark,
     grid-template-rows: minmax(0, 1fr);
   }
 
-  .layout,
-  .content,
   .tab-content,
   .workbench,
   .files-workbench,
   .editor-panel,
   .panel,
-  .panel-body,
   .browse-preview,
   .markdown-preview,
   .preview-full {
@@ -3185,17 +3182,8 @@ mark,
   }
 
   .content,
-  .panel-body,
   .editor-panel .panel-body {
     padding: 0;
-  }
-
-  .content {
-    overflow: hidden;
-  }
-
-  .tab-content {
-    overflow: auto;
   }
 
   .files-workbench,
