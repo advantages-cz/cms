@@ -581,6 +581,12 @@ Decision: When the viewport switches between portrait mobile and the dedicated l
 
 Reasoning: A plain scroll position restore is not stable across orientation-driven layout changes because the tree viewport height and row positions change. Re-revealing the active row keeps navigation anchored to the current document, and removing coarse-pointer hover styling avoids sticky tap highlights that looked like random selection state on phones.
 
+### 2026-06-10: Tree Expand Preserves The Active Panel Scroll Position
+
+Decision: Expanding or collapsing a directory preserves the current tree scroll offset and restores it against the active tree panel instance, preferring the open mobile sidebar tree when present and the desktop tree otherwise.
+
+Reasoning: The app renders separate mobile and desktop tree containers, so restoring scroll against the first generic tree list in the DOM can jump the visible tree back to the top. Targeting the active panel keeps folder toggling spatially stable.
+
 ### 2026-06-10: Keep One Guard Entry At The Bottom Of CMS History
 
 Decision: Browser file-navigation history now seeds a single guard entry beneath the current CMS location. Back and swipe-back still move through real CMS file and folder selections, but the last back step is absorbed inside the app instead of immediately escaping to the previous browser page.

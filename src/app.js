@@ -5455,6 +5455,7 @@ async function restoreSelectionFromLocation({ keepBusy = false } = {}) {
 }
 
 function toggleDirectory(path, { navigation = "" } = {}) {
+  const preservedTreeScrollTop = currentTreeScrollTop();
   state.selectedPath = "";
   state.selectedDir = path;
   state.editor = null;
@@ -5470,7 +5471,8 @@ function toggleDirectory(path, { navigation = "" } = {}) {
   if (navigation) {
     updateBrowserNavigation({ mode: navigation });
   }
-  render();
+  state.treeScrollTop = preservedTreeScrollTop;
+  render({ treeScrollTop: preservedTreeScrollTop });
 }
 
 function selectDirectory(path, { navigation = "", revealInTree = false } = {}) {
@@ -5511,7 +5513,7 @@ function captureTreeScroll() {
 
 function restoreTreeScroll() {
   window.requestAnimationFrame(() => {
-    const list = document.querySelector(".file-list");
+    const list = activeTreeListElement();
     if (list instanceof HTMLElement) {
       list.scrollTop = state.treeScrollTop;
     }
@@ -5545,8 +5547,23 @@ function revealSelectedTreeRow() {
 }
 
 function currentTreeScrollTop() {
-  const list = document.querySelector(".file-list");
+  const list = activeTreeListElement();
   return list instanceof HTMLElement ? list.scrollTop : state.treeScrollTop;
+}
+
+function activeTreeListElement() {
+  if (state.mobileTreeOpen) {
+    const mobileList = document.querySelector("#mobile-tree-panel .file-list");
+    if (mobileList instanceof HTMLElement) {
+      return mobileList;
+    }
+  }
+  const desktopList = document.querySelector(".files-workbench > .tree-panel .file-list");
+  if (desktopList instanceof HTMLElement) {
+    return desktopList;
+  }
+  const fallbackList = document.querySelector(".file-list");
+  return fallbackList instanceof HTMLElement ? fallbackList : null;
 }
 
 function currentPreviewScrollTop() {
