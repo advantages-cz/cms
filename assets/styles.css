@@ -3186,6 +3186,8 @@ mark,
   }
 
   .tree-panel .panel-body {
+    display: flex;
+    flex-direction: column;
     padding-top: 0;
   }
 
