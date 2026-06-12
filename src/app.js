@@ -194,6 +194,13 @@ function openExternalUrl(url) {
   window.open(url, "_blank", "noopener,noreferrer");
 }
 
+function openExternalUrlInSameTab(url) {
+  if (!url) {
+    return;
+  }
+  window.location.assign(url);
+}
+
 function isAndroidDevice() {
   if (typeof navigator === "undefined") {
     return false;
@@ -201,8 +208,20 @@ function isAndroidDevice() {
   return /Android/i.test(navigator.userAgent || "");
 }
 
-function shouldOpenPdfInNewTab(path) {
+function shouldOpenPdfInSameTab(path) {
   return isAndroidDevice() && isPdfPath(path);
+}
+
+async function openPdfFromTreeInSameTab(path) {
+  const entry = state.files.find((file) => file.path === path);
+  if (!entry?.sha || !state.client || !state.owner || !state.repo) {
+    return false;
+  }
+
+  const blobData = await state.client.getBlob(state.owner, state.repo, entry.sha);
+  const blob = blobFromBase64(blobData.content || "", "application/pdf");
+  openExternalUrlInSameTab(URL.createObjectURL(blob));
+  return true;
 }
 
 const scheduleFilterRender = debounce(() => {
@@ -732,11 +751,13 @@ async function handleAction(button) {
 
   if (action === "select-file") {
     const path = button.dataset.path || "";
-    if (shouldOpenPdfInNewTab(path)) {
-      const entry = state.files.find((file) => file.path === path);
-      if (entry?.download_url) {
-        openExternalUrl(entry.download_url);
-        return;
+    if (shouldOpenPdfInSameTab(path)) {
+      try {
+        if (await openPdfFromTreeInSameTab(path)) {
+          return;
+        }
+      } catch {
+        // Fall back to the in-app preview if direct PDF open fails.
       }
     }
     const preservedTreeScrollTop = treeScrollTopFromControl(button);
@@ -778,11 +799,13 @@ async function handleAction(button) {
 
   if (action === "preview-file") {
     const path = button.dataset.path || "";
-    if (shouldOpenPdfInNewTab(path)) {
-      const entry = state.files.find((file) => file.path === path);
-      if (entry?.download_url) {
-        openExternalUrl(entry.download_url);
-        return;
+    if (shouldOpenPdfInSameTab(path)) {
+      try {
+        if (await openPdfFromTreeInSameTab(path)) {
+          return;
+        }
+      } catch {
+        // Fall back to the in-app preview if direct PDF open fails.
       }
     }
     state.tab = "files";
