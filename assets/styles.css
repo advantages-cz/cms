@@ -2228,6 +2228,11 @@ mark,
   gap: 0;
 }
 
+.browse-preview-single {
+  grid-template-rows: minmax(0, 1fr);
+  gap: 0;
+}
+
 .editor-panel form {
   height: 100%;
   min-height: 0;

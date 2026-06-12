@@ -3497,7 +3497,7 @@ function renderBrowsePreview() {
   }
 
   return `
-    <div class="browse-preview">
+    <div class="browse-preview browse-preview-single">
       ${renderPreviewPane("full")}
     </div>
   `;
