@@ -1356,9 +1356,9 @@ body.is-resizing-tree-pane {
 }
 
 .panel-header-main {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
   gap: 10px;
   min-width: 0;
 }
@@ -1394,7 +1394,7 @@ body.is-resizing-tree-pane {
 }
 
 .selected-file-heading-row {
-  display: inline-flex;
+  display: flex;
   align-items: center;
   gap: 8px;
   min-width: 0;
@@ -1425,6 +1425,18 @@ body.is-resizing-tree-pane {
 
 .panel-actions {
   flex: 0 0 auto;
+  min-width: 0;
+  justify-content: flex-end;
+}
+
+@media (max-width: 1180px) {
+  .panel-header-main {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .panel-actions {
+    justify-content: flex-start;
+  }
 }
 
 .panel-body {
@@ -1449,6 +1461,16 @@ body.is-resizing-tree-pane {
   border-radius: var(--radius-sm);
   overflow: hidden;
   background: var(--surface);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.24);
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  max-height: min(34vh, 320px);
+}
+
+.browse-preview-diff-only .read-diff {
+  margin-bottom: 0;
+  height: 100%;
+  max-height: none;
 }
 
 .read-diff-header {
@@ -1465,17 +1487,28 @@ body.is-resizing-tree-pane {
   font-family: var(--mono);
   font-size: 12px;
   line-height: 1.5;
+  overflow: auto;
+  background:
+    linear-gradient(var(--surface), var(--surface)) padding-box,
+    repeating-linear-gradient(
+      180deg,
+      transparent,
+      transparent 27px,
+      color-mix(in srgb, var(--line) 55%, transparent) 27px,
+      color-mix(in srgb, var(--line) 55%, transparent) 28px
+    );
 }
 
 .read-diff-line {
   display: grid;
   grid-template-columns: 20px minmax(0, 1fr);
+  min-height: 28px;
 }
 
 .read-diff-line code {
   display: block;
   overflow-x: auto;
-  padding: 3px 10px 3px 0;
+  padding: 4px 12px 4px 10px;
   background: transparent;
   color: inherit;
   white-space: pre-wrap;
@@ -1485,21 +1518,35 @@ body.is-resizing-tree-pane {
   display: grid;
   place-items: center;
   border-right: 1px solid var(--line);
+  font-weight: 760;
   color: var(--muted);
+  background: color-mix(in srgb, var(--surface-alt) 88%, transparent);
 }
 
 .read-diff-line-context {
-  background: var(--surface);
+  background: color-mix(in srgb, var(--surface) 92%, var(--surface-alt));
 }
 
 .read-diff-line-added {
-  background: var(--ok-soft);
-  color: var(--ok);
+  background: color-mix(in srgb, var(--ok-soft) 86%, var(--surface));
+  color: color-mix(in srgb, var(--ok) 88%, var(--text));
+  box-shadow: inset 3px 0 0 color-mix(in srgb, var(--ok) 72%, transparent);
 }
 
 .read-diff-line-removed {
-  background: var(--danger-soft);
+  background: color-mix(in srgb, var(--danger-soft) 88%, var(--surface));
+  color: color-mix(in srgb, var(--danger) 90%, var(--text));
+  box-shadow: inset 3px 0 0 color-mix(in srgb, var(--danger) 72%, transparent);
+}
+
+.read-diff-line-added .read-diff-marker {
+  color: var(--ok);
+  background: color-mix(in srgb, var(--ok-soft) 92%, transparent);
+}
+
+.read-diff-line-removed .read-diff-marker {
   color: var(--danger);
+  background: color-mix(in srgb, var(--danger-soft) 92%, transparent);
 }
 
 .files-workbench > .panel:first-child .panel-body {
@@ -2169,9 +2216,16 @@ mark,
 
 .browse-preview {
   display: grid;
-  grid-template-rows: minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr);
+  align-content: start;
+  gap: 12px;
   height: 100%;
   min-height: 0;
+}
+
+.browse-preview-diff-only {
+  grid-template-rows: minmax(0, 1fr);
+  gap: 0;
 }
 
 .editor-panel form {

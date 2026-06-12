@@ -3477,10 +3477,18 @@ function renderBrowsePreview() {
   }
 
   const readDiff = renderReadSnapshotDiff();
+  const diffOnly = Boolean(readDiff);
+  if (diffOnly) {
+    return `
+      <div class="browse-preview browse-preview-diff-only">
+        ${readDiff}
+      </div>
+    `;
+  }
+
   if (state.editor && isMarkdownPath(state.editor.path)) {
     return `
       <div class="browse-preview">
-        ${readDiff}
         <article class="markdown-preview">${renderMarkdown(state.editor.content)}</article>
       </div>
     `;
@@ -3488,7 +3496,6 @@ function renderBrowsePreview() {
 
   return `
     <div class="browse-preview">
-      ${readDiff}
       ${renderPreviewPane("full")}
     </div>
   `;

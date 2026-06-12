@@ -1,18 +1,18 @@
-const CACHE_NAME = "adaptivio-cms-shell-v53";
+const CACHE_NAME = "adaptivio-cms-shell-v56";
 const SHELL_ASSETS = [
   "./",
   "./index.html",
   "./manifest.webmanifest",
-  "./assets/styles.css?v=20260612-181500",
-  "./assets/favicon.svg?v=20260612-181500",
+  "./assets/styles.css?v=20260612-191800",
+  "./assets/favicon.svg?v=20260612-191800",
   "./assets/brand/adaptivio/adaptivio-symbol-cerny-rgb.svg",
-  "./src/app.js?v=20260612-181500",
-  "./src/editorWorkflow.js?v=20260612-181500",
-  "./src/github.js?v=20260612-181500",
-  "./src/i18n.js?v=20260612-181500",
-  "./src/repoCache.js?v=20260612-181500",
-  "./src/storage.js?v=20260612-181500",
-  "./src/utils.js?v=20260612-181500",
+  "./src/app.js?v=20260612-191800",
+  "./src/editorWorkflow.js?v=20260612-191800",
+  "./src/github.js?v=20260612-191800",
+  "./src/i18n.js?v=20260612-191800",
+  "./src/repoCache.js?v=20260612-191800",
+  "./src/storage.js?v=20260612-191800",
+  "./src/utils.js?v=20260612-191800",
   "./cms.config.json",
 ];
 
