@@ -149,7 +149,6 @@ let globalSearchTyping = false;
 let focusRestoreToken = 0;
 let focusMobileSearchAfterRender = false;
 let revealMobileTreeAfterRender = false;
-let pendingDirectoryToggleScroll = null;
 let previewScrollSyncTimer = 0;
 let pendingPreviewScrollRestore = null;
 let lastContentOnlyLandscape = isContentOnlyLandscape();
@@ -722,8 +721,9 @@ async function handleAction(button) {
 
   if (action === "select-file") {
     const path = button.dataset.path || "";
+    const preservedTreeScrollTop = treeScrollTopFromControl(button);
     state.mobileTreeOpen = false;
-    await loadFile(path, { navigation: "push" });
+    await loadFile(path, { navigation: "push", treeScrollTop: preservedTreeScrollTop });
     return;
   }
 
@@ -744,7 +744,7 @@ async function handleAction(button) {
   }
 
   if (action === "toggle-dir") {
-    toggleDirectory(button.dataset.path || "", { navigation: "push" });
+    toggleDirectory(button.dataset.path || "", { navigation: "push", treeScrollTop: treeScrollTopFromControl(button) });
     return;
   }
 
@@ -1666,7 +1666,7 @@ function leaveEditSession() {
   render();
 }
 
-async function loadFile(path, { keepBusy = false, syncLatest = false, navigation = "", revealInTree = false } = {}) {
+async function loadFile(path, { keepBusy = false, syncLatest = false, navigation = "", revealInTree = false, treeScrollTop = null } = {}) {
   if (!path) {
     return;
   }
@@ -1727,7 +1727,7 @@ async function loadFile(path, { keepBusy = false, syncLatest = false, navigation
   if (keepBusy) {
     await run();
   } else {
-    await withBusy(t("repo.loadingFile"), run);
+    await withBusy(t("repo.loadingFile"), run, { treeScrollTop });
   }
 }
 
@@ -2434,7 +2434,6 @@ function render({ treeScrollTop = null } = {}) {
   `;
   restoreTreeScroll();
   revealSelectedTreeRow();
-  restoreDirectoryToggleScroll();
   revealSelectedMobileTreeRow();
   restoreFocusSnapshot(focusSnapshot);
   focusMobileSearchInput();
@@ -5552,17 +5551,9 @@ async function restoreSelectionFromLocation({ keepBusy = false } = {}) {
   await withBusy(t("repo.checkingHistory"), run);
 }
 
-function toggleDirectory(path, { navigation = "" } = {}) {
-  const preservedTreeScrollTop = currentTreeScrollTop();
-  const list = activeTreeListElement();
-  const dirToggle = list?.querySelector(`.tree-toggle[data-path="${cssEscape(path)}"]`);
+function toggleDirectory(path, { navigation = "", treeScrollTop = null } = {}) {
+  const preservedTreeScrollTop = treeScrollTop ?? currentTreeScrollTop();
   const expanding = !state.expandedDirs.has(path);
-  let viewportOffset = 12;
-  if (list instanceof HTMLElement && dirToggle instanceof HTMLElement) {
-    const listRect = list.getBoundingClientRect();
-    const dirRect = dirToggle.getBoundingClientRect();
-    viewportOffset = Math.max(12, Math.round(dirRect.top - listRect.top));
-  }
   state.selectedPath = "";
   state.selectedDir = path;
   state.revealSelectedInTree = false;
@@ -5575,7 +5566,6 @@ function toggleDirectory(path, { navigation = "" } = {}) {
   } else {
     state.expandedDirs.add(path);
   }
-  pendingDirectoryToggleScroll = { path, expanding, viewportOffset };
   persistSettings();
   if (navigation) {
     updateBrowserNavigation({ mode: navigation });
@@ -5585,6 +5575,7 @@ function toggleDirectory(path, { navigation = "" } = {}) {
 }
 
 function selectDirectory(path, { navigation = "", revealInTree = false } = {}) {
+  const preservedTreeScrollTop = currentTreeScrollTop();
   state.selectedPath = "";
   state.selectedDir = path;
   state.editor = null;
@@ -5597,7 +5588,8 @@ function selectDirectory(path, { navigation = "", revealInTree = false } = {}) {
   if (navigation) {
     updateBrowserNavigation({ mode: navigation });
   }
-  render();
+  state.treeScrollTop = preservedTreeScrollTop;
+  render({ treeScrollTop: preservedTreeScrollTop });
 }
 
 function expandPathToFile(path) {
@@ -5655,67 +5647,14 @@ function revealSelectedTreeRow() {
   });
 }
 
-function restoreDirectoryToggleScroll() {
-  if (!pendingDirectoryToggleScroll) {
-    return;
-  }
-
-  const pending = pendingDirectoryToggleScroll;
-  pendingDirectoryToggleScroll = null;
-  window.requestAnimationFrame(() => {
-    const list = activeTreeListElement();
-    if (!(list instanceof HTMLElement)) {
-      return;
-    }
-
-    const toggles = [...list.querySelectorAll(".tree-toggle[data-path]")];
-    const dirToggle = toggles.find((toggle) => toggle instanceof HTMLElement && toggle.dataset.path === pending.path);
-    if (!(dirToggle instanceof HTMLElement)) {
-      return;
-    }
-
-    const listRect = list.getBoundingClientRect();
-    const padding = 12;
-
-    if (!pending.expanding) {
-      const dirRect = dirToggle.getBoundingClientRect();
-      list.scrollTop = Math.max(0, list.scrollTop + dirRect.top - (listRect.top + pending.viewportOffset));
-      state.treeScrollTop = list.scrollTop;
-      return;
-    }
-
-    const descendants = [...list.querySelectorAll("[data-path]")].filter((node) => {
-      if (!(node instanceof HTMLElement)) {
-        return false;
-      }
-      const nodePath = node.dataset.path || "";
-      return Boolean(nodePath) && nodePath !== pending.path && nodePath.startsWith(`${pending.path}/`);
-    });
-    if (!descendants.length) {
-      const dirRect = dirToggle.getBoundingClientRect();
-      list.scrollTop = Math.max(0, list.scrollTop + dirRect.top - (listRect.top + pending.viewportOffset));
-      state.treeScrollTop = list.scrollTop;
-      return;
-    }
-
-    const lastRect = descendants[descendants.length - 1].getBoundingClientRect();
-    const availableBottom = listRect.bottom - padding;
-    if (lastRect.bottom <= availableBottom) {
-      const dirRect = dirToggle.getBoundingClientRect();
-      list.scrollTop = Math.max(0, list.scrollTop + dirRect.top - (listRect.top + pending.viewportOffset));
-      state.treeScrollTop = list.scrollTop;
-      return;
-    }
-
-    const dirRect = dirToggle.getBoundingClientRect();
-    list.scrollTop = Math.max(0, list.scrollTop + dirRect.top - (listRect.top + padding));
-    state.treeScrollTop = list.scrollTop;
-  });
-}
-
 function currentTreeScrollTop() {
   const list = activeTreeListElement();
   return list instanceof HTMLElement ? list.scrollTop : state.treeScrollTop;
+}
+
+function treeScrollTopFromControl(control) {
+  const list = control instanceof HTMLElement ? control.closest(".file-list") : null;
+  return list instanceof HTMLElement ? list.scrollTop : currentTreeScrollTop();
 }
 
 function activeTreeListElement() {
@@ -5865,8 +5804,8 @@ function assertCanWrite() {
   }
 }
 
-async function withBusy(label, task) {
-  const preservedTreeScrollTop = currentTreeScrollTop();
+async function withBusy(label, task, { treeScrollTop = null } = {}) {
+  const preservedTreeScrollTop = treeScrollTop ?? currentTreeScrollTop();
   state.treeScrollTop = preservedTreeScrollTop;
   state.busy = true;
   state.busyLabel = label;

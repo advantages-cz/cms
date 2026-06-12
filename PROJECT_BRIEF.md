@@ -466,6 +466,12 @@ Decision: Give `rozcestnik.md` a dedicated signpost-style icon in the file tree 
 
 Reasoning: The file acts as a navigation hub, so a distinct icon makes its role visible without changing editing, preview, or routing behavior.
 
+### 2026-06-12: Preserve Tree Scroll Across File Selection And Folder Toggles
+
+Decision: Tree interactions now preserve scroll position from the exact tree list the user clicked in, and busy renders reuse that preserved position during file selection, directory selection, and folder expand/collapse flows.
+
+Reasoning: The CMS re-renders the shell when loading previews and toggling folders. Capturing scroll from the active control instead of re-discovering the tree after state changes prevents desktop and mobile tree panes from jumping back to the top.
+
 ### 2026-06-08: Pin `rozcestnik.md` Near `README.md`
 
 Decision: In each folder, sort `README.md` first and `rozcestnik.md` second before applying the existing file ordering rules for everything else.
