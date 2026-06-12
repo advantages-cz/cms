@@ -150,6 +150,7 @@ Implemented capabilities:
 - Internal Markdown links resolved through the CMS tree instead of navigating the browser frame; links to existing directories select and expand the matching tree folder.
 - Markdown heading anchors normalize diacritics consistently between generated heading IDs and rendered internal links.
 - Markdown preview hides HTML comments and supports angle-bracket link destinations with spaces, such as `[PDF](<vystupy/test pozvanky/file.pdf>)`.
+- On Android browsers, selecting a PDF from the repository tree should open the file in a new browser tab instead of attempting an inline CMS preview, because embedded PDF support is inconsistent there.
 - Browser history integration for repository file and folder navigation via URL `path` and `dir` parameters.
 - Sandboxed HTML preview with relative image, SVG, and CSS assets inlined from the current branch.
 - Fixed-height application shell with internal scrolling in the tree and preview regions.

@@ -33,6 +33,7 @@ Adaptivio also needs GitHub Actions status, failing check annotations, detection
 - Opens a slide-over Discourse discussion panel for the selected file, using the current CMS file URL and a deterministic lookup key for exact Discourse search plus plain links for opening search and a pre-filled new-topic composer. Markdown files additionally prefill quote selections, including selected table rows or partial cell ranges converted to Markdown tables, plus front matter-based metadata.
 - Previews HTML in a sandboxed iframe with relative image/SVG/CSS assets resolved when possible.
 - Previews PDF, SVG, images, and text.
+- Opens PDFs from the file tree in a new browser tab on Android, where inline PDF embedding is not reliable.
 - Supports English and Czech UI through `src/i18n.js`; English is the default language.
 
 ## Security Model

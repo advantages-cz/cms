@@ -194,6 +194,17 @@ function openExternalUrl(url) {
   window.open(url, "_blank", "noopener,noreferrer");
 }
 
+function isAndroidDevice() {
+  if (typeof navigator === "undefined") {
+    return false;
+  }
+  return /Android/i.test(navigator.userAgent || "");
+}
+
+function shouldOpenPdfInNewTab(path) {
+  return isAndroidDevice() && isPdfPath(path);
+}
+
 const scheduleFilterRender = debounce(() => {
   globalSearchTyping = false;
   render();
@@ -721,6 +732,13 @@ async function handleAction(button) {
 
   if (action === "select-file") {
     const path = button.dataset.path || "";
+    if (shouldOpenPdfInNewTab(path)) {
+      const entry = state.files.find((file) => file.path === path);
+      if (entry?.download_url) {
+        openExternalUrl(entry.download_url);
+        return;
+      }
+    }
     const preservedTreeScrollTop = treeScrollTopFromControl(button);
     state.mobileTreeOpen = false;
     await loadFile(path, { navigation: "push", treeScrollTop: preservedTreeScrollTop });
@@ -759,10 +777,18 @@ async function handleAction(button) {
   }
 
   if (action === "preview-file") {
+    const path = button.dataset.path || "";
+    if (shouldOpenPdfInNewTab(path)) {
+      const entry = state.files.find((file) => file.path === path);
+      if (entry?.download_url) {
+        openExternalUrl(entry.download_url);
+        return;
+      }
+    }
     state.tab = "files";
     state.mobileTreeOpen = false;
     persistSettings();
-    await loadFile(button.dataset.path || "", { navigation: "push", revealInTree: true });
+    await loadFile(path, { navigation: "push", revealInTree: true });
     return;
   }
 
