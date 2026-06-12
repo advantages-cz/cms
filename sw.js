@@ -1,17 +1,18 @@
-const CACHE_NAME = "adaptivio-cms-shell-v51";
+const CACHE_NAME = "adaptivio-cms-shell-v53";
 const SHELL_ASSETS = [
   "./",
   "./index.html",
   "./manifest.webmanifest",
-  "./assets/styles.css?v=20260610-162500",
-  "./assets/favicon.svg?v=20260610-162500",
-  "./src/app.js?v=20260610-162500",
-  "./src/editorWorkflow.js?v=20260610-162500",
-  "./src/github.js?v=20260610-162500",
-  "./src/i18n.js?v=20260610-162500",
-  "./src/repoCache.js?v=20260610-162500",
-  "./src/storage.js?v=20260610-162500",
-  "./src/utils.js?v=20260610-162500",
+  "./assets/styles.css?v=20260612-181500",
+  "./assets/favicon.svg?v=20260612-181500",
+  "./assets/brand/adaptivio/adaptivio-symbol-cerny-rgb.svg",
+  "./src/app.js?v=20260612-181500",
+  "./src/editorWorkflow.js?v=20260612-181500",
+  "./src/github.js?v=20260612-181500",
+  "./src/i18n.js?v=20260612-181500",
+  "./src/repoCache.js?v=20260612-181500",
+  "./src/storage.js?v=20260612-181500",
+  "./src/utils.js?v=20260612-181500",
   "./cms.config.json",
 ];
 
@@ -22,6 +23,7 @@ function isAppShellRequest(requestUrl) {
     pathname.endsWith("/manifest.webmanifest") ||
     pathname.endsWith("/assets/styles.css") ||
     pathname.endsWith("/assets/favicon.svg") ||
+    pathname.endsWith("/assets/brand/adaptivio/adaptivio-symbol-cerny-rgb.svg") ||
     pathname.endsWith("/src/app.js") ||
     pathname.endsWith("/src/editorWorkflow.js") ||
     pathname.endsWith("/src/github.js") ||
@@ -107,6 +109,15 @@ self.addEventListener("fetch", (event) => {
         const responseClone = networkResponse.clone();
         void caches.open(CACHE_NAME).then((cache) => cache.put(request, responseClone));
         return networkResponse;
+      }).catch(async () => {
+        const fallbackResponse = await caches.match(request);
+        if (fallbackResponse) {
+          return fallbackResponse;
+        }
+        return new Response("", {
+          status: 504,
+          statusText: "Offline asset unavailable",
+        });
       });
     }),
   );

@@ -177,3 +177,57 @@ export function debounce(fn, delay) {
     timer = window.setTimeout(() => fn(...args), delay);
   };
 }
+
+export function fnv1aHash(value) {
+  const input = String(value || "");
+  let hash = 0x811c9dc5;
+  for (let index = 0; index < input.length; index += 1) {
+    hash ^= input.charCodeAt(index);
+    hash = Math.imul(hash, 0x01000193);
+  }
+  return (hash >>> 0).toString(16).padStart(8, "0");
+}
+
+export function buildLineDiff(before, after) {
+  const beforeLines = String(before || "").replace(/\r\n/g, "\n").split("\n");
+  const afterLines = String(after || "").replace(/\r\n/g, "\n").split("\n");
+  const rows = [];
+  const matrix = Array.from({ length: beforeLines.length + 1 }, () => new Array(afterLines.length + 1).fill(0));
+
+  for (let beforeIndex = beforeLines.length - 1; beforeIndex >= 0; beforeIndex -= 1) {
+    for (let afterIndex = afterLines.length - 1; afterIndex >= 0; afterIndex -= 1) {
+      matrix[beforeIndex][afterIndex] =
+        beforeLines[beforeIndex] === afterLines[afterIndex]
+          ? matrix[beforeIndex + 1][afterIndex + 1] + 1
+          : Math.max(matrix[beforeIndex + 1][afterIndex], matrix[beforeIndex][afterIndex + 1]);
+    }
+  }
+
+  let beforeIndex = 0;
+  let afterIndex = 0;
+  while (beforeIndex < beforeLines.length && afterIndex < afterLines.length) {
+    if (beforeLines[beforeIndex] === afterLines[afterIndex]) {
+      rows.push({ type: "context", text: beforeLines[beforeIndex] });
+      beforeIndex += 1;
+      afterIndex += 1;
+    } else if (matrix[beforeIndex + 1][afterIndex] >= matrix[beforeIndex][afterIndex + 1]) {
+      rows.push({ type: "removed", text: beforeLines[beforeIndex] });
+      beforeIndex += 1;
+    } else {
+      rows.push({ type: "added", text: afterLines[afterIndex] });
+      afterIndex += 1;
+    }
+  }
+
+  while (beforeIndex < beforeLines.length) {
+    rows.push({ type: "removed", text: beforeLines[beforeIndex] });
+    beforeIndex += 1;
+  }
+
+  while (afterIndex < afterLines.length) {
+    rows.push({ type: "added", text: afterLines[afterIndex] });
+    afterIndex += 1;
+  }
+
+  return rows;
+}

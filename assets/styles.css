@@ -1374,6 +1374,11 @@ body.is-resizing-tree-pane {
   min-width: 0;
 }
 
+.panel-header-meta-stack {
+  display: grid;
+  gap: 10px;
+}
+
 .panel-header h2,
 .panel-header h3 {
   margin: 0;
@@ -1426,6 +1431,75 @@ body.is-resizing-tree-pane {
   min-height: 0;
   overflow: auto;
   padding: 8px;
+}
+
+.read-snapshot-banner {
+  margin: 0;
+}
+
+.read-snapshot-meta {
+  margin: 6px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.read-diff {
+  margin-bottom: 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  background: var(--surface);
+}
+
+.read-diff-header {
+  padding: 9px 12px;
+  border-bottom: 1px solid var(--line);
+  background: var(--surface-alt);
+  font-size: 12px;
+  font-weight: 760;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.read-diff-body {
+  font-family: var(--mono);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.read-diff-line {
+  display: grid;
+  grid-template-columns: 20px minmax(0, 1fr);
+}
+
+.read-diff-line code {
+  display: block;
+  overflow-x: auto;
+  padding: 3px 10px 3px 0;
+  background: transparent;
+  color: inherit;
+  white-space: pre-wrap;
+}
+
+.read-diff-marker {
+  display: grid;
+  place-items: center;
+  border-right: 1px solid var(--line);
+  color: var(--muted);
+}
+
+.read-diff-line-context {
+  background: var(--surface);
+}
+
+.read-diff-line-added {
+  background: var(--ok-soft);
+  color: var(--ok);
+}
+
+.read-diff-line-removed {
+  background: var(--danger-soft);
+  color: var(--danger);
 }
 
 .files-workbench > .panel:first-child .panel-body {

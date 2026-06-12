@@ -15,13 +15,26 @@ import {
   saveCachedContent,
   saveRepositoryCache,
 } from "./repoCache.js";
-import { clearToken, loadLastSave, loadSettings, loadToken, saveLastSave, saveSettings, saveToken } from "./storage.js";
+import {
+  clearToken,
+  listReadSnapshotPaths,
+  loadLastSave,
+  loadReadSnapshot,
+  loadSettings,
+  loadToken,
+  saveLastSave,
+  saveReadSnapshot,
+  saveSettings,
+  saveToken,
+} from "./storage.js";
 import {
   blobFromBase64,
+  buildLineDiff,
   classifyConclusion,
   debounce,
   escapeHtml,
   extensionOf,
+  fnv1aHash,
   formatDate,
   humanBytes,
   isActionAuthor,
@@ -96,6 +109,8 @@ const state = {
   editor: null,
   preview: null,
   previewUrls: [],
+  readSnapshot: null,
+  readDiffExpanded: false,
   lastSave: null,
   externalCompare: null,
   compare: null,
@@ -750,6 +765,18 @@ async function handleAction(button) {
     return;
   }
 
+  if (action === "toggle-read-diff") {
+    state.readDiffExpanded = !state.readDiffExpanded;
+    render();
+    return;
+  }
+
+  if (action === "mark-read-snapshot") {
+    markCurrentFileAsReadSnapshot();
+    render();
+    return;
+  }
+
   if (action === "create-branch") {
     const input = document.querySelector("#new-branch-name");
     await createBranch(String(input?.value || "").trim());
@@ -1155,7 +1182,9 @@ async function refreshRepositoryData({ keepBusy = false, preserveSelection = fal
     assertConnected();
     const previousPath = preserveSelection && !state.editor?.dirty ? state.selectedPath : "";
     const previousDir = preserveSelection ? state.selectedDir : "";
+    const previousFiles = state.files;
     const tree = await loadRepositorySnapshot(knownHeadSha, { allowOfflineCache: state.offline });
+    await refreshReadSnapshotStatuses(previousFiles, tree.tree || []);
     revokePreviewUrls();
     state.editor = null;
     state.preview = null;
@@ -1194,12 +1223,14 @@ async function refreshRepositoryData({ keepBusy = false, preserveSelection = fal
 async function refreshRepositoryTree({ keepBusy = false, expectedHeadSha = "" } = {}) {
   const run = async () => {
     assertConnected();
+    const previousFiles = state.files;
     const tree = await loadRepositorySnapshot(expectedHeadSha || headShaForBranch(state.branch), {
       allowOfflineCache: state.offline,
     });
     if (expectedHeadSha && tree.headSha !== expectedHeadSha) {
       return;
     }
+    await refreshReadSnapshotStatuses(previousFiles, tree.tree || []);
     applyRepositoryTree(tree);
     state.lastSave = loadLastSave(state.owner, state.repo, state.branch);
   };
@@ -1664,10 +1695,13 @@ async function loadFile(path, { keepBusy = false, syncLatest = false, navigation
       binary: !isTextPath(path),
       dirty: false,
     };
+    state.readSnapshot = null;
+    state.readDiffExpanded = false;
 
     if (isTextPath(path)) {
       state.editor.content = await loadTextContentForEntry(entry);
       state.editor.baseContent = state.editor.content;
+      syncReadSnapshot(entry, state.editor.content);
       if (isSearchIndexablePath(path) && entry.size <= MAX_SEARCH_INDEX_BYTES) {
         state.searchTextBySha.set(entry.sha, normalizeSearchText(state.editor.content));
         state.searchContentBySha.set(entry.sha, state.editor.content);
@@ -3105,11 +3139,19 @@ function renderSelectedFileHeading() {
 }
 
 function renderSelectedFileMeta() {
+  const sections = [];
   const frontMatter = selectedFrontMatterEntries();
-  if (!frontMatter.length || !state.frontMatterOpen) {
+  if (frontMatter.length && state.frontMatterOpen) {
+    sections.push(renderFrontMatterPanel(frontMatter));
+  }
+  const readSnapshotBanner = renderReadSnapshotBanner();
+  if (readSnapshotBanner) {
+    sections.push(readSnapshotBanner);
+  }
+  if (!sections.length) {
     return "";
   }
-  return `<div class="panel-header-meta">${renderFrontMatterPanel(frontMatter)}</div>`;
+  return `<div class="panel-header-meta panel-header-meta-stack">${sections.join("")}</div>`;
 }
 
 function renderDiscussionHeaderActions(context = selectedDiscussionContext()) {
@@ -3434,9 +3476,11 @@ function renderBrowsePreview() {
     return `<div class="empty">${t("files.previewNotLoaded")}</div>`;
   }
 
+  const readDiff = renderReadSnapshotDiff();
   if (state.editor && isMarkdownPath(state.editor.path)) {
     return `
       <div class="browse-preview">
+        ${readDiff}
         <article class="markdown-preview">${renderMarkdown(state.editor.content)}</article>
       </div>
     `;
@@ -3444,8 +3488,58 @@ function renderBrowsePreview() {
 
   return `
     <div class="browse-preview">
+      ${readDiff}
       ${renderPreviewPane("full")}
     </div>
+  `;
+}
+
+function renderReadSnapshotBanner() {
+  if (!state.readSnapshot?.changed) {
+    return "";
+  }
+
+  const changedAt = state.readSnapshot.savedAt
+    ? t("files.readSnapshotChangedAt", { savedAt: formatDate(state.readSnapshot.savedAt) })
+    : "";
+  return `
+    <div class="banner info read-snapshot-banner">
+      <div class="dismissible">
+        <div>
+          <p>${escapeHtml(t("files.readSnapshotChanged"))}</p>
+          ${changedAt ? `<p class="read-snapshot-meta">${escapeHtml(changedAt)}</p>` : ""}
+        </div>
+        <div class="button-row">
+          <button type="button" data-action="toggle-read-diff">${escapeHtml(
+            state.readDiffExpanded ? t("files.hideReadDiff") : t("files.showReadDiff"),
+          )}</button>
+          <button type="button" data-action="mark-read-snapshot">${escapeHtml(t("files.markCurrentAsRead"))}</button>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function renderReadSnapshotDiff() {
+  if (!state.readSnapshot?.changed || !state.readDiffExpanded) {
+    return "";
+  }
+
+  const rows = buildLineDiff(state.readSnapshot.content || "", state.editor?.content || "");
+  return `
+    <section class="read-diff" aria-label="${escapeHtml(t("files.readDiffTitle"))}">
+      <div class="read-diff-header">${escapeHtml(t("files.readDiffTitle"))}</div>
+      <div class="read-diff-body">
+        ${rows
+          .map((row) => {
+            const marker = row.type === "added" ? "+" : row.type === "removed" ? "-" : " ";
+            return `<div class="read-diff-line read-diff-line-${row.type}"><span class="read-diff-marker">${marker}</span><code>${escapeHtml(
+              row.text,
+            )}</code></div>`;
+          })
+          .join("")}
+      </div>
+    </section>
   `;
 }
 
@@ -4486,15 +4580,6 @@ function discussionLookupKeyForSelection() {
     return "";
   }
   return `avdsref${fnv1aHash(input)}`;
-}
-
-function fnv1aHash(value) {
-  let hash = 0x811c9dc5;
-  for (let index = 0; index < value.length; index += 1) {
-    hash ^= value.charCodeAt(index);
-    hash = Math.imul(hash, 0x01000193);
-  }
-  return (hash >>> 0).toString(16).padStart(8, "0");
 }
 
 function discussionQuoteBlock() {
@@ -5950,11 +6035,15 @@ function isChecksApiRequest(path) {
 }
 
 export const __testing = {
+  buildLineDiff,
+  markCurrentFileAsReadSnapshot,
+  refreshReadSnapshotStatuses,
   state,
   saveCurrentFile,
   serializeSelectionFragment,
   enterOfflineMode,
   restoreOfflineSnapshot,
+  syncReadSnapshot,
 };
 
 function summarizeTokenProbeError(error) {
@@ -6174,4 +6263,127 @@ function revokePreviewUrls() {
     URL.revokeObjectURL(url);
   }
   state.previewUrls = [];
+}
+
+function syncReadSnapshot(entry, content) {
+  if (!entry?.path || !isTextPath(entry.path)) {
+    state.readSnapshot = null;
+    state.readDiffExpanded = false;
+    return;
+  }
+
+  const stored = loadReadSnapshot(state.owner, state.repo, state.branch, entry.path);
+  if (!stored) {
+    const snapshot = {
+      sha: entry.sha,
+      hash: fnv1aHash(content),
+      savedAt: new Date().toISOString(),
+      stale: false,
+    };
+    saveReadSnapshot(state.owner, state.repo, state.branch, entry.path, snapshot);
+    state.readSnapshot = { ...snapshot, changed: false };
+    state.readDiffExpanded = false;
+    return;
+  }
+  state.readSnapshot = {
+    ...stored,
+    changed: Boolean(stored.stale),
+  };
+  state.readDiffExpanded = false;
+}
+
+function markCurrentFileAsReadSnapshot() {
+  if (!state.selectedPath || !state.editor) {
+    return;
+  }
+  const entry = state.files.find((file) => file.path === state.selectedPath);
+  if (!entry || !isTextPath(entry.path)) {
+    return;
+  }
+
+  const snapshot = {
+    sha: entry.sha,
+    hash: fnv1aHash(state.editor.content || ""),
+    content: state.editor.content || "",
+    savedAt: new Date().toISOString(),
+    stale: false,
+  };
+  saveReadSnapshot(state.owner, state.repo, state.branch, entry.path, snapshot);
+  state.readSnapshot = { ...snapshot, changed: false };
+  state.readDiffExpanded = false;
+}
+
+async function refreshReadSnapshotStatuses(previousFiles, nextFiles) {
+  if (!state.owner || !state.repo || !state.branch) {
+    return;
+  }
+
+  const previousByPath = new Map((previousFiles || []).map((file) => [file.path, file]));
+  const nextByPath = new Map((nextFiles || []).map((file) => [file.path, file]));
+  const snapshotPaths = listReadSnapshotPaths(state.owner, state.repo, state.branch);
+
+  for (const path of snapshotPaths) {
+    const snapshot = loadReadSnapshot(state.owner, state.repo, state.branch, path);
+    if (!snapshot) {
+      continue;
+    }
+
+    const nextEntry = nextByPath.get(path);
+    if (!nextEntry || !isTextPath(path)) {
+      continue;
+    }
+
+    if (snapshot.sha === nextEntry.sha) {
+      if (snapshot.stale) {
+        const nextSnapshot = { ...snapshot, stale: false };
+        saveReadSnapshot(state.owner, state.repo, state.branch, path, nextSnapshot);
+        if (state.selectedPath === path && state.readSnapshot) {
+          state.readSnapshot = { ...nextSnapshot, changed: false };
+        }
+      }
+      continue;
+    }
+
+    const previousEntry = previousByPath.get(path);
+    const previousContent = await resolveReadSnapshotPreviousContent(snapshot, previousEntry);
+    const nextSnapshot = {
+      ...snapshot,
+      content: previousContent,
+      stale: true,
+    };
+    saveReadSnapshot(state.owner, state.repo, state.branch, path, nextSnapshot);
+    if (state.selectedPath === path && state.readSnapshot) {
+      state.readSnapshot = { ...nextSnapshot, changed: true };
+    }
+  }
+}
+
+async function resolveReadSnapshotPreviousContent(snapshot, previousEntry) {
+  if (typeof snapshot.content === "string") {
+    return snapshot.content;
+  }
+
+  if (typeof previousEntry?.content === "string") {
+    return previousEntry.content;
+  }
+
+  if (!snapshot?.sha) {
+    return "";
+  }
+
+  const cached = await loadCachedContents(state.owner, state.repo, [snapshot.sha]).catch(() => new Map());
+  if (cached.has(snapshot.sha)) {
+    return cached.get(snapshot.sha);
+  }
+
+  if (state.offline || !state.client) {
+    return "";
+  }
+
+  try {
+    const blob = await state.client.getBlob(state.owner, state.repo, snapshot.sha);
+    return decodeContentApiText(blob.content || "");
+  } catch {
+    return "";
+  }
 }

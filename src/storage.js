@@ -3,6 +3,8 @@ const SESSION_TOKEN_KEY = "adaptivio.cms.token.session.v1";
 const LOCAL_TOKEN_KEY = "adaptivio.cms.token.local.v1";
 const SESSION_DISCOURSE_AUTH_KEY = "adaptivio.cms.discourse-auth.session.v1";
 const LAST_SAVE_PREFIX = "adaptivio.cms.last-save.v1";
+const READ_SNAPSHOT_PREFIX = "adaptivio.cms.read-snapshot.v1";
+const READ_SNAPSHOT_INDEX_PREFIX = "adaptivio.cms.read-snapshot-index.v1";
 
 export function loadSettings() {
   return readJson(localStorage.getItem(SETTINGS_KEY), {});
@@ -79,8 +81,36 @@ export function saveLastSave(owner, repo, branch, snapshot) {
   localStorage.setItem(lastSaveKey(owner, repo, branch), JSON.stringify(snapshot));
 }
 
+export function loadReadSnapshot(owner, repo, branch, path) {
+  return readJson(localStorage.getItem(readSnapshotKey(owner, repo, branch, path)), null);
+}
+
+export function saveReadSnapshot(owner, repo, branch, path, snapshot) {
+  localStorage.setItem(readSnapshotKey(owner, repo, branch, path), JSON.stringify(snapshot));
+  saveReadSnapshotIndex(owner, repo, branch, path);
+}
+
+export function listReadSnapshotPaths(owner, repo, branch) {
+  return readJson(localStorage.getItem(readSnapshotIndexKey(owner, repo, branch)), []);
+}
+
 function lastSaveKey(owner, repo, branch) {
   return `${LAST_SAVE_PREFIX}.${owner}/${repo}.${branch}`;
+}
+
+function readSnapshotKey(owner, repo, branch, path) {
+  return `${READ_SNAPSHOT_PREFIX}.${owner}/${repo}.${branch}.${encodeURIComponent(path)}`;
+}
+
+function readSnapshotIndexKey(owner, repo, branch) {
+  return `${READ_SNAPSHOT_INDEX_PREFIX}.${owner}/${repo}.${branch}`;
+}
+
+function saveReadSnapshotIndex(owner, repo, branch, path) {
+  const key = readSnapshotIndexKey(owner, repo, branch);
+  const paths = new Set(readJson(localStorage.getItem(key), []));
+  paths.add(path);
+  localStorage.setItem(key, JSON.stringify([...paths].sort()));
 }
 
 function readJson(value, fallback) {

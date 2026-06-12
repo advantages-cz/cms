@@ -143,6 +143,7 @@ Implemented capabilities:
 - HTML, PDF, image, and text previews.
 - SVG file preview and SVG assets in HTML preview.
 - Rendered Markdown preview in browse mode.
+- Text files persist a local per-file read snapshot keyed by repo/branch/path. The initial snapshot stores version identity, and only after a later content change is the previous text retained locally so the CMS can offer a diff against the last read version.
 - Front matter-aware Markdown rendering.
 - Collapsed front matter display in rendered Markdown preview.
 - Optional Discourse discussion side panel for any selected file. The panel opens from the file header and supports a no-auth MVP for private Discourse instances by opening Discourse search for the current CMS file URL and a pre-filled `new-topic` composer. Markdown documents additionally contribute selection quotes, selected table ranges converted back to Markdown tables, and front matter-based discussion metadata.
