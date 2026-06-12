@@ -111,6 +111,7 @@ const state = {
   previewUrls: [],
   readSnapshot: null,
   readDiffExpanded: false,
+  fileSurfaceMode: "preview",
   lastSave: null,
   externalCompare: null,
   compare: null,
@@ -767,6 +768,7 @@ async function handleAction(button) {
 
   if (action === "toggle-read-diff") {
     state.readDiffExpanded = !state.readDiffExpanded;
+    state.fileSurfaceMode = state.readDiffExpanded ? "diff" : "preview";
     render();
     return;
   }
@@ -1697,6 +1699,7 @@ async function loadFile(path, { keepBusy = false, syncLatest = false, navigation
     };
     state.readSnapshot = null;
     state.readDiffExpanded = false;
+    state.fileSurfaceMode = "preview";
 
     if (isTextPath(path)) {
       state.editor.content = await loadTextContentForEntry(entry);
@@ -3477,7 +3480,7 @@ function renderBrowsePreview() {
   }
 
   const readDiff = renderReadSnapshotDiff();
-  const diffOnly = Boolean(readDiff);
+  const diffOnly = state.fileSurfaceMode === "diff" && Boolean(readDiff);
   if (diffOnly) {
     return `
       <div class="browse-preview browse-preview-diff-only">
@@ -3528,7 +3531,7 @@ function renderReadSnapshotBanner() {
 }
 
 function renderReadSnapshotDiff() {
-  if (!state.readSnapshot?.changed || !state.readDiffExpanded) {
+  if (!state.readSnapshot?.changed) {
     return "";
   }
 
@@ -6290,13 +6293,17 @@ function syncReadSnapshot(entry, content) {
     saveReadSnapshot(state.owner, state.repo, state.branch, entry.path, snapshot);
     state.readSnapshot = { ...snapshot, changed: false };
     state.readDiffExpanded = false;
+    state.fileSurfaceMode = "preview";
     return;
   }
   state.readSnapshot = {
     ...stored,
     changed: Boolean(stored.stale),
   };
-  state.readDiffExpanded = false;
+  if (!state.readSnapshot.changed) {
+    state.readDiffExpanded = false;
+    state.fileSurfaceMode = "preview";
+  }
 }
 
 function markCurrentFileAsReadSnapshot() {
@@ -6318,6 +6325,7 @@ function markCurrentFileAsReadSnapshot() {
   saveReadSnapshot(state.owner, state.repo, state.branch, entry.path, snapshot);
   state.readSnapshot = { ...snapshot, changed: false };
   state.readDiffExpanded = false;
+  state.fileSurfaceMode = "preview";
 }
 
 async function refreshReadSnapshotStatuses(previousFiles, nextFiles) {
@@ -6346,6 +6354,8 @@ async function refreshReadSnapshotStatuses(previousFiles, nextFiles) {
         saveReadSnapshot(state.owner, state.repo, state.branch, path, nextSnapshot);
         if (state.selectedPath === path && state.readSnapshot) {
           state.readSnapshot = { ...nextSnapshot, changed: false };
+          state.readDiffExpanded = false;
+          state.fileSurfaceMode = "preview";
         }
       }
       continue;
@@ -6361,6 +6371,9 @@ async function refreshReadSnapshotStatuses(previousFiles, nextFiles) {
     saveReadSnapshot(state.owner, state.repo, state.branch, path, nextSnapshot);
     if (state.selectedPath === path && state.readSnapshot) {
       state.readSnapshot = { ...nextSnapshot, changed: true };
+      if (state.fileSurfaceMode !== "diff") {
+        state.readDiffExpanded = false;
+      }
     }
   }
 }

@@ -129,11 +129,17 @@ test("read snapshot detects changes on repository refresh and can be updated to 
   state.files = [{ path: "content/page.md", sha: "sha-2", size: 15 }];
   __testing.syncReadSnapshot({ path: "content/page.md", sha: "sha-2", size: 15 }, "hello\nnew world");
   assert.equal(state.readSnapshot.changed, true);
+  assert.equal(state.fileSurfaceMode, "preview");
   assert.equal(state.readSnapshot.sha, "sha-1");
   assert.equal(state.readSnapshot.content, "hello\nworld");
+
+  state.readDiffExpanded = true;
+  state.fileSurfaceMode = "diff";
+  assert.equal(state.fileSurfaceMode, "diff");
 
   __testing.markCurrentFileAsReadSnapshot();
   assert.equal(state.readSnapshot.changed, false);
   assert.equal(state.readSnapshot.sha, "sha-2");
   assert.equal(state.readSnapshot.content, "hello\nnew world");
+  assert.equal(state.fileSurfaceMode, "preview");
 });

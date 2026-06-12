@@ -3251,6 +3251,22 @@ mark,
     background: transparent;
   }
 
+  .read-snapshot-banner .dismissible {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .read-snapshot-banner .button-row {
+    display: grid;
+    grid-template-columns: 1fr;
+    width: 100%;
+  }
+
+  .read-snapshot-banner .button-row button {
+    width: 100%;
+    min-height: 42px;
+    text-align: center;
+  }
+
   .selected-file-heading h2 {
     font-size: 13px;
     line-height: 1.35;
