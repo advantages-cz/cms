@@ -3185,10 +3185,15 @@ mark,
       visibility 0s linear 0s;
   }
 
-  .tree-panel .panel-body {
+  .files-workbench > .tree-panel .panel-body {
     display: flex;
     flex-direction: column;
+    grid-template-rows: none;
     padding-top: 0;
+  }
+
+  .tree-panel .file-list {
+    flex: 1 1 auto;
   }
 
   .files-workbench {
