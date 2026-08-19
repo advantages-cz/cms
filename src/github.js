@@ -158,6 +158,14 @@ export class GitHubClient {
     return this.request(`/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/git/blobs/${sha}`);
   }
 
+  // Compare data for base...head. Only merge-base and ahead/behind counts are
+  // used; per_page keeps the commit payload small.
+  compareBranches(owner, repo, basehead) {
+    return this.request(
+      `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/compare/${encodeURIComponent(basehead)}?per_page=1`,
+    );
+  }
+
   putFile(owner, repo, path, { branch, message, contentBase64, sha }) {
     const body = {
       message,

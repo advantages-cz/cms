@@ -3343,6 +3343,7 @@ mark,
     background: transparent;
     -webkit-overflow-scrolling: touch;
   }
+
 }
 
 @media (hover: none) and (pointer: coarse) and (orientation: landscape) and (max-height: 500px) {
@@ -3426,4 +3427,715 @@ mark,
     padding-block: 4px 16px;
     background: transparent;
   }
+}
+
+/* Graph tab: canvas viewer with overlay panels. */
+
+.tab-content-graph {
+  overflow: hidden;
+}
+
+.graph-tab {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  background: var(--bg);
+}
+
+.graph-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--line);
+  background: var(--surface);
+}
+
+.graph-search {
+  flex: 0 1 200px;
+  width: 200px;
+  min-width: 130px;
+  font-size: 12.5px;
+}
+
+.graph-toolbar-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.graph-select {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.graph-select select {
+  min-height: 30px;
+  padding: 0 8px;
+  font-size: 12.5px;
+}
+
+.graph-toolbar-spacer {
+  flex: 1 1 auto;
+}
+
+.graph-body {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.graph-canvas-host {
+  position: absolute;
+  inset: 0;
+}
+
+.graph-canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  cursor: pointer;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+}
+
+/* Graph buttons and links opt into direct manipulation like preview links:
+   no double-tap-zoom delay on touch. */
+.graph-tab button,
+.graph-tab a,
+.graph-tab select,
+.graph-tab input {
+  touch-action: manipulation;
+}
+
+.graph-overlay {
+  position: absolute;
+  z-index: 2;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: color-mix(in srgb, var(--surface) 92%, transparent);
+  box-shadow: var(--shadow);
+  color: var(--text);
+}
+
+.graph-overlay[hidden] {
+  display: none !important;
+}
+
+.graph-legend {
+  top: 10px;
+  left: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 10px;
+  font-size: 12px;
+  /* Keep the legend clear of the stats strip anchored bottom-left. */
+  max-height: calc(100% - 72px);
+  overflow: auto;
+}
+
+.graph-legend strong {
+  font-size: 10.5px;
+  font-weight: 780;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 4px;
+}
+
+.graph-legend-row {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 26px;
+  padding: 0 4px;
+  border: 0;
+  background: transparent;
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+  text-align: left;
+}
+
+.graph-legend-row:hover {
+  background: var(--surface-alt);
+}
+
+.graph-legend-row.off {
+  opacity: 0.35;
+  text-decoration: line-through;
+}
+
+.graph-legend-dot {
+  display: inline-block;
+  width: 9px;
+  height: 9px;
+  border-radius: 3px;
+  flex: 0 0 auto;
+}
+
+.graph-legend-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 140px;
+}
+
+.graph-legend-count {
+  margin-left: auto;
+  font-size: 10.5px;
+  color: var(--muted-soft);
+}
+
+.graph-stats {
+  left: 10px;
+  bottom: 10px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding: 6px 10px;
+  font-size: 11.5px;
+  color: var(--muted);
+  max-width: min(640px, calc(100% - 24px));
+}
+
+.graph-stats-branch {
+  font-family: var(--mono);
+  font-size: 10.5px;
+}
+
+.graph-hint {
+  left: 50%;
+  bottom: 10px;
+  transform: translateX(-50%);
+  padding: 4px 10px;
+  font-size: 11px;
+  color: var(--muted-soft);
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+.graph-info {
+  top: 10px;
+  right: 10px;
+  width: 250px;
+  max-height: calc(100% - 24px);
+  overflow: auto;
+  padding: 12px;
+  font-size: 12.5px;
+}
+
+.graph-info-close {
+  position: absolute;
+  top: 6px;
+  right: 8px;
+  min-height: 24px;
+  border: 0;
+  background: transparent;
+  color: var(--muted-soft);
+  font-size: 16px;
+  padding: 0 4px;
+}
+
+.graph-info-close:hover {
+  color: var(--text);
+  background: transparent;
+  border: 0;
+}
+
+.graph-info-name {
+  margin: 0 24px 2px 0;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.graph-info-path {
+  margin: 0 0 6px;
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--muted);
+  word-break: break-all;
+}
+
+.graph-info-unit {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0 0 8px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.graph-info-facts {
+  border-collapse: collapse;
+  margin: 0 0 8px;
+}
+
+.graph-info-facts th {
+  padding: 1px 10px 1px 0;
+  font-weight: 400;
+  font-size: 11.5px;
+  color: var(--muted);
+  text-align: left;
+}
+
+.graph-info-facts td {
+  font-size: 12px;
+}
+
+.graph-info-excerpt {
+  margin: 0 0 10px;
+  font-size: 11.5px;
+  line-height: 1.45;
+  color: var(--muted);
+}
+
+.graph-info-open {
+  width: 100%;
+}
+
+.graph-health {
+  bottom: 10px;
+  right: 10px;
+  top: auto;
+  width: 300px;
+  max-height: min(60%, 520px);
+  display: flex;
+  flex-direction: column;
+  padding: 0;
+  font-size: 12.5px;
+}
+
+.graph-health-header {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--line);
+}
+
+.graph-health-header h2 {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 780;
+}
+
+.graph-health-body {
+  overflow: auto;
+  padding: 10px 12px;
+}
+
+.graph-health-section {
+  margin-bottom: 14px;
+}
+
+.graph-health-section h3 {
+  margin: 0 0 6px;
+  font-size: 11px;
+  font-weight: 780;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.graph-file-link {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 34px;
+  padding: 4px 8px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  text-align: left;
+}
+
+.graph-file-link:hover {
+  background: var(--surface-alt);
+}
+
+.graph-file-dot {
+  flex: 0 0 auto;
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+}
+
+.graph-file-main {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.graph-file-title {
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.graph-file-sub {
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.graph-file-badge {
+  flex: 0 0 auto;
+  margin-left: 4px;
+  font-size: 11px;
+  color: var(--muted-soft);
+  font-variant-numeric: tabular-nums;
+}
+
+.graph-health-count {
+  color: var(--muted-soft);
+  font-size: 11px;
+}
+
+.graph-health-empty {
+  margin: 0;
+  font-size: 11.5px;
+  color: var(--muted-soft);
+}
+
+.graph-health-facts {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0;
+  font-size: 12px;
+}
+
+.graph-health-fact {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 8px;
+  width: 100%;
+  min-height: 26px;
+  padding: 2px 8px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  text-align: left;
+  font-size: 12px;
+  color: var(--text);
+}
+
+button.graph-health-fact:hover {
+  background: var(--surface-alt);
+}
+
+.graph-health-fact span:first-child {
+  color: var(--muted);
+}
+
+.graph-health-fact.static {
+  padding: 2px 8px;
+}
+
+.graph-health-fact-count {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Units toggle exists only on mobile, where the legend is hidden by default. */
+.graph-units-toggle {
+  display: none;
+}
+
+
+.graph-legend-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.graph-legend-actions {
+  display: inline-flex;
+  gap: 4px;
+}
+
+.graph-legend-actions button {
+  min-height: 22px;
+  padding: 0 8px;
+  font-size: 10.5px;
+  color: var(--muted);
+  border-color: var(--line);
+  background: transparent;
+}
+
+.graph-info-links {
+  margin: 0 0 8px;
+}
+
+.graph-info-links h3 {
+  margin: 0 0 4px;
+  font-size: 11px;
+  font-weight: 780;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.graph-info-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.graph-info-actions .graph-info-open {
+  width: auto;
+  flex: 1 1 auto;
+}
+
+.graph-edge-tip {
+  position: absolute;
+  z-index: 3;
+  max-width: 300px;
+  padding: 6px 9px;
+  font-size: 11.5px;
+  line-height: 1.45;
+  pointer-events: none;
+  white-space: normal;
+  overflow-wrap: break-word;
+}
+
+.graph-edge-tip .graph-tip-path {
+  display: block;
+  margin-top: 2px;
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--muted);
+  word-break: break-all;
+}
+
+.graph-edge-tip .graph-tip-label {
+  color: var(--muted);
+}
+
+.graph-local-chip {
+  top: 10px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 6px 4px 10px;
+  font-size: 12px;
+}
+
+.graph-local-chip button {
+  min-height: 22px;
+  width: 22px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--muted-soft);
+  font-size: 15px;
+}
+
+.graph-local-chip button:hover {
+  color: var(--text);
+  background: transparent;
+  border: 0;
+}
+
+.graph-diff {
+  top: 10px;
+  right: 10px;
+  width: 300px;
+  max-height: min(60%, 520px);
+  display: flex;
+  flex-direction: column;
+  padding: 0;
+  font-size: 12.5px;
+}
+
+.graph-diff-summary {
+  margin: 0 0 10px;
+  font-size: 11.5px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.graph-file-link.is-added .graph-file-dot {
+  background: var(--ok);
+}
+
+.graph-file-link.is-changed .graph-file-dot {
+  background: var(--warn);
+}
+
+.graph-file-link.removed {
+  cursor: default;
+  opacity: 0.75;
+}
+
+.graph-file-link.removed:hover {
+  background: transparent;
+}
+
+.graph-file-link.removed .graph-file-dot {
+  background: var(--danger);
+}
+
+.graph-stats-diff {
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+  border-inline-end: 1px solid var(--line);
+  padding-inline-end: 10px;
+}
+
+.graph-diff-full {
+  margin-left: auto;
+  margin-right: 26px;
+  font-size: 11.5px;
+  color: var(--accent);
+  text-decoration: none;
+}
+
+.graph-diff-full:hover {
+  text-decoration: underline;
+}
+
+.graph-diff-position {
+  margin: 0 0 4px;
+  font-size: 11px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.graph-diff-position a {
+  color: var(--accent);
+  text-decoration: none;
+  font-variant-numeric: tabular-nums;
+}
+
+.graph-diff-position a:hover {
+  text-decoration: underline;
+}
+
+.graph-edge-tip .graph-tip-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+  margin-right: 5px;
+}
+
+.graph-panel-min {
+  min-height: 22px;
+  padding: 0 7px;
+  border-color: var(--line);
+  background: transparent;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1;
+}
+
+.graph-panel-min:hover {
+  color: var(--text);
+}
+
+.graph-info .graph-panel-min {
+  position: absolute;
+  top: 6px;
+  right: 36px;
+}
+
+/* Wrapper divs inside flex panels must not break the flex layout. */
+.graph-legend .graph-panel-body,
+.graph-stats .graph-panel-body {
+  display: contents;
+}
+
+.graph-panel-body.hidden-body {
+  display: none;
+}
+
+/* Graph tab on phones: must come AFTER the base graph styles above —
+   equal specificity means source order decides, and these rules override. */
+@media (max-width: 700px) {
+/* Graph tab: keep the toolbar wrapping (same as desktop) instead of forcing
+   one scrolling row; groups and buttons never shrink below their content so
+   filters can't overlap. */
+.graph-toolbar {
+  gap: 8px;
+  padding: 6px 8px;
+}
+
+.graph-toolbar-group,
+.graph-toolbar .button-quiet {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
+.graph-search {
+  flex: 1 1 150px;
+  width: auto;
+  min-width: 0;
+}
+
+.graph-select {
+  gap: 4px;
+  flex: 0 0 auto;
+}
+
+.graph-select > span {
+  display: none;
+}
+
+.graph-select select {
+  max-width: 108px;
+}
+
+.graph-units-toggle {
+  display: block;
+}
+
+.graph-legend {
+  display: none;
+}
+
+.graph-legend.mobile-open {
+  display: flex;
+  top: 52px;
+  max-width: 62vw;
+  max-height: 50%;
+  font-size: 11px;
+}
+
+.graph-legend-name {
+  max-width: 90px;
+}
+
+.graph-hint {
+  display: none;
+}
+
+.graph-info,
+.graph-health,
+.graph-diff {
+  left: 10px;
+  right: 10px;
+  width: auto;
+  max-height: 55%;
+}
+
 }
