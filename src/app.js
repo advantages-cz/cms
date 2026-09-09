@@ -8,6 +8,8 @@ import {
   upsertFileMetadata as upsertFileMetadataState,
 } from "./editorWorkflow.js";
 import { GitHubClient, GitHubError, GitHubRequestError } from "./github.js";
+import { buildGraphModel, isGraphVisiblePath } from "./graph.js";
+import { GRAPH_URL_PARAMS, graphTabHtml, graphUrlState, mountGraphView, unmountGraphView } from "./graphView.js";
 import { DEFAULT_LANGUAGE, LANGUAGES, normalizeLanguage, translate } from "./i18n.js";
 import {
   loadCachedContents,
@@ -157,7 +159,22 @@ let historyNavigationSeeded = false;
 let swallowingHistoryGuardPop = false;
 
 function normalizeTab(tab) {
-  return ["files", "changes", "commits", "actions"].includes(tab) ? tab : tab === "review" ? "changes" : "files";
+  return ["files", "graph", "changes", "commits", "actions"].includes(tab) ? tab : tab === "review" ? "changes" : "files";
+}
+
+// Single entry point for tab transitions (click handlers, the mobile tree
+// toggle, and the graph open-file action): persisted settings and the mobile
+// tree state stay consistent for any future tab.
+function applyTab(nextTab) {
+  const tab = normalizeTab(nextTab);
+  if (tab === state.tab) {
+    return;
+  }
+  state.tab = tab;
+  if (tab !== "files") {
+    state.mobileTreeOpen = false;
+  }
+  persistSettings();
 }
 
 function isContentOnlyLandscape() {
@@ -618,18 +635,14 @@ async function handleAction(button) {
   }
 
   if (action === "tab") {
-    state.tab = normalizeTab(button.dataset.tab || "files");
-    if (state.tab !== "files") {
-      state.mobileTreeOpen = false;
-    }
-    persistSettings();
+    applyTab(button.dataset.tab || "files");
     render();
     return;
   }
 
   if (action === "toggle-mobile-tree") {
     if (state.tab !== "files") {
-      state.tab = "files";
+      applyTab("files");
       state.mobileTreeOpen = true;
     } else {
       state.mobileTreeOpen = !state.mobileTreeOpen;
@@ -808,9 +821,8 @@ async function handleAction(button) {
         // Fall back to the in-app preview if direct PDF open fails.
       }
     }
-    state.tab = "files";
+    applyTab("files");
     state.mobileTreeOpen = false;
-    persistSettings();
     await loadFile(path, { navigation: "push", revealInTree: true });
     return;
   }
@@ -2425,8 +2437,7 @@ async function createPullRequest(data) {
     state.modal = null;
     state.editMode = false;
     await refreshReviewData({ keepBusy: true });
-    state.tab = "changes";
-    persistSettings();
+    applyTab("changes");
     toast(t("pr.created"), "ok");
   });
 }
@@ -2488,7 +2499,122 @@ function render({ treeScrollTop = null } = {}) {
   focusMobileSearchInput();
   highlightSearchMatches();
   restorePreviewScroll();
+  syncGraphView();
   syncDiscussionEmbed();
+}
+
+let graphModelCache = { key: "", model: null };
+let graphDiffCache = { key: "", model: null, meta: null };
+
+// Loads the graph-diff base for the current branch: the merge-base tree of
+// defaultBranch...branch (three-dot semantics, matching the GitHub compare
+// link), so master commits made after the branch was cut do not show up as
+// phantom changes. Falls back to a straight master comparison when the
+// compare API is unavailable.
+async function loadGraphDiffContext() {
+  const masterSha = headShaForBranch(state.defaultBranch);
+  if (!state.client || !masterSha || !state.branch || state.branch === state.defaultBranch) {
+    return null;
+  }
+  const key = `${state.owner}/${state.repo}@${state.headSha}:${masterSha}`;
+  if (graphDiffCache.key === key && graphDiffCache.model) {
+    return graphDiffCache;
+  }
+  const run = async () => {
+    let baseSha = masterSha;
+    let aheadBy = null;
+    let behindBy = null;
+    try {
+      const compare = await state.client.compareBranches(
+        state.owner,
+        state.repo,
+        `${state.defaultBranch}...${state.branch}`,
+      );
+      if (compare?.merge_base_commit?.sha) {
+        baseSha = compare.merge_base_commit.sha;
+      }
+      aheadBy = typeof compare?.ahead_by === "number" ? compare.ahead_by : null;
+      behindBy = typeof compare?.behind_by === "number" ? compare.behind_by : null;
+    } catch {
+      // No compare data: compare against master head directly.
+    }
+    const tree = await state.client.listTree(state.owner, state.repo, state.defaultBranch, { headSha: baseSha });
+    const entries = tree.tree.filter(
+      (entry) => entry.type === "blob" && isMarkdownPath(entry.path) && isGraphVisiblePath(entry.path),
+    );
+    const storedBySha = await loadCachedContents(
+      state.owner,
+      state.repo,
+      entries.map((entry) => entry.sha),
+    ).catch(() => new Map());
+    const files = [];
+    for (const entry of entries) {
+      let content = storedBySha.get(entry.sha);
+      if (typeof content !== "string") {
+        const fetched = await state.client.getContent(state.owner, state.repo, entry.path, baseSha);
+        if (Array.isArray(fetched) || fetched.type !== "file") {
+          continue;
+        }
+        content = decodeContentApiText(fetched.content || "");
+        await saveCachedContent(state.owner, state.repo, entry.sha, content, entry.path).catch(() => {});
+      }
+      files.push({ path: entry.path, sha: entry.sha, size: entry.size || 0, content });
+    }
+    graphDiffCache = { key, model: buildGraphModel(files), meta: { baseSha, aheadBy, behindBy } };
+    return graphDiffCache;
+  };
+  // withBusy renders (and can re-mount the graph view) around the task and
+  // does not return the task result, so capture the result explicitly.
+  let result = null;
+  await withBusy(t("graph.diffLoading"), async () => {
+    result = await run();
+  });
+  return result;
+}
+
+function graphModelForCurrentFiles() {
+  const key = `${state.owner}/${state.repo}@${state.headSha}`;
+  if (graphModelCache.key === key && graphModelCache.model) {
+    return graphModelCache.model;
+  }
+  const model = buildGraphModel(state.files);
+  graphModelCache = { key, model };
+  return model;
+}
+
+function syncGraphView() {
+  if (state.tab === "graph" && state.headSha && state.files.length) {
+    mountGraphView({
+      model: graphModelForCurrentFiles(),
+      modelKey: `${state.owner}/${state.repo}@${state.headSha}`,
+      t,
+      branchLabel: state.branch === state.defaultBranch ? state.branch : `${state.branch} @ ${shortSha(state.headSha)}`,
+      openFile: (path) => {
+        applyTab("files");
+        state.mobileTreeOpen = false;
+        void loadFile(path, { revealInTree: true });
+      },
+      onStateChange: () => {
+        updateBrowserNavigation({ mode: "replace" });
+      },
+      canDiff: Boolean(state.branch && state.branch !== state.defaultBranch && headShaForBranch(state.defaultBranch)),
+      compareUrl:
+        state.branch && state.branch !== state.defaultBranch
+          ? `https://github.com/${state.owner}/${state.repo}/compare/${encodeURIComponent(state.defaultBranch)}...${encodeURIComponent(state.branch)}`
+          : "",
+      compareBehindUrl:
+        state.branch && state.branch !== state.defaultBranch
+          ? `https://github.com/${state.owner}/${state.repo}/compare/${encodeURIComponent(state.branch)}...${encodeURIComponent(state.defaultBranch)}`
+          : "",
+      diffContext:
+        graphDiffCache.key === `${state.owner}/${state.repo}@${state.headSha}:${headShaForBranch(state.defaultBranch)}`
+          ? { model: graphDiffCache.model, meta: graphDiffCache.meta }
+          : null,
+      loadDiffContext: loadGraphDiffContext,
+    });
+  } else {
+    unmountGraphView();
+  }
 }
 
 function focusMobileSearchInput({ immediate = false } = {}) {
@@ -2770,6 +2896,9 @@ function renderActiveTabContent({ contentOnly = false } = {}) {
   if (state.tab === "files") {
     return renderFilesTab({ contentOnly });
   }
+  if (state.tab === "graph") {
+    return graphTabHtml();
+  }
   if (state.tab === "changes") {
     return renderChangesTab();
   }
@@ -3005,6 +3134,7 @@ function formatRunStatusLabel(status) {
 function renderTabs() {
   const tabs = [
     ["files", t("tabs.files")],
+    ["graph", t("tabs.graph")],
     ["changes", t("tabs.changes")],
     ["commits", t("tabs.commits")],
     ["actions", t("tabs.actions")],
@@ -5432,6 +5562,7 @@ function currentHistoryNavigationState() {
     branch: state.branch,
     path: state.selectedPath,
     dir: state.selectedDir,
+    ...(graphUrlState() || {}),
     previewScrollTop: normalizePreviewScrollTop(currentPreviewScrollTop()),
   };
 }
@@ -5468,6 +5599,21 @@ function updateBrowserNavigation({ mode = "replace" } = {}) {
 
   const url = new URL(window.location.href);
   url.searchParams.delete("repo");
+  // Graph view permalink parameters are written only while the graph tab is
+  // active; other tabs leave them untouched so a shared link still works
+  // after the recipient switches to the graph tab.
+  if (state.tab === "graph") {
+    const graphParams = graphUrlState();
+    if (graphParams) {
+      for (const name of GRAPH_URL_PARAMS) {
+        if (graphParams[name]) {
+          url.searchParams.set(name, graphParams[name]);
+        } else {
+          url.searchParams.delete(name);
+        }
+      }
+    }
+  }
   if (state.branch) {
     url.searchParams.set("branch", state.branch);
   } else {
@@ -5493,6 +5639,7 @@ function updateBrowserNavigation({ mode = "replace" } = {}) {
     currentState.branch === nextState.branch &&
     currentState.path === nextState.path &&
     currentState.dir === nextState.dir &&
+    GRAPH_URL_PARAMS.every((name) => currentState[name] === nextState[name]) &&
     normalizePreviewScrollTop(currentState.previewScrollTop) === nextState.previewScrollTop;
   if (next === current && stateUnchanged) {
     return;

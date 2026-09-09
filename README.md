@@ -31,6 +31,11 @@ Adaptivio also needs GitHub Actions status, failing check annotations, detection
 - Optionally loads check runs and check annotations for CI errors when the token/installation supports the Checks API.
 - Renders Markdown previews including front matter.
 - Opens a slide-over Discourse discussion panel for the selected file, using the current CMS file URL and a deterministic lookup key for exact Discourse search plus plain links for opening search and a pre-filled new-topic composer. Markdown files additionally prefill quote selections, including selected table rows or partial cell ranges converted to Markdown tables, plus front matter-based metadata.
+- Adds a Graph tab with an interactive document graph built client-side from the hydrated Markdown content: nodes are documents (colored and sized by unit and a selectable metric), edges are resolved Markdown links, with search, front-matter filters, unit toggles, and hover tooltips for documents and links.
+- Shows a per-document info panel with front matter, reading time, backlinks and outgoing links (with link text), a local-graph mode focusing the canvas on one document's neighborhood, and an Open in CMS action that loads the document in the Files tab.
+- Includes a library health panel with dead links, navigation orphans, isolated documents, most-linked documents, and front-matter counts; the counts drill straight into the matching graph filter, and all findings are clickable to select the document in the graph.
+- Compares the working branch's document graph against the merge base of the default branch (three-dot compare semantics) when requested: added, removed, and changed documents are listed and ringed on the canvas, and ahead/behind counts link to the matching GitHub compare directions.
+- Restores graph view state (local focus, hidden units, filters, size metric) from URL parameters, so graph views can be shared as links.
 - Previews HTML in a sandboxed iframe with relative image/SVG/CSS assets resolved when possible.
 - Previews PDF, SVG, images, and text.
 - Opens PDFs from the file tree in a new browser tab on Android, where inline PDF embedding is not reliable.

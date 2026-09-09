@@ -1,18 +1,20 @@
-const CACHE_NAME = "adaptivio-cms-shell-v62";
+const CACHE_NAME = "adaptivio-cms-shell-v63";
 const SHELL_ASSETS = [
   "./",
   "./index.html",
   "./manifest.webmanifest",
-  "./assets/styles.css?v=20260612-191528",
-  "./assets/favicon.svg?v=20260612-191528",
+  "./assets/styles.css?v=20260819-020645",
+  "./assets/favicon.svg?v=20260819-020645",
   "./assets/brand/adaptivio/adaptivio-symbol-cerny-rgb.svg",
-  "./src/app.js?v=20260612-191528",
-  "./src/editorWorkflow.js?v=20260612-191528",
-  "./src/github.js?v=20260612-191528",
-  "./src/i18n.js?v=20260612-191528",
-  "./src/repoCache.js?v=20260612-191528",
-  "./src/storage.js?v=20260612-191528",
-  "./src/utils.js?v=20260612-191528",
+  "./src/app.js?v=20260819-020645",
+  "./src/editorWorkflow.js?v=20260819-020645",
+  "./src/graph.js?v=20260819-020645",
+  "./src/graphView.js?v=20260819-020645",
+  "./src/github.js?v=20260819-020645",
+  "./src/i18n.js?v=20260819-020645",
+  "./src/repoCache.js?v=20260819-020645",
+  "./src/storage.js?v=20260819-020645",
+  "./src/utils.js?v=20260819-020645",
   "./cms.config.json",
 ];
 
@@ -26,6 +28,8 @@ function isAppShellRequest(requestUrl) {
     pathname.endsWith("/assets/brand/adaptivio/adaptivio-symbol-cerny-rgb.svg") ||
     pathname.endsWith("/src/app.js") ||
     pathname.endsWith("/src/editorWorkflow.js") ||
+    pathname.endsWith("/src/graph.js") ||
+    pathname.endsWith("/src/graphView.js") ||
     pathname.endsWith("/src/github.js") ||
     pathname.endsWith("/src/i18n.js") ||
     pathname.endsWith("/src/repoCache.js") ||

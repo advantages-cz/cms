@@ -96,6 +96,8 @@ Key files:
 - `index.html`: application shell.
 - `assets/styles.css`: UI styling.
 - `src/app.js`: application state, UI rendering, and workflow orchestration.
+- `src/graph.js`: pure document-graph model built from hydrated repository content (nodes, edges, health metrics, branch diff).
+- `src/graphView.js`: interactive canvas viewer for the Graph tab (force layout, filters, health and diff panels, URL view-state parameters).
 - `src/github.js`: GitHub REST API client.
 - `src/storage.js`: local/session storage helpers.
 - `src/utils.js`: encoding, preview, formatting, and classification helpers.
@@ -158,6 +160,12 @@ Implemented capabilities:
 - Mobile files UX uses a slide-over tree sidebar opened from a hamburger button, while desktop keeps the split workbench with a resizable tree pane.
 - On mobile, the files tab opens with the tree sidebar already visible after the app connects so repository navigation is the default first view.
 - Dismissible error and notification messages.
+- Library Graph tab: an interactive document graph computed client-side from the hydrated Markdown content (nodes are documents, edges are resolved Markdown links), with unit coloring, a selectable size metric, search, front-matter filters including a "(none)" option, unit visibility toggles with all/none shortcuts, collision-aware labels, hover tooltips for documents and links, and a fit-view control.
+- Graph info panel with front matter, reading time, excerpt, incoming and outgoing link lists with link text, a local-graph mode scoped to one document's neighborhood, and an Open in CMS action into the Files tab. The stats strip and health panel always diagnose the currently visible slice of the graph.
+- Library health panel scoped to the visible view: dead links, navigation orphans (mirroring the avds repository's `validate_navigation.py` rule), isolated documents, most-linked documents, and front-matter counts that drill straight into the matching toolbar filter.
+- Branch comparison of the document graph against the merge base of the default branch (three-dot compare semantics via the compare API), with added/removed/changed document lists, canvas rings, and ahead/behind counts linking to the corresponding GitHub compare directions.
+- Graph view state (local focus, hidden units, filters, size metric) round-trips through URL parameters, written while the graph tab is active and applied when the view mounts.
+- Tab transitions unified through a single `applyTab` entry point shared by tab clicks, the mobile tree toggle, the graph Open in CMS action, and history restoration.
 - Consolidated top workflow toolbar for branch, pull request, and refresh actions, while file-specific edit and discussion actions live in the selected-file header.
 - In iPhone/iOS PWA standalone mode, offline detection should not rely solely on `navigator.onLine` or the browser `offline` event, because those signals can report false offline states. Prefer switching into offline mode after an actual GitHub/network fetch failure, while still leaving explicit `Refresh` as the reconnect path.
 - Offline detection should only use explicit network indicators such as fetch/network failure messages or browser offline state. Do not treat generic JavaScript `TypeError` exceptions as proof that the device is offline.
@@ -238,6 +246,24 @@ Implemented capabilities:
 - Add a smoke-test checklist after deployment.
 
 ## Decision Log
+
+### 2026-08-18: Add A Library Graph Tab
+
+Decision: Add a Graph tab that computes the repository's document graph client-side from the hydrated Markdown content (nodes are documents, edges are resolved Markdown links) instead of committing a generated graph artifact to the repository.
+
+Reasoning: The CMS already hydrates every Markdown file for search and titles, so the graph needs no additional API calls in the common case and is always current for the checked-out branch, including working branches before pull requests merge. A committed artifact would be stale between regenerations, cannot run under the sandboxed HTML preview, and duplicates data the repository already contains. The model lives in a DOM-free module (`src/graph.js`) with unit tests; link extraction mirrors the Markdown preview renderer, navigation-orphan detection mirrors the avds repository's `validate_navigation.py`, and branch visibility mirrors the tree's hidden-root rules.
+
+### 2026-08-18: Compare Branch Graphs From The Merge Base
+
+Decision: The graph branch comparison builds its base model from the merge-base tree of `defaultBranch...branch` (GitHub three-dot compare semantics), with the compare API's ahead/behind counts linked to the corresponding compare directions.
+
+Reasoning: A straight branch-head versus master-head comparison reports master's progress since the branch was cut as phantom removals and changes, which contradicts the GitHub compare page for stale or fully merged branches. Diffing from the merge base keeps the graph diff, the panel, and the outbound compare links consistent: a merged branch shows an empty diff, matching GitHub's "nothing to compare".
+
+### 2026-08-18: Keep Graph View Parameters In The URL
+
+Decision: The graph view writes its own view-state parameters (local focus, hidden units, front-matter filters, size metric) to the URL while the graph tab is active and applies them when the view mounts. Cross-surface URL sharing (graph node selection writing the Files `path` parameter, a `tab` parameter driving the boot tab) was implemented and then removed.
+
+Reasoning: Deriving shared URL state from application state during tab transitions produced repeated bugs where one surface's URL rewrite clobbered another surface's parameter mid-transition. The graph-internal parameters do not cross surfaces — they are written only by the graph view and ignored elsewhere — and have been stable. Sharing the `path` parameter and a `tab` parameter across surfaces should return on top of a proper router module that writes the URL once, after state settles, covered by navigation tests.
 
 ### 2026-06-02: Build A Small Static CMS
 
